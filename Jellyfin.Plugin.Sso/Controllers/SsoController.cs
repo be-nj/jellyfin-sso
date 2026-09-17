@@ -265,7 +265,14 @@ public sealed class SsoController : ControllerBase
                 // by client + device id, so the token belongs to the same session the web
                 // app later plays on, instead of a second session that shares the device id.
                 const info = await fetch('/System/Info/Public').then(function(r){ return r.json(); });
-                const authHeader = 'MediaBrowser Client="Jellyfin Web", Device="Browser", DeviceId="'
+                // Rough match of the names jellyfin-web reports, so the device list stays readable.
+                const ua = navigator.userAgent;
+                const device = /Edg\//.test(ua) ? 'Edge Chromium'
+                  : /Firefox\//.test(ua) ? 'Firefox'
+                  : /Chrome\//.test(ua) ? 'Chrome'
+                  : /Safari\//.test(ua) ? 'Safari'
+                  : 'Web Browser';
+                const authHeader = 'MediaBrowser Client="Jellyfin Web", Device="' + device + '", DeviceId="'
                   + deviceId + '", Version="' + info.Version + '"';
 
                 const res = await fetch('/Users/AuthenticateByName', {
