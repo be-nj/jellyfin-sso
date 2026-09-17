@@ -24,13 +24,15 @@ build:
 publish:
 	dotnet publish $(PLUGIN_SRC) -c Release -o $(PUBLISH_DIR)
 
-# Sync plugin + all required deps, then restart the container.
+# Stop the container first: overwriting a loaded plugin DLL makes the old process
+# crash with BadImageFormatException while it shuts down.
 deploy: publish
 	ssh $(JELLYFIN_HOST) 'sudo mkdir -p "$(JELLYFIN_PLUGIN_PATH)"'
+	ssh $(JELLYFIN_HOST) "docker stop -t 30 jellyfin"
 	scp $(PUBLISH_DIR)/Jellyfin.Plugin.Sso.dll \
 	    $(foreach dll,$(EXTRA_DLLS),$(PUBLISH_DIR)/$(dll)) \
 	    "$(JELLYFIN_HOST):$(JELLYFIN_PLUGIN_PATH)/"
-	ssh $(JELLYFIN_HOST) "docker restart jellyfin"
+	ssh $(JELLYFIN_HOST) "docker start jellyfin"
 
 clean:
 	rm -rf $(PLUGIN_SRC)/bin $(PLUGIN_SRC)/obj

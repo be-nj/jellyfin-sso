@@ -283,7 +283,10 @@ public sealed class SsoController : ControllerBase
                   AccessToken: data.AccessToken,
                   UserId: data.User.Id,
                   UserName: data.User.Name,
-                  LastConnectionMode: 1,
+                  // jellyfin-web resolves the API address from the entry itself; without
+                  // an address for the chosen mode it throws "Must supply a serverAddress".
+                  ManualAddress: window.location.origin,
+                  LastConnectionMode: 2,
                   DateLastAccessed: Date.now(),
                 };
 
