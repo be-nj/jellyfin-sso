@@ -211,3 +211,7 @@ Tests live under `tests/` with outputs in `tests/runs/` (gitignored).
 - Per-user "exclude from sync" opt-out.
 - Multiple simultaneously-enabled providers + provider picker.
 - Versioned releases via a gitea plugin manifest.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
