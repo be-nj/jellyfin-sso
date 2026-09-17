@@ -261,8 +261,12 @@ public sealed class SsoController : ControllerBase
                 const deviceId = localStorage.getItem('_deviceId2') || crypto.randomUUID();
                 localStorage.setItem('_deviceId2', deviceId);
 
-                const authHeader = 'MediaBrowser Client="SSO Plugin", Device="Browser", DeviceId="'
-                  + deviceId + '", Version="1.0.0.0"';
+                // Authenticate as the web client with its device id. Jellyfin keys sessions
+                // by client + device id, so the token belongs to the same session the web
+                // app later plays on, instead of a second session that shares the device id.
+                const info = await fetch('/System/Info/Public').then(function(r){ return r.json(); });
+                const authHeader = 'MediaBrowser Client="Jellyfin Web", Device="Browser", DeviceId="'
+                  + deviceId + '", Version="' + info.Version + '"';
 
                 const res = await fetch('/Users/AuthenticateByName', {
                   method: 'POST',
