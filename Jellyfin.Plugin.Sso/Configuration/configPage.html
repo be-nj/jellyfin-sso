@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>SSO Authentication</title>
+  <style>
+    /* ── Tabs (horizontal, Media-Bar style) ── */
+    .sso-title-rule { max-width: 800px; margin: 1em 0; }
+    .sso-tabs { display: flex; flex-wrap: wrap; gap: .25em; margin-bottom: 1.5em; }
+    .sso-tab {
+      background: none; border: none; cursor: pointer;
+      color: #ccc; padding: .5em 1em;
+      border-bottom: 2px solid transparent;
+      transition: color .3s, border-bottom .3s;
+    }
+    .sso-tab h3 { margin: 0; font-weight: 400; }
+    .sso-tab:hover { color: #fff; }
+    .sso-tab.is-active { color: #fff; border-bottom-color: #00a4dc; }
+    .sso-panel[hidden] { display: none; }
+
+    /* ── Group mapping cards ── */
+    .sso-mapping.paperList {
+      border-left: 4px solid #00a4dc;
+      padding: 1em 1.25em 1.25em;
+      margin-bottom: 1.5em;
+    }
+    .sso-mapping-title {
+      margin: 0 0 .85em;
+      padding-bottom: .5em;
+      border-bottom: 1px solid rgba(255,255,255,.12);
+    }
+    .sso-mapping-head {
+      display: flex;
+      align-items: flex-end;
+      gap: 1.5em;
+      flex-wrap: wrap;
+    }
+    .sso-mapping-head .sso-group-field {
+      flex: 1 1 16em;
+      min-width: 12em;
+      margin: 0;
+    }
+    .sso-admin-toggle { flex: 0 0 auto; margin: 0; white-space: nowrap; }
+    .sso-remove-btn { flex: 0 0 auto; }
+    .sso-libs-section { margin-top: .5em; }
+    .sso-libs-grid.checkboxList {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(15em, 1fr));
+      gap: 0 1.5em;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    /* ── Links table ── */
+    .sso-links-table { width: 100%; border-collapse: collapse; margin-top: .5em; }
+    .sso-links-table th,
+    .sso-links-table td { padding: .4em .6em; text-align: left; border-bottom: 1px solid #444; font-size: .9em; }
+    .sso-links-table code { font-size: .8em; word-break: break-all; }
+
+    /* ── Spacing utilities (no inline styles) ── */
+    .sso-mt    { margin-top: .75em; }
+    .sso-mt-sm { margin-top: .5em; }
+    .sso-save-bar { margin-top: 1.5em; }
+    .sso-link-form { padding: .75em 0; display: flex; flex-direction: column; gap: .75em; max-width: 34em; }
+    .sso-link-form-summary { cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div id="SsoConfigPage" data-role="page" class="page type-interior pluginConfigurationPage"
+       data-require="emby-input,emby-button,emby-select,emby-checkbox"
+       data-controller="__plugin/SSO Authentication.js">
+    <div data-role="content">
+      <div class="content-primary">
+
+        <div class="sectionTitleContainer flex align-items-center">
+          <h2 class="sectionTitle">SSO Authentication</h2>
+        </div>
+        <hr class="sso-title-rule" />
+
+        <!-- Tab bar -->
+        <div class="sso-tabs" role="tablist">
+          <button type="button" class="sso-tab is-active" data-tab="provider"><h3>Provider</h3></button>
+          <button type="button" class="sso-tab" data-tab="mappings"><h3>Group Mappings</h3></button>
+          <button type="button" class="sso-tab" data-tab="links"><h3>Account Links</h3></button>
+        </div>
+
+        <!-- Provider -->
+        <div class="sso-panel" data-panel="provider">
+          <div class="verticalSection">
+            <div class="checkboxContainer">
+              <label>
+                <input id="ProviderEnabled" type="checkbox" is="emby-checkbox" />
+                <span>Enable SSO login</span>
+              </label>
+            </div>
+            <div class="inputContainer">
+              <input id="Authority" type="url" is="emby-input" label="Issuer URL (Authority)"
+                     placeholder="https://auth.example.com/application/o/jellyfin" />
+              <div class="fieldDescription">Base URL for OIDC discovery — must serve <code>/.well-known/openid-configuration</code>.</div>
+            </div>
+            <div class="inputContainer">
+              <input id="ClientId" type="text" is="emby-input" label="Client ID" />
+            </div>
+            <div class="inputContainer">
+              <input id="GroupsClaim" type="text" is="emby-input" label="Groups claim name" placeholder="groups" />
+              <div class="fieldDescription">Default <code>groups</code> works for Authentik and Authelia.</div>
+            </div>
+            <div class="checkboxContainer">
+              <label>
+                <input id="GroupsFromUserInfo" type="checkbox" is="emby-checkbox" />
+                <span>Fetch groups from userinfo endpoint instead of ID token</span>
+              </label>
+            </div>
+            <div class="fieldDescription sso-mt">
+              Login URL: <code id="SsoLoginUrl">(save first)</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- Group Mappings -->
+        <div class="sso-panel" data-panel="mappings" hidden>
+          <div class="verticalSection">
+            <div class="fieldDescription">
+              Applied <strong>declaratively on every login</strong> — Jellyfin user UI changes are overwritten.
+            </div>
+            <div id="GroupMappings" class="sso-mt"></div>
+            <button is="emby-button" type="button" id="AddMapping" class="raised sso-mt-sm">
+              + Add Mapping
+            </button>
+          </div>
+        </div>
+
+        <!-- Save (applies to Provider + Group Mappings) -->
+        <div id="SaveBar" class="sso-save-bar">
+          <button is="emby-button" type="button" id="Save" class="raised button-submit block">Save</button>
+        </div>
+
+        <!-- Account Links -->
+        <div class="sso-panel" data-panel="links" hidden>
+          <div class="verticalSection">
+            <div class="fieldDescription">New SSO users are linked automatically (JIT). Use this only to connect existing local Jellyfin accounts.</div>
+            <div id="Links" class="sso-mt"></div>
+            <details class="sso-mt">
+              <summary class="sso-link-form-summary">Add manual link</summary>
+              <div class="sso-link-form">
+                <div class="selectContainer">
+                  <select id="LinkProviderId" is="emby-select" label="Provider"></select>
+                </div>
+                <div class="selectContainer">
+                  <select id="LinkUserId" is="emby-select" label="Jellyfin user"></select>
+                </div>
+                <div class="inputContainer">
+                  <input id="LinkSub" type="text" is="emby-input" label="OIDC subject (sub)" />
+                  <div class="fieldDescription">
+                    The user's stable identifier from the IdP. Tip: have the user attempt an SSO
+                    login once — the rejected-collision log line prints their <code>Sub=</code>.
+                  </div>
+                </div>
+                <button is="emby-button" type="button" id="AddLink" class="raised">Link Account</button>
+              </div>
+            </details>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</body>
+</html>
