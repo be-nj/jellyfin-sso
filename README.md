@@ -8,6 +8,10 @@ IdP groups and re-applied on every login. Admins configure the group → library
 in a native Jellyfin dashboard page.
 
 - **Target:** Jellyfin **12.1.x**, `net10.0`. `Jellyfin.Controller` must match the server version exactly.
+- **Install:** add the [plugin repository](#from-the-plugin-repository-recommended) to your
+  Jellyfin dashboard — no manual DLL copying.
+- **Versioning:** the `1.12.x` line targets Jellyfin 12; compatibility itself is enforced
+  by `targetAbi` in the manifest.
 - **Status:** in active development.
 
 ---
@@ -101,7 +105,7 @@ Jellyfin runs in Docker; the plugin folder lives in the config volume.
 
 ```bash
 # Build a ZIP identical to the released one (dist/jellyfin-sso_<version>.zip)
-scripts/package.sh 1.1.0.0
+scripts/package.sh 1.12.0.0
 
 # Build a plain publish output (includes the IdentityModel deps)
 make publish
@@ -224,7 +228,7 @@ Tests live under `tests/` with outputs in `tests/runs/` (gitignored).
 ### Cutting a release
 
 ```bash
-git tag v1.1.0 && git push origin v1.1.0
+git tag v1.12.1 && git push origin v1.12.1
 ```
 
 The `Release` workflow builds the ZIP, attaches it to a GitHub release and appends the
@@ -232,7 +236,7 @@ version to `manifest.json` on `main`, which is what servers poll. The `targetAbi
 into the manifest is derived from the `Jellyfin.Controller` reference in the csproj, so a
 Jellyfin bump automatically applies to the next release.
 
-Tags must be four-part or three-part (`v1.1.0` becomes `1.1.0.0`) and must point at a
+Tags must be four-part or three-part (`v1.12.1` becomes `1.12.1.0`) and must point at a
 commit on `main`.
 
 ---
