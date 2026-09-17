@@ -80,10 +80,30 @@ never need this — they are linked automatically by JIT.
 
 ## Installation
 
+### From the plugin repository (recommended)
+
+In the Jellyfin dashboard, go to **Plugins → Repositories → +** and add:
+
+| Field | Value |
+|---|---|
+| Repository Name | `SSO Authentication` |
+| Repository URL | `https://raw.githubusercontent.com/be-nj/jellyfin-sso/main/manifest.json` |
+
+The plugin then appears under **Plugins → Catalog → Authentication**. Install it and
+restart Jellyfin. Updates show up in the catalog like any other plugin.
+
+Jellyfin only offers versions whose `targetAbi` matches the running server, so a plugin
+build for a different Jellyfin release is never installed by accident.
+
+### Manual / development install
+
 Jellyfin runs in Docker; the plugin folder lives in the config volume.
 
 ```bash
-# Build a self-contained publish output (includes the IdentityModel deps)
+# Build a ZIP identical to the released one (dist/jellyfin-sso_<version>.zip)
+scripts/package.sh 1.1.0.0
+
+# Build a plain publish output (includes the IdentityModel deps)
 make publish
 
 # Or build + deploy to the server in one step (see Makefile for host vars)
@@ -201,6 +221,20 @@ server-side).
 
 Tests live under `tests/` with outputs in `tests/runs/` (gitignored).
 
+### Cutting a release
+
+```bash
+git tag v1.1.0 && git push origin v1.1.0
+```
+
+The `Release` workflow builds the ZIP, attaches it to a GitHub release and appends the
+version to `manifest.json` on `main`, which is what servers poll. The `targetAbi` written
+into the manifest is derived from the `Jellyfin.Controller` reference in the csproj, so a
+Jellyfin bump automatically applies to the next release.
+
+Tags must be four-part or three-part (`v1.1.0` becomes `1.1.0.0`) and must point at a
+commit on `main`.
+
 ---
 
 ## Roadmap
@@ -210,7 +244,6 @@ Tests live under `tests/` with outputs in `tests/runs/` (gitignored).
 - RP-initiated logout.
 - Per-user "exclude from sync" opt-out.
 - Multiple simultaneously-enabled providers + provider picker.
-- Versioned releases via a gitea plugin manifest.
 
 ## License
 

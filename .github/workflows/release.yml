@@ -1,0 +1,78 @@
+name: Release
+
+# Tag a commit on main to publish a release:
+#
+#   git tag v1.1.0 && git push origin v1.1.0
+#
+# The workflow builds the plugin ZIP, attaches it to a GitHub release and adds
+# the version to manifest.json on main, which is the file Jellyfin polls.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Verify the tag points at main
+        run: |
+          git merge-base --is-ancestor "$GITHUB_SHA" main \
+            || { echo "tag $GITHUB_REF_NAME is not on main"; exit 1; }
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Derive the version from the tag
+        id: version
+        run: |
+          raw="${GITHUB_REF_NAME#v}"
+          # Jellyfin wants a four-part version; v1.1.0 becomes 1.1.0.0.
+          case "$(tr -cd '.' <<< "$raw" | wc -c)" in
+            2) version="$raw.0" ;;
+            3) version="$raw" ;;
+            *) echo "tag must look like v1.1.0 or v1.1.0.0, got $GITHUB_REF_NAME"; exit 1 ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "zip=jellyfin-sso_$version.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Build the plugin package
+        run: scripts/package.sh "${{ steps.version.outputs.version }}"
+
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/${{ steps.version.outputs.zip }}" \
+            --title "${{ steps.version.outputs.version }}" \
+            --generate-notes
+
+      - name: Add the version to manifest.json
+        run: |
+          version='${{ steps.version.outputs.version }}'
+          zip='${{ steps.version.outputs.zip }}'
+          scripts/update-manifest.sh \
+            "$version" \
+            "$(cat "dist/$zip.md5")" \
+            "${{ github.server_url }}/${{ github.repository }}/releases/download/$GITHUB_REF_NAME/$zip" \
+            "See the release notes for $GITHUB_REF_NAME."
+
+      - name: Commit the manifest
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add manifest.json
+          git commit -m "Publish ${{ steps.version.outputs.version }} in the plugin manifest"
+          git push origin main

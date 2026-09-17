@@ -1,0 +1,11 @@
+[
+  {
+    "guid": "f5538c3a-1bce-4b8c-b8a5-bc1a0fffdf27",
+    "name": "SSO Authentication",
+    "description": "OIDC/OAuth2 single sign-on with group-based library access.",
+    "overview": "Single sign-on for Jellyfin against any OIDC provider, with users and library permissions driven by IdP groups.",
+    "owner": "be-nj",
+    "category": "Authentication",
+    "versions": []
+  }
+]
