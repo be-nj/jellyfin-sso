@@ -8,6 +8,19 @@ public class PluginConfiguration : BasePluginConfiguration
     public List<GroupMappingConfig> GroupMappings { get; set; } = [];
     public List<LinkConfig> Links { get; set; } = [];
     public List<string> SeenGroups { get; set; } = [];
+
+    /// <summary>
+    /// When true, an SSO login never clears an existing administrator flag. The escape
+    /// hatch for the case where a group rename at the IdP would otherwise demote the
+    /// admins; library access is still synced declaratively.
+    /// </summary>
+    public bool PreserveAdminPermissions { get; set; }
+
+    /// <summary>
+    /// Jellyfin users whose permissions are managed by hand. They can still log in via
+    /// SSO, but their policy is left exactly as an administrator set it.
+    /// </summary>
+    public List<Guid> SyncExcludedUserIds { get; set; } = [];
 }
 
 public class ProviderConfig
@@ -67,11 +80,17 @@ public class GroupMappingConfig
 
     public bool IsAdministrator { get; set; }
 
-    // Phase 2 fields (commented out, same bundle shape so no schema migration needed later):
-    // public bool EnableLiveTvAccess { get; set; }
-    // public bool EnableLiveTvManagement { get; set; }
-    // public bool EnableContentDownloading { get; set; }
-    // public int? MaxParentalRating { get; set; }
+    public bool EnableLiveTvAccess { get; set; }
+
+    public bool EnableLiveTvManagement { get; set; }
+
+    public bool EnableContentDownloading { get; set; }
+
+    /// <summary>
+    /// Highest parental rating this group may watch. Null means no limit; a user in
+    /// several groups gets the most permissive of them.
+    /// </summary>
+    public int? MaxParentalRating { get; set; }
 }
 
 /// <summary>

@@ -1,0 +1,185 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Microsoft.Playwright;
+
+namespace Jellyfin.Plugin.Sso.E2eTests;
+
+/// <summary>
+/// The admin page is plain JavaScript loaded into Jellyfin's dashboard, so nothing but a
+/// browser notices a typo in it. This drives the real page: it renders inside the real
+/// dashboard, a mapping edited there round-trips through the plugin's API, and the safety
+/// settings are actually saved.
+/// </summary>
+[Collection(JellyfinCollection.Name)]
+public sealed class ConfigPageTests : IAsyncLifetime
+{
+    private readonly JellyfinEnvironment _env;
+    private IPlaywright _playwright = null!;
+    private IBrowser _browser = null!;
+
+    public ConfigPageTests(JellyfinEnvironment env)
+    {
+        _env = env;
+    }
+
+    public async Task InitializeAsync()
+    {
+        await _env.ResetAsync();
+        _playwright = await BrowserSupport.InstallAsync();
+        _browser = await _playwright.Chromium.LaunchAsync();
+    }
+
+    public async Task DisposeAsync()
+    {
+        await _browser.DisposeAsync();
+        _playwright.Dispose();
+    }
+
+    [Fact]
+    public async Task The_admin_page_saves_a_group_mapping_with_its_permissions()
+    {
+        var page = await OpenConfigPageAsync();
+
+        await page.ClickAsync("#AddMapping");
+        var card = page.Locator(".sso-mapping").Last;
+        await card.Locator(".sso-group-input").FillAsync("set-from-ui");
+        // Jellyfin styles its checkboxes with an overlay, so the input itself is not
+        // clickable in the ordinary sense.
+        await card.Locator(".sso-livetv-cb").CheckAsync(new LocatorCheckOptions { Force = true });
+        await card.Locator(".sso-rating-input").FillAsync("12");
+
+        await page.ClickAsync("#Save");
+
+        // Read it back through the API: the page is only trustworthy if this matches.
+        var mapping = await WaitForMappingAsync("set-from-ui");
+        Assert.True(mapping["EnableLiveTvAccess"]!.GetValue<bool>());
+        Assert.False(mapping["EnableContentDownloading"]!.GetValue<bool>());
+        Assert.Equal(12, mapping["MaxParentalRating"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task The_admin_page_saves_the_safety_settings()
+    {
+        var page = await OpenConfigPageAsync();
+
+        await page.CheckAsync("#PreserveAdminPermissions", new PageCheckOptions { Force = true });
+        // The exclusion list is built from the server's users, so the setup admin is there.
+        await page.Locator($".sso-excl-cb[value=\"{_env.AdminUserId}\"]")
+            .CheckAsync(new LocatorCheckOptions { Force = true });
+
+        await page.ClickAsync("#Save");
+
+        await WaitForConfigAsync(config =>
+            config["PreserveAdminPermissions"]!.GetValue<bool>()
+            && config["SyncExcludedUserIds"]!.AsArray().Count == 1);
+    }
+
+    [Fact]
+    public async Task The_admin_page_shows_the_stored_mappings()
+    {
+        var page = await OpenConfigPageAsync();
+
+        // ResetAsync configures media, kids and jellyfin-admins.
+        Assert.Equal(3, await page.Locator(".sso-mapping").CountAsync());
+        var groups = await page.Locator(".sso-group-input").EvaluateAllAsync<string[]>(
+            "inputs => inputs.map(i => i.value)");
+        Assert.Contains("media", groups);
+        Assert.Contains("jellyfin-admins", groups);
+    }
+
+    /// <summary>
+    /// Opens the plugin's page inside the dashboard with a seeded admin session, and fails
+    /// with the page's own console output if the page never initialises.
+    /// </summary>
+    private async Task<IPage> OpenConfigPageAsync()
+    {
+        var context = await _browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            BaseURL = _env.BaseUrl,
+            IgnoreHTTPSErrors = true,
+        });
+
+        var credentials = new JsonObject
+        {
+            ["Servers"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["Id"] = _env.ServerId,
+                    ["AccessToken"] = _env.AdminToken,
+                    ["UserId"] = _env.AdminUserId,
+                    ["UserName"] = _env.AdminUserName,
+                    ["ManualAddress"] = _env.BaseUrl,
+                    ["LastConnectionMode"] = 2,
+                    ["DateLastAccessed"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                },
+            },
+        };
+
+        await context.AddInitScriptAsync(
+            "window.localStorage.setItem('jellyfin_credentials', "
+            + JsonSerializer.Serialize(credentials.ToJsonString()) + ");"
+            + "window.localStorage.setItem('_deviceId2', 'e2e-config-page');");
+
+        var page = await context.NewPageAsync();
+        var consoleMessages = new List<string>();
+        page.Console += (_, message) => consoleMessages.Add($"{message.Type}: {message.Text}");
+
+        // Jellyfin's web client routes plugin pages by display name, not by GUID.
+        await page.GotoAsync("/web/index.html#/configurationpage?name=SSO%20Authentication");
+
+        try
+        {
+            // The mappings panel starts hidden behind its tab, so wait for the markup, not
+            // for visibility, and only then switch to the tab the settings live on.
+            await page.WaitForSelectorAsync("#GroupMappings", new PageWaitForSelectorOptions
+            {
+                State = WaitForSelectorState.Attached,
+                Timeout = 30_000,
+            });
+            // The mapping cards are rendered after the config request resolves.
+            await page.WaitForFunctionAsync(
+                "() => document.querySelectorAll('.sso-mapping').length > 0",
+                null,
+                new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+            await page.ClickAsync(".sso-tab[data-tab=\"mappings\"]");
+            await page.WaitForSelectorAsync("#GroupMappings", new PageWaitForSelectorOptions { Timeout = 10_000 });
+        }
+        catch (TimeoutException)
+        {
+            await BrowserSupport.CaptureAsync(page, "config-page");
+            Assert.Fail(
+                "The plugin's configuration page did not initialise.\n"
+                + $"url:     {page.Url}\n"
+                + $"console: {string.Join(" | ", consoleMessages)}");
+        }
+
+        return page;
+    }
+
+    private async Task<JsonNode> WaitForMappingAsync(string group)
+    {
+        var config = await WaitForConfigAsync(c => c["GroupMappings"]!.AsArray()
+            .Any(m => m!["Group"]!.GetValue<string>() == group));
+        return JellyfinEnvironment.Mapping(config, group);
+    }
+
+    /// <summary>Polls the plugin config until the page's save has landed.</summary>
+    private async Task<JsonNode> WaitForConfigAsync(Func<JsonNode, bool> saved)
+    {
+        for (var attempt = 0; attempt < 30; attempt++)
+        {
+            var config = await _env.PluginConfigAsync();
+            if (saved(config))
+            {
+                return config;
+            }
+
+            await Task.Delay(500);
+        }
+
+        Assert.Fail("The configuration page never saved the expected configuration.");
+        throw new InvalidOperationException("unreachable");
+    }
+}

@@ -1,6 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Text.Json;
-using IdentityModel.Client;
+using Duende.IdentityModel.Client;
 using Jellyfin.Plugin.Sso.Configuration;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;

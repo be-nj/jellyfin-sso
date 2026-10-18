@@ -182,6 +182,66 @@ public sealed class SsoLoginTests : IAsyncLifetime
     /// Jellyfin reports enabled folders as dashed GUIDs while library ids come back from
     /// the API without dashes, so both sides are normalised before comparing.
     /// </summary>
+    [Fact]
+    public async Task Live_tv_and_downloads_follow_the_groups()
+    {
+        await _env.PatchConfigAsync(config =>
+        {
+            var media = JellyfinEnvironment.Mapping(config, "media");
+            media["EnableLiveTvAccess"] = true;
+            media["EnableContentDownloading"] = true;
+        });
+
+        var login = await _env.StartWebLoginAsync(new FakeUser("sub-tv", "tvuser", ["media"]));
+        Assert.True(login.Succeeded, login.Body);
+
+        var policy = await _env.UserPolicyAsync("tvuser");
+        Assert.True(policy["EnableLiveTvAccess"]!.GetValue<bool>());
+        Assert.True(policy["EnableContentDownloading"]!.GetValue<bool>());
+        Assert.False(policy["EnableLiveTvManagement"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task A_parental_rating_from_the_group_reaches_the_user_policy()
+    {
+        await _env.PatchConfigAsync(config =>
+            JellyfinEnvironment.Mapping(config, "kids")["MaxParentalRating"] = 6);
+
+        var login = await _env.StartWebLoginAsync(new FakeUser("sub-kid", "kiduser", ["kids"]));
+        Assert.True(login.Succeeded, login.Body);
+
+        Assert.Equal(6, (await _env.UserPolicyAsync("kiduser"))["MaxParentalRating"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task An_excluded_user_keeps_the_permissions_an_admin_set()
+    {
+        await _env.StartWebLoginAsync(new FakeUser("sub-manual", "manualuser", ["media"]));
+        var userId = (await _env.FindUserAsync("manualuser"))!["Id"]!.GetValue<string>();
+
+        await _env.PatchConfigAsync(config =>
+            config["SyncExcludedUserIds"]!.AsArray().Add(userId));
+
+        // Logs in again with no groups at all: without the exclusion this would revoke access.
+        var second = await _env.StartWebLoginAsync(new FakeUser("sub-manual", "manualuser", []));
+        Assert.True(second.Succeeded, second.Body);
+
+        Assert.Equal([Library(_env.MoviesLibraryId)], Folders(await _env.UserPolicyAsync("manualuser")));
+    }
+
+    [Fact]
+    public async Task Admin_rights_are_revoked_once_the_admin_group_is_gone()
+    {
+        await _env.StartWebLoginAsync(new FakeUser("sub-demote", "demoteuser", ["jellyfin-admins"]));
+        Assert.True((await _env.UserPolicyAsync("demoteuser"))["IsAdministrator"]!.GetValue<bool>());
+
+        // The local setup admin still exists, so the last-administrator guard does not apply.
+        var second = await _env.StartWebLoginAsync(new FakeUser("sub-demote", "demoteuser", ["media"]));
+        Assert.True(second.Succeeded, second.Body);
+
+        Assert.False((await _env.UserPolicyAsync("demoteuser"))["IsAdministrator"]!.GetValue<bool>());
+    }
+
     private static List<Guid> Folders(JsonNode policy)
         => policy["EnabledFolders"]?.AsArray().Select(f => Guid.Parse(f!.GetValue<string>())).ToList() ?? [];
 

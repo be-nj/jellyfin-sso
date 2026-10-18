@@ -1,3 +1,6 @@
+using Jellyfin.Data;
+using Jellyfin.Database.Implementations.Entities;
+using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.Sso.Auth;
 using Jellyfin.Plugin.Sso.Configuration;
 using Jellyfin.Plugin.Sso.Oidc;
@@ -38,6 +41,140 @@ public sealed class PermissionSyncTests : IDisposable
         });
 
     private static OidcIdentity Identity(params string[] groups) => new("sub-1", "ben", groups);
+
+    /// <summary>Registers a Jellyfin user for the synced id, optionally already an admin.</summary>
+    private User ExistingUser(bool admin, Guid? id = null)
+    {
+        var user = new User(
+            "ben",
+            "Emby.Server.Implementations.Library.DefaultAuthenticationProvider",
+            "Emby.Server.Implementations.Library.DefaultPasswordResetProvider");
+        user.SetPermission(PermissionKind.IsAdministrator, admin);
+        // Registered under both ids so a test can sync either the shared id or the entity's own.
+        _userManager.GetUserById(id ?? _userId).Returns(user);
+        _userManager.GetUserById(user.Id).Returns(user);
+        return user;
+    }
+
+    private void OtherUsers(params User[] users) => _userManager.GetUsers().Returns(users);
+
+    [Fact]
+    public async Task Live_tv_and_downloads_come_from_the_groups()
+    {
+        _harness.Configuration.GroupMappings.Add(new GroupMappingConfig
+        {
+            Group = "media",
+            LibraryIds = [MoviesId.ToString("N")],
+            EnableLiveTvAccess = true,
+        });
+        _harness.Configuration.GroupMappings.Add(new GroupMappingConfig
+        {
+            Group = "downloaders",
+            EnableContentDownloading = true,
+        });
+
+        await _sync.SyncAsync(_userId, Identity("media", "downloaders"));
+
+        var policy = CapturedPolicy();
+        Assert.True(policy.EnableLiveTvAccess);
+        Assert.True(policy.EnableContentDownloading);
+        Assert.False(policy.EnableLiveTvManagement);
+    }
+
+    [Fact]
+    public async Task An_admin_group_grants_live_tv_and_downloads_too()
+    {
+        Map("jellyfin-admins", true);
+
+        await _sync.SyncAsync(_userId, Identity("jellyfin-admins"));
+
+        var policy = CapturedPolicy();
+        Assert.True(policy.EnableLiveTvAccess);
+        Assert.True(policy.EnableLiveTvManagement);
+        Assert.True(policy.EnableContentDownloading);
+        Assert.Null(policy.MaxParentalRating);
+    }
+
+    [Fact]
+    public async Task The_most_permissive_parental_rating_of_the_matched_groups_wins()
+    {
+        _harness.Configuration.GroupMappings.Add(new GroupMappingConfig { Group = "kids", MaxParentalRating = 6 });
+        _harness.Configuration.GroupMappings.Add(new GroupMappingConfig { Group = "teens", MaxParentalRating = 12 });
+
+        await _sync.SyncAsync(_userId, Identity("kids", "teens"));
+
+        Assert.Equal(12, CapturedPolicy().MaxParentalRating);
+    }
+
+    [Fact]
+    public async Task A_group_without_a_parental_limit_lifts_the_limit()
+    {
+        _harness.Configuration.GroupMappings.Add(new GroupMappingConfig { Group = "kids", MaxParentalRating = 6 });
+        _harness.Configuration.GroupMappings.Add(new GroupMappingConfig { Group = "media" });
+
+        await _sync.SyncAsync(_userId, Identity("kids", "media"));
+
+        Assert.Null(CapturedPolicy().MaxParentalRating);
+    }
+
+    [Fact]
+    public async Task An_excluded_user_keeps_the_permissions_an_admin_gave_them()
+    {
+        Map("media", false, MoviesId);
+        _harness.Configuration.SyncExcludedUserIds.Add(_userId);
+
+        await _sync.SyncAsync(_userId, Identity("media", "a-new-group"));
+
+        await _userManager.DidNotReceiveWithAnyArgs().UpdatePolicyAsync(default, default!);
+        // Group names are still learned, so the admin UI can offer them.
+        Assert.Contains("a-new-group", _harness.Configuration.SeenGroups);
+    }
+
+    [Fact]
+    public async Task PreserveAdminPermissions_keeps_an_admin_that_no_group_grants()
+    {
+        Map("media", false, MoviesId);
+        _harness.Configuration.PreserveAdminPermissions = true;
+        ExistingUser(admin: true);
+        OtherUsers(ExistingUser(admin: true, id: Guid.NewGuid()));
+
+        await _sync.SyncAsync(_userId, Identity("media"));
+
+        var policy = CapturedPolicy();
+        Assert.True(policy.IsAdministrator);
+        // A kept administrator is still an administrator, so they keep full library access.
+        Assert.True(policy.EnableAllFolders);
+    }
+
+    [Fact]
+    public async Task The_last_administrator_is_never_demoted()
+    {
+        // A typo in the admin group would otherwise lock everyone out of the server.
+        Map("jellyfin-adminz", true);
+        var admin = ExistingUser(admin: true);
+        OtherUsers(admin);
+
+        await _sync.SyncAsync(admin.Id, Identity("jellyfin-admins"));
+
+        Assert.True(CapturedPolicy().IsAdministrator);
+    }
+
+    [Fact]
+    public async Task An_admin_is_demoted_while_another_admin_remains()
+    {
+        Map("media", false, MoviesId);
+        var user = ExistingUser(admin: true);
+        var otherAdmin = new User(
+            "root",
+            "Emby.Server.Implementations.Library.DefaultAuthenticationProvider",
+            "Emby.Server.Implementations.Library.DefaultPasswordResetProvider");
+        otherAdmin.SetPermission(PermissionKind.IsAdministrator, true);
+        OtherUsers(user, otherAdmin);
+
+        await _sync.SyncAsync(user.Id, Identity("media"));
+
+        Assert.False(CapturedPolicy().IsAdministrator);
+    }
 
     [Fact]
     public async Task A_mapped_group_grants_exactly_its_libraries()

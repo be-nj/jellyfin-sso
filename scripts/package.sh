@@ -25,7 +25,7 @@ trap 'rm -rf "$PUBLISH_DIR"' EXIT
 
 # Dependencies Jellyfin does not ship itself; they have to live next to the plugin.
 EXTRA_DLLS=(
-    IdentityModel.dll
+    Duende.IdentityModel.dll
     Microsoft.IdentityModel.Abstractions.dll
     Microsoft.IdentityModel.JsonWebTokens.dll
     Microsoft.IdentityModel.Logging.dll

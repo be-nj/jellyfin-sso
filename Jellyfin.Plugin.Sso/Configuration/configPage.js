@@ -3,7 +3,7 @@
  * Must be an ES module; default export receives the view element. */
 
 var API = '/sso/admin';
-var _libraries = [], _seenGroups = [], _config = null;
+var _libraries = [], _seenGroups = [], _users = [], _config = null;
 
 export default function (view) {
     load(view).catch(function (e) { Dashboard.alert('Failed to load SSO config: ' + e.message); });
@@ -69,10 +69,40 @@ function load(view) {
         setVal(view, 'GroupsClaim', p.GroupsClaim || '');
         setChk(view, 'GroupsFromUserInfo', !!p.GroupsFromUserInfo);
         if (p.Id) view.querySelector('#SsoLoginUrl').textContent = '/sso/oidc/start/' + p.Id;
+        setChk(view, 'PreserveAdminPermissions', !!_config.PreserveAdminPermissions);
         renderMappings(view, _config.GroupMappings || []);
-        populateLinkForm(view);
         renderLinks(view);
+        return populateUsers(view);
     });
+}
+
+// Users are needed twice: the manual-link dropdown and the exclude-from-sync list.
+function populateUsers(view) {
+    return apiGet(API + '/users').then(function (users) {
+        _users = users;
+        populateLinkForm(view);
+        renderExcluded(view);
+    });
+}
+
+function renderExcluded(view) {
+    var excluded = _config.SyncExcludedUserIds || [];
+    view.querySelector('#SyncExcluded').innerHTML = _users.map(function (u) {
+        var checked = excluded.some(function (id) { return sameId(id, u.Id); }) ? ' checked' : '';
+        return '<div class="sectioncheckbox"><label><input type="checkbox" is="emby-checkbox" class="sso-excl-cb" value="'
+            + escAttr(u.Id) + '"' + checked + ' /><span>' + escHtml(u.Name) + '</span></label></div>';
+    }).join('');
+}
+
+function collectExcluded(view) {
+    return Array.from(view.querySelectorAll('.sso-excl-cb'))
+        .filter(function (cb) { return cb.checked; })
+        .map(function (cb) { return cb.value; });
+}
+
+// Jellyfin hands out ids with and without dashes depending on the endpoint.
+function sameId(a, b) {
+    return String(a).replace(/-/g, '').toLowerCase() === String(b).replace(/-/g, '').toLowerCase();
 }
 
 function populateLinkForm(view) {
@@ -83,13 +113,11 @@ function populateLinkForm(view) {
     }).join('');
 
     // Jellyfin user dropdown — only unlinked users (linked ones can't be re-linked anyway)
-    return apiGet(API + '/users').then(function (users) {
-        var userSel = view.querySelector('#LinkUserId');
-        userSel.innerHTML = users.map(function (u) {
-            return '<option value="' + escAttr(u.Id) + '"' + (u.Linked ? ' disabled' : '') + '>'
-                + escHtml(u.Name) + (u.Linked ? ' (already linked)' : '') + '</option>';
-        }).join('');
-    });
+    var userSel = view.querySelector('#LinkUserId');
+    userSel.innerHTML = _users.map(function (u) {
+        return '<option value="' + escAttr(u.Id) + '"' + (u.Linked ? ' disabled' : '') + '>'
+            + escHtml(u.Name) + (u.Linked ? ' (already linked)' : '') + '</option>';
+    }).join('');
 }
 
 // ─── Save ────────────────────────────────────────────────────────────────────
@@ -112,6 +140,8 @@ function save(view) {
         GroupMappings: collectMappings(view),
         Links: (_config && _config.Links) || [],
         SeenGroups: (_config && _config.SeenGroups) || [],
+        PreserveAdminPermissions: getChk(view, 'PreserveAdminPermissions'),
+        SyncExcludedUserIds: collectExcluded(view),
     };
     apiPost(API + '/config', cfg).then(function () {
         _config = cfg;
@@ -146,6 +176,12 @@ function buildRow(view, m, i) {
     }).join('');
 
     var adminChecked = m.IsAdministrator ? ' checked' : '';
+    var rating = (m.MaxParentalRating === null || m.MaxParentalRating === undefined) ? '' : m.MaxParentalRating;
+
+    function permission(cls, labelText, on) {
+        return '<div class="sectioncheckbox"><label><input type="checkbox" is="emby-checkbox" class="' + cls + '"'
+            + (on ? ' checked' : '') + ' /><span>' + labelText + '</span></label></div>';
+    }
 
     // Built as innerHTML so Jellyfin's emby-* custom elements auto-upgrade on DOM insertion.
     card.innerHTML =
@@ -163,14 +199,28 @@ function buildRow(view, m, i) {
         '<div class="folderAccess sso-libs-section">' +
             '<h3 class="checkboxListLabel">Libraries</h3>' +
             '<div class="checkboxList sso-libs-grid">' + libsHtml + '</div>' +
+        '</div>' +
+        '<div class="sso-perms-section">' +
+            '<h3 class="checkboxListLabel">Permissions</h3>' +
+            '<div class="checkboxList sso-libs-grid">' +
+                permission('sso-livetv-cb', 'Live TV access', m.EnableLiveTvAccess) +
+                permission('sso-livetv-mgmt-cb', 'Live TV management', m.EnableLiveTvManagement) +
+                permission('sso-download-cb', 'Downloads', m.EnableContentDownloading) +
+            '</div>' +
+            '<div class="inputContainer sso-rating-field">' +
+                '<input type="number" is="emby-input" class="sso-rating-input" min="0" ' +
+                    'label="Max parental rating (empty = no limit)" value="' + escAttr(String(rating)) + '" />' +
+            '</div>' +
         '</div>';
 
     var ac = card.querySelector('.sso-admin-check');
     var libsSection = card.querySelector('.sso-libs-section');
+    var permsSection = card.querySelector('.sso-perms-section');
 
-    // Admin = all folders → hide the per-library list when admin is checked.
+    // Admins get everything, so the per-group grants are irrelevant while admin is checked.
     function syncAdmin() {
         libsSection.style.display = ac.checked ? 'none' : '';
+        permsSection.style.display = ac.checked ? 'none' : '';
     }
     ac.addEventListener('change', syncAdmin);
     syncAdmin();
@@ -198,10 +248,21 @@ function collectMappings(view) {
         var libIds = Array.from(card.querySelectorAll('.sso-lib-cb'))
             .filter(function (cb) { return cb.checked; })
             .map(function (cb) { return cb.value; });
+        var ratingInput = card.querySelector('.sso-rating-input');
+        var rating = ratingInput ? ratingInput.value.trim() : '';
+        var checked = function (cls) {
+            var cb = card.querySelector(cls);
+            return cb ? cb.checked : false;
+        };
+
         return {
             Group: g,
             LibraryIds: libIds,
             IsAdministrator: ac ? ac.checked : false,
+            EnableLiveTvAccess: checked('.sso-livetv-cb'),
+            EnableLiveTvManagement: checked('.sso-livetv-mgmt-cb'),
+            EnableContentDownloading: checked('.sso-download-cb'),
+            MaxParentalRating: rating === '' ? null : parseInt(rating, 10),
         };
     }).filter(Boolean);
 }

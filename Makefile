@@ -7,7 +7,7 @@ JELLYFIN_HOST        ?= diana.home
 JELLYFIN_PLUGIN_PATH ?= /etc/komodo/stacks/jellyfin/jellyfin-config/plugins/SSO Authentication_1.0.0.0
 
 # External deps that Jellyfin does NOT bundle (must live in the plugin folder).
-EXTRA_DLLS := IdentityModel.dll \
+EXTRA_DLLS := Duende.IdentityModel.dll \
               Microsoft.IdentityModel.Abstractions.dll \
               Microsoft.IdentityModel.JsonWebTokens.dll \
               Microsoft.IdentityModel.Logging.dll \

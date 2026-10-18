@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "low-contrast",
+        "value": "*",
+        "files": [
+          "Jellyfin.Plugin.Sso/Configuration/configPage.html"
+        ],
+        "createdAt": "2026-10-18T22:27:37.651Z",
+        "reason": "model: page defines no colors; it reuses Jellyfin's native dashboard classes (fieldDescription, checkboxListLabel) so contrast comes from the server's theme CSS"
+      }
+    ]
+  }
+}

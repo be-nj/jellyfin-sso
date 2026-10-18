@@ -36,6 +36,13 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
 
     public string AdminToken { get; private set; } = string.Empty;
 
+    /// <summary>Identity of the setup administrator, for seeding a dashboard session.</summary>
+    public string AdminUserId { get; private set; } = string.Empty;
+
+    public string AdminUserName => AdminUser;
+
+    public string ServerId { get; private set; } = string.Empty;
+
     public string MoviesLibraryId { get; private set; } = string.Empty;
 
     public string KidsLibraryId { get; private set; } = string.Empty;
@@ -77,6 +84,10 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
         await CompleteStartupWizardAsync();
         AdminToken = await AuthenticateAdminAsync();
         _admin.DefaultRequestHeaders.Authorization = AuthHeader(AdminToken);
+
+        var me = JsonNode.Parse(await _admin.GetStringAsync("/Users/Me"))!;
+        AdminUserId = me["Id"]!.GetValue<string>();
+        ServerId = JsonNode.Parse(await _admin.GetStringAsync("/System/Info/Public"))!["Id"]!.GetValue<string>();
 
         MoviesLibraryId = await CreateLibraryAsync("Movies", "movies", "/media/movies");
         KidsLibraryId = await CreateLibraryAsync("Kids", "movies", "/media/kids");
@@ -225,6 +236,20 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
 
     public async Task<JsonNode> PluginConfigAsync()
         => JsonNode.Parse(await _admin.GetStringAsync("/sso/admin/config"))!;
+
+    /// <summary>Reads the live plugin configuration, lets the test change it, and saves it.</summary>
+    public async Task PatchConfigAsync(Action<JsonNode> change)
+    {
+        var config = await PluginConfigAsync();
+        change(config);
+        var response = await _admin.PostAsJsonAsync("/sso/admin/config", config);
+        response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>The group mapping for a group name, as stored in the live configuration.</summary>
+    public static JsonNode Mapping(JsonNode config, string group)
+        => config["GroupMappings"]!.AsArray()
+            .First(m => m!["Group"]!.GetValue<string>() == group)!;
 
     public async Task<Guid> CreateLocalUserAsync(string username)
     {

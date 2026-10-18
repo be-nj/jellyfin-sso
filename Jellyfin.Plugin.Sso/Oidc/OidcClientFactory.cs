@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net.Http.Headers;
-using IdentityModel.Client;
+using Duende.IdentityModel.Client;
 using Jellyfin.Plugin.Sso.Configuration;
 using Microsoft.Extensions.Logging;
 

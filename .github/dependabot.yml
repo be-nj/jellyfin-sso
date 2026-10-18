@@ -1,0 +1,33 @@
+version: 2
+
+# Dependabot works without installing anything; the identity libraries in the auth path
+# are the reason this exists, so they get their own group and a weekly check.
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      identity:
+        patterns:
+          - 'Duende.IdentityModel*'
+          - 'Microsoft.IdentityModel*'
+          - 'System.IdentityModel*'
+      test-tooling:
+        patterns:
+          - 'xunit*'
+          - 'Microsoft.NET.Test.Sdk'
+          - 'NSubstitute'
+          - 'Testcontainers*'
+          - 'Microsoft.Playwright'
+          - 'coverlet*'
+    ignore:
+      # Pinned to the server's ABI on purpose; bumping these is a deliberate port.
+      - dependency-name: Jellyfin.Controller
+      - dependency-name: Jellyfin.Model
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

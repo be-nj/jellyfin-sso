@@ -119,7 +119,7 @@ plugin folder (the `Makefile`'s `deploy` target handles this):
 
 ```
 Jellyfin.Plugin.Sso.dll
-IdentityModel.dll
+Duende.IdentityModel.dll
 Microsoft.IdentityModel.Abstractions.dll
 Microsoft.IdentityModel.JsonWebTokens.dll
 Microsoft.IdentityModel.Logging.dll
@@ -171,9 +171,24 @@ Dashboard → **Plugins → SSO Authentication**:
   - Group name (autocompletes from groups seen at login).
   - Libraries the group may access (checkboxes).
   - **Admin (all libraries)** — grants Jellyfin admin and full library access.
+  - **Live TV access**, **Live TV management**, **Downloads**.
+  - **Max parental rating** — empty means no limit.
+- **Safety**:
+  - **Never remove administrator rights on login** — keeps existing admins even when no
+    admin group matches. Library access stays declarative.
+  - **Excluded from sync** — users whose permissions you manage by hand. They can still
+    log in via SSO; their policy is never touched.
 
 > Mappings are applied **declaratively on every login**. Changing a user's library access
 > in Jellyfin's own user UI will be overwritten on their next login.
+
+A user in several groups gets the union: every library of every matched group, each
+permission if any group grants it, and the **most permissive** parental rating — a group
+without a limit lifts the limit.
+
+> **Lockout guard:** the last remaining administrator is never demoted, whatever the
+> groups say. A mistyped admin group therefore costs you a warning in the log, not access
+> to your own server.
 
 ### Manual linking (existing local accounts)
 
@@ -251,8 +266,10 @@ container is made to trust), and the browser hop is driven by Playwright.
 Covered there: the plugin loads in a real server, the redirect and PKCE code exchange, JIT
 provisioning, group-to-library permissions applied through Jellyfin's own user policy,
 Jellyfin minting an access token for the ephemeral secret, the username-collision refusal,
-and the localStorage handoff into the web client. Screenshots and page dumps of failed
-browser runs land in `tests/runs/playwright/`.
+and the localStorage handoff into the web client. The admin page is driven too — it is
+plain JavaScript inside Jellyfin's dashboard, where only a browser notices a typo — so a
+mapping edited in the UI is read back through the API. Screenshots and page dumps of
+failed browser runs land in `tests/runs/playwright/`.
 
 `make e2e` runs inside the .NET SDK image (no local SDK needed) and talks to the host's
 Docker daemon; it needs Docker and about 1 GB for the Jellyfin image.
@@ -277,11 +294,10 @@ commit on `main`.
 
 ## Roadmap
 
-- Phase 2 group-derived permissions: Live TV, downloads, parental rating.
 - Active revocation (background re-sync).
 - RP-initiated logout.
-- Per-user "exclude from sync" opt-out.
 - Multiple simultaneously-enabled providers + provider picker.
+- Self-service account linking for users (currently admin-only).
 
 ## License
 

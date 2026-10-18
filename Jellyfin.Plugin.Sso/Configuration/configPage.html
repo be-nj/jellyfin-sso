@@ -43,6 +43,8 @@
     .sso-admin-toggle { flex: 0 0 auto; margin: 0; white-space: nowrap; }
     .sso-remove-btn { flex: 0 0 auto; }
     .sso-libs-section { margin-top: .5em; }
+    .sso-perms-section { margin-top: .5em; }
+    .sso-rating-field { max-width: 18em; margin-top: .25em; }
     .sso-libs-grid.checkboxList {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(15em, 1fr));
@@ -127,6 +129,26 @@
             <button is="emby-button" type="button" id="AddMapping" class="raised sso-mt-sm">
               + Add Mapping
             </button>
+          </div>
+
+          <div class="verticalSection sso-mt">
+            <h3 class="checkboxListLabel">Safety</h3>
+            <div class="checkboxContainer">
+              <label>
+                <input id="PreserveAdminPermissions" type="checkbox" is="emby-checkbox" />
+                <span>Never remove administrator rights on login</span>
+              </label>
+              <div class="fieldDescription">
+                Without this, a renamed or mistyped admin group demotes your administrators on
+                their next login. The last remaining administrator is always kept, either way.
+              </div>
+            </div>
+
+            <h3 class="checkboxListLabel sso-mt-sm">Excluded from sync</h3>
+            <div class="fieldDescription">
+              These users keep the permissions you set in Jellyfin. They can still log in via SSO.
+            </div>
+            <div id="SyncExcluded" class="checkboxList sso-libs-grid"></div>
           </div>
         </div>
 

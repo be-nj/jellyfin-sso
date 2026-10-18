@@ -23,24 +23,7 @@ public sealed class BrowserLoginTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await _env.ResetAsync();
-
-        // Keep the browser download inside tests/runs/ like every other test artifact.
-        Environment.SetEnvironmentVariable(
-            "PLAYWRIGHT_BROWSERS_PATH",
-            Path.Combine(RunsDirectory(), "playwright", "browsers"));
-
-        // CI images ship the shared libraries Chromium needs; a bare container does not,
-        // so E2E_PLAYWRIGHT_WITH_DEPS=1 lets it install them (needs root).
-        string[] install = Environment.GetEnvironmentVariable("E2E_PLAYWRIGHT_WITH_DEPS") == "1"
-            ? ["install", "chromium", "--with-deps"]
-            : ["install", "chromium"];
-
-        if (Program.Main(install) != 0)
-        {
-            throw new InvalidOperationException("Could not install the Chromium build Playwright needs.");
-        }
-
-        _playwright = await Playwright.CreateAsync();
+        _playwright = await BrowserSupport.InstallAsync();
         _browser = await _playwright.Chromium.LaunchAsync();
     }
 
@@ -128,7 +111,7 @@ public sealed class BrowserLoginTests : IAsyncLifetime
         }
         catch (TimeoutException)
         {
-            var directory = await CaptureAsync(page, name);
+            var directory = await BrowserSupport.CaptureAsync(page, name);
 
             Assert.Fail(
                 "The login never reached the web client.\n"
@@ -137,20 +120,6 @@ public sealed class BrowserLoginTests : IAsyncLifetime
                 + $"console: {string.Join(" | ", consoleErrors ?? [])}\n"
                 + $"saved:   {directory}");
         }
-    }
-
-    /// <summary>Saves a screenshot and the page HTML under tests/runs/playwright.</summary>
-    private static async Task<string> CaptureAsync(IPage page, string name)
-    {
-        var directory = Path.Combine(RunsDirectory(), "playwright");
-        Directory.CreateDirectory(directory);
-        await page.ScreenshotAsync(new PageScreenshotOptions
-        {
-            Path = Path.Combine(directory, $"{name}.png"),
-            FullPage = true,
-        });
-        await File.WriteAllTextAsync(Path.Combine(directory, $"{name}.html"), await page.ContentAsync());
-        return directory;
     }
 
     /// <summary>
@@ -168,26 +137,12 @@ public sealed class BrowserLoginTests : IAsyncLifetime
         }
         catch (TimeoutException)
         {
-            await CaptureAsync(page, name);
+            await BrowserSupport.CaptureAsync(page, name);
             Assert.Fail(
                 "The web client never adopted the SSO session.\n"
                 + $"url:     {page.Url}\n"
                 + $"text:    {await page.InnerTextAsync("body")}\n"
                 + $"console: {string.Join(" | ", consoleErrors ?? [])}");
         }
-    }
-
-    private static string RunsDirectory()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "manifest.json")))
-        {
-            dir = dir.Parent;
-        }
-
-        return Path.Combine(
-            dir?.FullName ?? throw new InvalidOperationException("Could not locate the repository root."),
-            "tests",
-            "runs");
     }
 }

@@ -1,4 +1,4 @@
-using IdentityModel.Client;
+using Duende.IdentityModel.Client;
 using Jellyfin.Plugin.Sso.Auth;
 using Jellyfin.Plugin.Sso.Configuration;
 using Jellyfin.Plugin.Sso.Oidc;
