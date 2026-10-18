@@ -236,7 +236,28 @@ secret bridge (single use, no empty password, no cross-user use), PKCE state han
 the provisioning and permission rules (never adopt an account by username, revoke access
 when groups disappear).
 
-The suite runs on every push and pull request, and again before a release is published.
+### End-to-end tests
+
+```bash
+make e2e
+```
+
+A throwaway Jellyfin container is started from the image matching the pinned
+`Jellyfin.Controller` version, with the **release ZIP** installed as a plugin — so the
+artifact users download is the one under test. Alongside it runs a fake OIDC provider (a
+small ASP.NET host in the test process, serving HTTPS with a self-signed certificate the
+container is made to trust), and the browser hop is driven by Playwright.
+
+Covered there: the plugin loads in a real server, the redirect and PKCE code exchange, JIT
+provisioning, group-to-library permissions applied through Jellyfin's own user policy,
+Jellyfin minting an access token for the ephemeral secret, the username-collision refusal,
+and the localStorage handoff into the web client. Screenshots and page dumps of failed
+browser runs land in `tests/runs/playwright/`.
+
+`make e2e` runs inside the .NET SDK image (no local SDK needed) and talks to the host's
+Docker daemon; it needs Docker and about 1 GB for the Jellyfin image.
+
+Both suites run on every push and pull request, and again before a release is published.
 
 ### Cutting a release
 

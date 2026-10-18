@@ -258,7 +258,26 @@ public sealed class SsoController : ControllerBase
             (async function() {
               const msg = document.getElementById('msg');
               try {
-                const deviceId = localStorage.getItem('_deviceId2') || crypto.randomUUID();
+                // crypto.randomUUID only exists in a secure context, so a server reached
+                // over plain HTTP on a LAN address would fail here. Fall back to
+                // getRandomValues, which has no such restriction.
+                function uuid() {
+                  if (window.crypto && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+                  const bytes = new Uint8Array(16);
+                  if (window.crypto && typeof crypto.getRandomValues === 'function') {
+                    crypto.getRandomValues(bytes);
+                  } else {
+                    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+                  }
+                  bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+                  bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 1
+                  let hex = '';
+                  for (const b of bytes) hex += b.toString(16).padStart(2, '0');
+                  return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16)
+                    + '-' + hex.slice(16, 20) + '-' + hex.slice(20);
+                }
+
+                const deviceId = localStorage.getItem('_deviceId2') || uuid();
                 localStorage.setItem('_deviceId2', deviceId);
 
                 // Authenticate as the web client with its device id. Jellyfin keys sessions

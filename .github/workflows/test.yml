@@ -26,3 +26,30 @@ jobs:
           name: test-results
           path: tests/runs/dotnet/results/
           if-no-files-found: ignore
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      # Drives a throwaway Jellyfin container with the real plugin ZIP, a fake identity
+      # provider and a headless browser.
+      - name: Run the e2e suite
+        run: dotnet test tests/Jellyfin.Plugin.Sso.E2eTests -c Release --logger trx
+
+      - name: Upload e2e artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-results
+          path: |
+            tests/runs/dotnet/results/
+            tests/runs/playwright/*.png
+            tests/runs/playwright/*.html
+          if-no-files-found: ignore

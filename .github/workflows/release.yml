@@ -50,6 +50,9 @@ jobs:
       - name: Run the test suite
         run: dotnet test tests/Jellyfin.Plugin.Sso.Tests -c Release
 
+      - name: Run the e2e suite
+        run: dotnet test tests/Jellyfin.Plugin.Sso.E2eTests -c Release
+
       - name: Build the plugin package
         run: scripts/package.sh "${{ steps.version.outputs.version }}"
 
