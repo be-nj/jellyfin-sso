@@ -1,53 +1,56 @@
+using Jellyfin.Plugin.Sso.Configuration;
 using Jellyfin.Plugin.Sso.Controllers;
 
 namespace Jellyfin.Plugin.Sso.Tests;
 
 /// <summary>
-/// Provider ids and IdP errors come straight from the query string and end up in the
-/// server log, where newlines would let a caller forge log entries.
+/// The provider id and the IdP's error arrive in the query string and end up in the log
+/// and in the response. Neither may carry text the caller chose: newlines would let them
+/// forge log entries.
 /// </summary>
-public sealed class LoggableTests
+public sealed class LoggableTests : IDisposable
 {
+    private readonly PluginHarness _harness = new();
+
     [Fact]
-    public void A_plain_value_is_kept()
+    public void A_configured_provider_is_named_in_the_log()
     {
-        Assert.Equal("provider-1", SsoController.Loggable("provider-1"));
+        _harness.Configuration.Providers.Add(new ProviderConfig { Id = "provider-1", Name = "Authentik" });
+
+        Assert.Equal("provider-1", SsoController.KnownProviderId("provider-1"));
     }
 
     [Theory]
-    [InlineData("a\nb")]
-    [InlineData("a\rb")]
-    [InlineData("a\tb")]
-    [InlineData("a\u0000b")]
-    public void Control_characters_are_removed(string value)
+    [InlineData("nonexistent")]
+    [InlineData("provider-1\n[12:00:00] [INF] Fake: an administrator logged in")]
+    [InlineData("")]
+    public void Anything_else_is_reported_as_unknown(string providerId)
     {
-        Assert.Equal("ab", SsoController.Loggable(value));
+        _harness.Configuration.Providers.Add(new ProviderConfig { Id = "provider-1", Name = "Authentik" });
+
+        Assert.Equal("unknown", SsoController.KnownProviderId(providerId));
     }
 
-    [Fact]
-    public void A_forged_log_line_cannot_be_injected()
+    [Theory]
+    [InlineData("access_denied")]
+    [InlineData("server_error")]
+    [InlineData("invalid_scope")]
+    public void A_standard_oauth_error_is_passed_through(string error)
     {
-        var forged = "p\n[12:00:00] [INF] Fake: an administrator logged in";
-
-        var safe = SsoController.Loggable(forged);
-
-        Assert.DoesNotContain('\n', safe);
-        Assert.DoesNotContain('\r', safe);
+        Assert.Equal(error, SsoController.OAuthErrorCode(error));
     }
 
-    [Fact]
-    public void An_oversized_value_is_truncated()
+    [Theory]
+    [InlineData("something_the_idp_invented")]
+    [InlineData("access_denied\nforged log line")]
+    [InlineData(null)]
+    public void Anything_outside_RFC_6749_collapses_to_one_code(string? error)
     {
-        var safe = SsoController.Loggable(new string('x', 5000));
+        var code = SsoController.OAuthErrorCode(error);
 
-        Assert.Equal(201, safe.Length);
-        Assert.EndsWith("…", safe);
+        Assert.Equal("unrecognised_error", code);
+        Assert.DoesNotContain('\n', code);
     }
 
-    [Fact]
-    public void Null_and_empty_stay_empty()
-    {
-        Assert.Equal(string.Empty, SsoController.Loggable(null));
-        Assert.Equal(string.Empty, SsoController.Loggable(string.Empty));
-    }
+    public void Dispose() => _harness.Dispose();
 }

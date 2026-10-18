@@ -152,10 +152,10 @@ public sealed class SsoController : ControllerBase
     {
         if (!string.IsNullOrEmpty(error))
         {
+            var errorCode = OAuthErrorCode(error);
             _logger.LogWarning(
-                "OIDC callback error for provider {Id}: {Error}",
-                Loggable(providerId), Loggable(error));
-            return BadRequest($"IdP returned error: {error}");
+                "OIDC callback error for provider {Id}: {Error}", KnownProviderId(providerId), errorCode);
+            return BadRequest($"IdP returned error: {errorCode}");
         }
 
         var pending = _states.Consume(state);
@@ -193,7 +193,7 @@ public sealed class SsoController : ControllerBase
         }
         catch (InvalidOperationException ex)
         {
-            _logger.LogWarning(ex, "SSO login failed for provider {Id}", Loggable(providerId));
+            _logger.LogWarning(ex, "SSO login failed for provider {Id}", KnownProviderId(providerId));
             return BadRequest(ex.Message);
         }
     }
@@ -383,20 +383,31 @@ public sealed class SsoController : ControllerBase
     }
 
     /// <summary>
-    /// Makes a value from the query string safe to write to the log: control characters
-    /// would let a caller forge extra log lines, and an unbounded value would let them
-    /// flood the log.
+    /// The id of the configured provider the request refers to, or "unknown". Logging the
+    /// configured value rather than the query string keeps caller-controlled text — and
+    /// the forged log lines it could carry — out of the log entirely.
     /// </summary>
-    internal static string Loggable(string? value, int maxLength = 200)
-    {
-        if (string.IsNullOrEmpty(value))
-        {
-            return string.Empty;
-        }
+    internal static string KnownProviderId(string providerId)
+        => Plugin.Instance?.Configuration.Providers
+            .FirstOrDefault(p => string.Equals(p.Id, providerId, StringComparison.Ordinal))
+            ?.Id
+            ?? "unknown";
 
-        var clean = new string(value.Where(ch => !char.IsControl(ch)).ToArray());
-        return clean.Length <= maxLength ? clean : clean[..maxLength] + "…";
-    }
+    /// <summary>
+    /// Maps the IdP's error to the fixed set from RFC 6749 §4.1.2.1, so neither the log
+    /// nor the response ever carries a string the caller chose.
+    /// </summary>
+    internal static string OAuthErrorCode(string? error) => error switch
+    {
+        "invalid_request" => "invalid_request",
+        "unauthorized_client" => "unauthorized_client",
+        "access_denied" => "access_denied",
+        "unsupported_response_type" => "unsupported_response_type",
+        "invalid_scope" => "invalid_scope",
+        "server_error" => "server_error",
+        "temporarily_unavailable" => "temporarily_unavailable",
+        _ => "unrecognised_error",
+    };
 
     private static string JsonEscape(string s)
         => System.Text.Json.JsonSerializer.Serialize(s);
