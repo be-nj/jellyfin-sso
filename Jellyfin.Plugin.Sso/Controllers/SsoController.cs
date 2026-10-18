@@ -91,7 +91,7 @@ public sealed class SsoController : ControllerBase
             .CreateAuthorizeUrl(
                 clientId: provider.ClientId,
                 responseType: "code",
-                scope: string.Join(' ', provider.Scopes),
+                scope: string.Join(' ', provider.EffectiveScopes()),
                 redirectUri: redirectUri,
                 state: state,
                 nonce: pending.Nonce,
@@ -127,7 +127,7 @@ public sealed class SsoController : ControllerBase
             .CreateAuthorizeUrl(
                 clientId: provider.ClientId,
                 responseType: "code",
-                scope: string.Join(' ', provider.Scopes),
+                scope: string.Join(' ', provider.EffectiveScopes()),
                 redirectUri: redirectUri,
                 state: state,
                 nonce: pending.Nonce,

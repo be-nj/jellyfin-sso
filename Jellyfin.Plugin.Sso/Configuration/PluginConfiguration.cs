@@ -28,7 +28,19 @@ public class ProviderConfig
     /// </summary>
     public string? ConfidentialSecretRef { get; set; }
 
-    public List<string> Scopes { get; set; } = ["openid", "profile", "email"];
+    /// <summary>
+    /// Requested scopes. Starts empty on purpose: XmlSerializer appends saved items to a
+    /// pre-filled list instead of replacing it, which duplicated the defaults on every
+    /// config load. Use <see cref="EffectiveScopes"/> when building requests.
+    /// </summary>
+    public List<string> Scopes { get; set; } = [];
+
+    /// <summary>Distinct configured scopes, or openid/profile/email when none are set.</summary>
+    public IEnumerable<string> EffectiveScopes()
+    {
+        var scopes = Scopes.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()).Distinct().ToList();
+        return scopes.Count > 0 ? scopes : ["openid", "profile", "email"];
+    }
 
     /// <summary>Claim name for groups. Default "groups" works for Authentik + Authelia.</summary>
     public string GroupsClaim { get; set; } = "groups";
