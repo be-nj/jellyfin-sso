@@ -22,16 +22,15 @@ public sealed class LoginBranding
 
     public void Apply()
     {
-        var config = Plugin.Instance?.Configuration;
-        var provider = config?.Providers.FirstOrDefault(p => p.Enabled);
+        var enabled = Plugin.Instance?.Configuration.Providers.Where(p => p.Enabled).ToList() ?? [];
 
         var branding = (_configManager.GetConfiguration("branding") as BrandingOptions)
             ?? new BrandingOptions();
 
-        if (provider is null)
+        if (enabled.Count == 0)
         {
             // No enabled provider — remove the button if it was previously set by us.
-            if (branding.LoginDisclaimer?.Contains("/sso/oidc/start/") == true)
+            if (branding.LoginDisclaimer?.Contains("/sso/oidc/start") == true)
             {
                 branding.LoginDisclaimer = string.Empty;
                 _configManager.SaveConfiguration("branding", branding);
@@ -39,18 +38,24 @@ public sealed class LoginBranding
             return;
         }
 
+        // With several providers the button goes to the stable entry point, which asks
+        // which one; with a single provider it skips that step.
+        var href = enabled.Count == 1 ? $"/sso/oidc/start/{enabled[0].Id}" : "/sso/oidc/start";
+        var label = enabled.Count == 1 ? $"Login with SSO ({enabled[0].Name})" : "Login with SSO";
+
         // Inject a link styled with Jellyfin's own button classes.
         // Using the native Jellyfin web button CSS to blend in.
         var link = $"<a class=\"raised emby-button block\" " +
-                   $"href=\"/sso/oidc/start/{provider.Id}\" " +
+                   $"href=\"{href}\" " +
                    $"style=\"display:block;text-align:center;margin-top:.5em\">" +
-                   $"Login with SSO ({provider.Name})</a>";
+                   $"{label}</a>";
 
         if (string.Equals(branding.LoginDisclaimer, link, StringComparison.Ordinal))
             return; // no change needed
 
         branding.LoginDisclaimer = link;
         _configManager.SaveConfiguration("branding", branding);
-        _logger.LogInformation("SSO: login button set in Jellyfin branding for provider {Name}.", provider.Name);
+        _logger.LogInformation(
+            "SSO: login button set in Jellyfin branding for {Count} enabled provider(s).", enabled.Count);
     }
 }

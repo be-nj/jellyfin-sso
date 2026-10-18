@@ -14,6 +14,12 @@ export default function (view) {
         save(view);
     });
 
+    view.querySelector('#AddProvider').addEventListener('click', function () {
+        var c = view.querySelector('#Providers');
+        c.appendChild(buildProviderCard({ Id: newId(), Enabled: true }, c.children.length));
+        renumberProviders(view);
+    });
+
     view.querySelector('#AddMapping').addEventListener('click', function () {
         var c = view.querySelector('#GroupMappings');
         c.appendChild(buildRow(view, {}, c.children.length));
@@ -62,13 +68,9 @@ function load(view) {
         apiGet(API + '/seen-groups'),
     ]).then(function (r) {
         _config = r[0]; _libraries = r[1]; _seenGroups = r[2];
-        var p = (_config.Providers && _config.Providers[0]) || {};
-        setChk(view, 'ProviderEnabled', !!p.Enabled);
-        setVal(view, 'Authority', p.Authority || '');
-        setVal(view, 'ClientId', p.ClientId || '');
-        setVal(view, 'GroupsClaim', p.GroupsClaim || '');
-        setChk(view, 'GroupsFromUserInfo', !!p.GroupsFromUserInfo);
-        if (p.Id) view.querySelector('#SsoLoginUrl').textContent = '/sso/oidc/start/' + p.Id;
+        renderProviders(view, _config.Providers || []);
+        setChk(view, 'SignOutOfIdentityProvider', !!_config.SignOutOfIdentityProvider);
+        setChk(view, 'AllowSelfServiceLinking', !!_config.AllowSelfServiceLinking);
         setChk(view, 'PreserveAdminPermissions', !!_config.PreserveAdminPermissions);
         renderMappings(view, _config.GroupMappings || []);
         renderLinks(view);
@@ -123,31 +125,116 @@ function populateLinkForm(view) {
 // ─── Save ────────────────────────────────────────────────────────────────────
 
 function save(view) {
-    var p = (_config && _config.Providers && _config.Providers[0]) || {};
-    var provider = {
-        Id: p.Id || newId(),
-        Name: 'Default',
-        Enabled: getChk(view, 'ProviderEnabled'),
-        Authority: getVal(view, 'Authority'),
-        ClientId: getVal(view, 'ClientId'),
-        ClientType: 0,
-        Scopes: ['openid', 'profile', 'email'],
-        GroupsClaim: getVal(view, 'GroupsClaim') || 'groups',
-        GroupsFromUserInfo: getChk(view, 'GroupsFromUserInfo'),
-    };
+    var providers = collectProviders(view);
     var cfg = {
-        Providers: [provider],
+        Providers: providers,
         GroupMappings: collectMappings(view),
         Links: (_config && _config.Links) || [],
         SeenGroups: (_config && _config.SeenGroups) || [],
         PreserveAdminPermissions: getChk(view, 'PreserveAdminPermissions'),
+        SignOutOfIdentityProvider: getChk(view, 'SignOutOfIdentityProvider'),
+        AllowSelfServiceLinking: getChk(view, 'AllowSelfServiceLinking'),
         SyncExcludedUserIds: collectExcluded(view),
     };
     apiPost(API + '/config', cfg).then(function () {
         _config = cfg;
-        view.querySelector('#SsoLoginUrl').textContent = '/sso/oidc/start/' + provider.Id;
+        renderProviders(view, providers);
+        return populateUsers(view);
+    }).then(function () {
         Dashboard.processPluginConfigurationUpdateResult();
     }).catch(function (e) { Dashboard.alert('Save failed: ' + e.message); });
+}
+
+// ─── Providers ────────────────────────────────────────────────────────────────
+
+function renderProviders(view, providers) {
+    var c = view.querySelector('#Providers');
+    c.innerHTML = '';
+    providers.forEach(function (p, i) { c.appendChild(buildProviderCard(p, i)); });
+    renumberProviders(view);
+}
+
+function buildProviderCard(p, i) {
+    var card = document.createElement('div');
+    card.className = 'sso-provider paperList';
+    card.dataset.providerId = p.Id || newId();
+
+    var loginUrl = '/sso/oidc/start/' + card.dataset.providerId;
+
+    card.innerHTML =
+        '<h3 class="checkboxListLabel sso-provider-title">Provider ' + (i + 1) + '</h3>' +
+        '<div class="sso-mapping-head">' +
+            '<div class="inputContainer sso-group-field">' +
+                '<input type="text" is="emby-input" class="sso-provider-name" label="Display name" ' +
+                    'value="' + escAttr(p.Name || '') + '" />' +
+            '</div>' +
+            '<div class="checkboxContainer sso-admin-toggle"><label>' +
+                '<input type="checkbox" is="emby-checkbox" class="sso-provider-enabled"' +
+                (p.Enabled ? ' checked' : '') + ' /><span>Enabled</span></label></div>' +
+            '<button type="button" is="emby-button" class="raised sso-provider-remove">' +
+                '<span>Remove</span></button>' +
+        '</div>' +
+        '<div class="inputContainer">' +
+            '<input type="url" is="emby-input" class="sso-provider-authority" ' +
+                'label="Issuer URL (Authority)" placeholder="https://auth.example.com/application/o/jellyfin" ' +
+                'value="' + escAttr(p.Authority || '') + '" />' +
+            '<div class="fieldDescription">Must serve <code>/.well-known/openid-configuration</code>.</div>' +
+        '</div>' +
+        '<div class="inputContainer">' +
+            '<input type="text" is="emby-input" class="sso-provider-client" label="Client ID" ' +
+                'value="' + escAttr(p.ClientId || '') + '" />' +
+        '</div>' +
+        '<div class="inputContainer">' +
+            '<input type="text" is="emby-input" class="sso-provider-groups-claim" ' +
+                'label="Groups claim name" placeholder="groups" ' +
+                'value="' + escAttr(p.GroupsClaim || '') + '" />' +
+        '</div>' +
+        '<div class="checkboxContainer"><label>' +
+            '<input type="checkbox" is="emby-checkbox" class="sso-provider-userinfo"' +
+            (p.GroupsFromUserInfo ? ' checked' : '') +
+            ' /><span>Fetch groups from userinfo endpoint instead of ID token</span></label></div>' +
+        '<div class="fieldDescription">Login URL: <code>' + escHtml(loginUrl) + '</code></div>';
+
+    card.querySelector('.sso-provider-remove').addEventListener('click', function () {
+        card.remove();
+    });
+
+    return card;
+}
+
+function renumberProviders(view) {
+    Array.from(view.querySelectorAll('.sso-provider .sso-provider-title')).forEach(function (t, idx) {
+        t.textContent = 'Provider ' + (idx + 1);
+    });
+}
+
+function collectProviders(view) {
+    return Array.from(view.querySelectorAll('.sso-provider')).map(function (card) {
+        var val = function (cls) {
+            var el = card.querySelector(cls);
+            return el ? el.value.trim() : '';
+        };
+        var authority = val('.sso-provider-authority');
+        var clientId = val('.sso-provider-client');
+        if (!authority && !clientId) return null;
+
+        var previous = ((_config && _config.Providers) || []).filter(function (p) {
+            return p.Id === card.dataset.providerId;
+        })[0] || {};
+
+        return {
+            Id: card.dataset.providerId,
+            Name: val('.sso-provider-name') || 'SSO',
+            Enabled: card.querySelector('.sso-provider-enabled').checked,
+            Authority: authority,
+            ClientId: clientId,
+            ClientType: previous.ClientType || 0,
+            ConfidentialSecretRef: previous.ConfidentialSecretRef || null,
+            Scopes: previous.Scopes && previous.Scopes.length ? previous.Scopes : [],
+            GroupsClaim: val('.sso-provider-groups-claim') || 'groups',
+            GroupsFromUserInfo: card.querySelector('.sso-provider-userinfo').checked,
+        };
+    }).filter(Boolean);
 }
 
 // ─── Mapping table ────────────────────────────────────────────────────────────

@@ -86,6 +86,9 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
     /// <summary>Signals whether the provider ever issued a token, useful in negative tests.</summary>
     public int TokensIssued { get; private set; }
 
+    /// <summary>How often the end-session endpoint was reached.</summary>
+    public int SessionsEnded { get; private set; }
+
     public static async Task<FakeIdentityProvider> StartAsync(string certificateDirectory)
     {
         var idp = new FakeIdentityProvider(FreePort(), certificateDirectory);
@@ -104,6 +107,8 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
             ["token_endpoint"] = $"{ContainerAuthority}/token",
             ["userinfo_endpoint"] = $"{ContainerAuthority}/userinfo",
             ["jwks_uri"] = $"{ContainerAuthority}/jwks",
+            // Browser-facing like authorize: the user's browser is sent here to sign out.
+            ["end_session_endpoint"] = $"{BrowserAuthority}/endsession",
             ["response_types_supported"] = new[] { "code" },
             ["subject_types_supported"] = new[] { "public" },
             ["id_token_signing_alg_values_supported"] = new[] { "RS256" },
@@ -178,6 +183,13 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
                 ["expires_in"] = 300,
                 ["id_token"] = MintIdToken(pending),
             });
+        });
+
+        app.MapGet("/endsession", (
+            [FromQuery(Name = "post_logout_redirect_uri")] string? postLogoutRedirectUri) =>
+        {
+            SessionsEnded++;
+            return Results.Redirect(postLogoutRedirectUri ?? "/");
         });
 
         app.MapGet("/userinfo", (HttpRequest request) =>

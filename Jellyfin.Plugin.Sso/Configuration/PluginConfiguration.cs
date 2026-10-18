@@ -17,6 +17,18 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool PreserveAdminPermissions { get; set; }
 
     /// <summary>
+    /// When true, signing out of Jellyfin also ends the session at the identity provider
+    /// (RFC 7009 style RP-initiated logout), so the next login asks for credentials again.
+    /// </summary>
+    public bool SignOutOfIdentityProvider { get; set; }
+
+    /// <summary>
+    /// Allow users to link their own Jellyfin account to an SSO identity from the
+    /// self-service page, instead of an administrator doing it for them.
+    /// </summary>
+    public bool AllowSelfServiceLinking { get; set; } = true;
+
+    /// <summary>
     /// Jellyfin users whose permissions are managed by hand. They can still log in via
     /// SSO, but their policy is left exactly as an administrator set it.
     /// </summary>

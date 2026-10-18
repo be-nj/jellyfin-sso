@@ -19,14 +19,17 @@ public sealed class PendingStateStore
         string RedirectUri,
         DateTimeOffset Expiry,
         // non-null only for Quick Connect path
-        string? QuickConnectCode = null);
+        string? QuickConnectCode = null,
+        // non-null only when an existing user is linking their own account
+        Guid? LinkUserId = null);
 
     private readonly ConcurrentDictionary<string, PendingState> _store = new();
 
     public (string State, PendingState Pending) Issue(
         string providerId,
         string redirectUri,
-        string? quickConnectCode = null)
+        string? quickConnectCode = null,
+        Guid? linkUserId = null)
     {
         Purge();
 
@@ -40,7 +43,8 @@ public sealed class PendingStateStore
             nonce,
             redirectUri,
             DateTimeOffset.UtcNow.Add(Ttl),
-            quickConnectCode);
+            quickConnectCode,
+            linkUserId);
 
         _store[state] = pending;
         return (state, pending);

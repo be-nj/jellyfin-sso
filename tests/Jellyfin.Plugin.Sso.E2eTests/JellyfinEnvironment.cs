@@ -24,6 +24,7 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
     private const string AdminPassword = "e2e-admin-password";
     public const string ClientId = "jellyfin-e2e";
     public const string ProviderId = "e2e-provider";
+    public const string SecondProviderId = "e2e-provider-2";
 
     private readonly string _deviceId = Guid.NewGuid().ToString("N");
     private IContainer _jellyfin = null!;
@@ -164,14 +165,17 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
     /// callback. Returns the ephemeral secret embedded in the callback page, which is what
     /// the page would post to Jellyfin's native auth endpoint.
     /// </summary>
-    public async Task<SsoLoginResult> StartWebLoginAsync(FakeUser user, HttpClient? client = null)
+    public async Task<SsoLoginResult> StartWebLoginAsync(
+        FakeUser user, HttpClient? client = null, string? providerId = null)
     {
         Idp.NextUser = user;
         client ??= TrustingClient();
 
         // Redirects are followed by hand: the chain crosses from the server (http) to the
         // provider (https) and back, and HttpClient refuses to follow a downgrade.
-        var url = $"{BaseUrl}/sso/oidc/start";
+        var url = providerId is null
+            ? $"{BaseUrl}/sso/oidc/start"
+            : $"{BaseUrl}/sso/oidc/start/{providerId}";
         HttpResponseMessage response;
         for (var hop = 0; ; hop++)
         {
@@ -200,10 +204,54 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
             body);
     }
 
+    /// <summary>Adds a second enabled provider, pointing at the same fake identity provider.</summary>
+    public async Task AddSecondProviderAsync()
+        => await PatchConfigAsync(config => config["Providers"]!.AsArray().Add(new JsonObject
+        {
+            ["Id"] = SecondProviderId,
+            ["Name"] = "Second IdP",
+            ["Enabled"] = true,
+            ["Authority"] = Idp.ContainerAuthority,
+            ["ClientId"] = ClientId + "-2",
+            ["Scopes"] = new JsonArray { "openid", "profile", "email", "groups" },
+            ["GroupsClaim"] = "groups",
+            ["GroupsFromUserInfo"] = false,
+        }));
+
+    /// <summary>Creates a local Jellyfin account and signs it in, as a client would.</summary>
+    public async Task<(Guid UserId, string Token)> CreateLocalUserWithTokenAsync(string username)
+    {
+        const string Password = "local-password";
+        var userId = await CreateLocalUserAsync(username, Password);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/Users/AuthenticateByName")
+        {
+            Content = JsonContent.Create(new { Username = username, Pw = Password }),
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue(
+            "MediaBrowser",
+            $"Client=\"e2e-tests\", Device=\"xunit\", DeviceId=\"{Guid.NewGuid():N}\", Version=\"1.0.0.0\"");
+
+        using var client = TrustingClient();
+        var response = await client.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        var payload = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        return (userId, payload["AccessToken"]!.GetValue<string>());
+    }
+
+    /// <summary>An Authorization header carrying someone else's session token.</summary>
+    public static AuthenticationHeaderValue TokenHeader(string token)
+        => new(
+            "MediaBrowser",
+            $"Client=\"e2e-tests\", Device=\"xunit\", DeviceId=\"{Guid.NewGuid():N}\", "
+            + $"Version=\"1.0.0.0\", Token=\"{token}\"");
+
     /// <summary>An HTTP client that accepts the fake provider's self-signed certificate.</summary>
-    public static HttpClient TrustingClient() => new(new HttpClientHandler
+    public static HttpClient TrustingClient(bool followRedirects = true) => new(new HttpClientHandler
     {
         ServerCertificateCustomValidationCallback = (_, _, _, _) => true,
+        AllowAutoRedirect = followRedirects,
     });
 
     /// <summary>Redeems an ephemeral secret on Jellyfin's native auth path.</summary>
@@ -251,9 +299,9 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
         => config["GroupMappings"]!.AsArray()
             .First(m => m!["Group"]!.GetValue<string>() == group)!;
 
-    public async Task<Guid> CreateLocalUserAsync(string username)
+    public async Task<Guid> CreateLocalUserAsync(string username, string password = "local-password")
     {
-        var response = await _admin.PostAsJsonAsync("/Users/New", new { Name = username, Password = "local-password" });
+        var response = await _admin.PostAsJsonAsync("/Users/New", new { Name = username, Password = password });
         response.EnsureSuccessStatusCode();
         var created = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
         return Guid.Parse(created["Id"]!.GetValue<string>());

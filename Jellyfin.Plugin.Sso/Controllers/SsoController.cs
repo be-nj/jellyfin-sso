@@ -48,17 +48,20 @@ public sealed class SsoController : ControllerBase
     // ──────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Stable entry point — auto-picks the single enabled provider.
-    /// Used by the JavaScript Injector button so the URL never changes.
+    /// Stable entry point. With one enabled provider it goes straight there; with several
+    /// it asks which one. The URL never changes, so the login button can be static.
     /// </summary>
     [HttpGet("oidc/start")]
     [AllowAnonymous]
     public async Task<IActionResult> StartDefault(CancellationToken ct)
     {
-        var provider = Plugin.Instance?.Configuration.Providers.FirstOrDefault(p => p.Enabled);
-        if (provider is null)
+        var enabled = EnabledProviders();
+        if (enabled.Count == 0)
             return NotFound("No enabled SSO provider configured.");
-        return await Start(provider.Id, ct).ConfigureAwait(false);
+        if (enabled.Count > 1)
+            return ProviderPicker(enabled, queryString: string.Empty);
+
+        return await Start(enabled[0].Id, ct).ConfigureAwait(false);
     }
 
     /// <summary>Same but for Quick Connect — stable entry point for native apps.</summary>
@@ -67,10 +70,13 @@ public sealed class SsoController : ControllerBase
     public async Task<IActionResult> StartDefaultQuickConnect(
         [FromQuery] string code, CancellationToken ct)
     {
-        var provider = Plugin.Instance?.Configuration.Providers.FirstOrDefault(p => p.Enabled);
-        if (provider is null)
+        var enabled = EnabledProviders();
+        if (enabled.Count == 0)
             return NotFound("No enabled SSO provider configured.");
-        return await StartWithQuickConnect(provider.Id, code, ct).ConfigureAwait(false);
+        if (enabled.Count > 1)
+            return ProviderPicker(enabled, queryString: $"?code={Uri.EscapeDataString(code)}");
+
+        return await StartWithQuickConnect(enabled[0].Id, code, ct).ConfigureAwait(false);
     }
 
     [HttpGet("oidc/start/{providerId}")]
@@ -138,6 +144,61 @@ public sealed class SsoController : ControllerBase
     }
 
     // ──────────────────────────────────────────────────────────────────────────
+    // Logout: end the session at the identity provider too
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Ends the session at the identity provider and comes back to the web client. Jellyfin
+    /// has already dropped its own token by the time a client sends the browser here; this
+    /// is the part Jellyfin cannot do, because only the plugin knows the provider.
+    /// </summary>
+    [HttpGet("oidc/logout")]
+    [HttpGet("oidc/logout/{providerId}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Logout(string? providerId, CancellationToken ct)
+    {
+        var home = "/web/index.html";
+        var config = Plugin.Instance?.Configuration;
+        if (config is null || !config.SignOutOfIdentityProvider)
+            return Redirect(home);
+
+        var provider = providerId is null
+            ? EnabledProviders().FirstOrDefault()
+            : GetEnabledProvider(providerId);
+
+        if (provider is null)
+            return Redirect(home);
+
+        try
+        {
+            var disco = await _oidc.GetDiscoveryDocumentAsync(provider, ct).ConfigureAwait(false);
+            if (string.IsNullOrEmpty(disco.EndSessionEndpoint))
+            {
+                _logger.LogInformation(
+                    "Provider {Id} advertises no end_session_endpoint; skipping provider logout.",
+                    KnownProviderId(provider.Id));
+                return Redirect(home);
+            }
+
+            var returnTo = $"{ExternalBaseUri()}{home}";
+            var url = new RequestUrl(disco.EndSessionEndpoint)
+                .Create(new Parameters
+                {
+                    { "client_id", provider.ClientId },
+                    { "post_logout_redirect_uri", returnTo },
+                });
+
+            return Redirect(url);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // A provider that cannot be reached must not keep the user from logging out.
+            _logger.LogWarning(ex, "Provider logout failed for {Id}", KnownProviderId(provider.Id));
+            return Redirect(home);
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
     // Callback: IdP returns here with code+state
     // ──────────────────────────────────────────────────────────────────────────
 
@@ -180,6 +241,11 @@ public sealed class SsoController : ControllerBase
                 pending.Nonce, ct)
                 .ConfigureAwait(false);
 
+            // Self-service linking stops here: it attaches the identity to the account the
+            // user was already signed into, and grants nothing by itself.
+            if (pending.LinkUserId is { } linkUserId)
+                return CompleteSelfServiceLink(provider, identity, linkUserId);
+
             var (userId, username) = await _provisioner.ResolveAsync(provider, identity, ct)
                 .ConfigureAwait(false);
 
@@ -196,6 +262,154 @@ public sealed class SsoController : ControllerBase
             _logger.LogWarning(ex, "SSO login failed for provider {Id}", KnownProviderId(providerId));
             return BadRequest(ex.Message);
         }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Self-service linking: a signed-in user attaches their own SSO identity
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The page a user opens to link their own account. It is anonymous because the browser
+    /// cannot send Jellyfin's token on a navigation; the page reads the token the web client
+    /// stored and calls <see cref="StartSelfServiceLink"/> with it.
+    /// </summary>
+    [HttpGet("link")]
+    [AllowAnonymous]
+    public IActionResult SelfServiceLinkPage()
+    {
+        var config = Plugin.Instance?.Configuration;
+        if (config is null || !config.AllowSelfServiceLinking)
+            return NotFound("Self-service linking is disabled.");
+
+        var providers = EnabledProviders();
+        if (providers.Count == 0)
+            return NotFound("No enabled SSO provider configured.");
+
+        var options = string.Join("\n", providers.Select(p =>
+            $"<option value={JsonEscape(p.Id)}>{Html(p.Name)}</option>"));
+
+        var html = $$"""
+            <!DOCTYPE html>
+            <html><head><meta charset="utf-8"/><title>Link SSO account</title>
+            <style>
+              body{font-family:system-ui,sans-serif;background:#1c1c1c;color:#ddd;display:flex;
+                   align-items:center;justify-content:center;height:100vh;margin:0}
+              .card{max-width:30em;padding:2em;line-height:1.5}
+              select,button{font:inherit;padding:.5em;margin-top:.75em}
+              #msg{color:#f88}
+            </style>
+            </head><body><div class="card">
+            <h1>Link your SSO account</h1>
+            <p>You are signed in to Jellyfin. Linking connects this account to your identity
+               provider so you can sign in with it from now on.</p>
+            <select id="provider">{{options}}</select>
+            <button id="go" type="button">Continue to provider</button>
+            <p id="msg"></p>
+            <script>
+            (function() {
+              const msg = document.getElementById('msg');
+
+              function token() {
+                try {
+                  const creds = JSON.parse(localStorage.getItem('jellyfin_credentials') || '{}');
+                  const server = (creds.Servers || [])[0];
+                  return server && server.AccessToken;
+                } catch (e) { return null; }
+              }
+
+              document.getElementById('go').addEventListener('click', async function() {
+                const accessToken = token();
+                if (!accessToken) {
+                  msg.textContent = 'Please sign in to Jellyfin in this browser first.';
+                  return;
+                }
+                msg.textContent = '';
+                try {
+                  const providerId = document.getElementById('provider').value;
+                  const res = await fetch('/sso/link/start?providerId=' + encodeURIComponent(providerId), {
+                    method: 'POST',
+                    headers: { 'Authorization': 'MediaBrowser Token="' + accessToken + '"' },
+                  });
+                  if (!res.ok) throw new Error(await res.text() || ('HTTP ' + res.status));
+                  const data = await res.json();
+                  window.location.href = data.AuthorizeUrl;
+                } catch (e) {
+                  msg.textContent = 'Could not start linking: ' + e.message;
+                }
+              });
+            })();
+            </script>
+            </div></body></html>
+            """;
+
+        return Content(html, "text/html");
+    }
+
+    /// <summary>
+    /// Begins the OIDC flow for the signed-in user and returns where to send the browser.
+    /// Authorization is why this is a POST with the token in a header rather than a redirect.
+    /// </summary>
+    [HttpPost("link/start")]
+    [Authorize]
+    public async Task<IActionResult> StartSelfServiceLink(
+        [FromQuery] string providerId, CancellationToken ct)
+    {
+        var config = Plugin.Instance?.Configuration;
+        if (config is null || !config.AllowSelfServiceLinking)
+            return NotFound("Self-service linking is disabled.");
+
+        if (CurrentUserId() is not { } userId)
+            return Unauthorized("No Jellyfin user in this request.");
+
+        var provider = GetEnabledProvider(providerId);
+        if (provider is null)
+            return NotFound("Provider not found or not enabled.");
+
+        if (config.Links.Any(l => l.ProviderId == provider.Id && l.JellyfinUserId == userId))
+            return Conflict("This account is already linked for that provider.");
+
+        var redirectUri = BuildCallbackUri(provider.Id);
+        var (state, pending) = _states.Issue(provider.Id, redirectUri, linkUserId: userId);
+        var disco = await _oidc.GetDiscoveryDocumentAsync(provider, ct).ConfigureAwait(false);
+
+        var authorizeUrl = new RequestUrl(disco.AuthorizeEndpoint
+            ?? throw new InvalidOperationException("Discovery document has no authorize endpoint."))
+            .CreateAuthorizeUrl(
+                clientId: provider.ClientId,
+                responseType: "code",
+                scope: string.Join(' ', provider.EffectiveScopes()),
+                redirectUri: redirectUri,
+                state: state,
+                nonce: pending.Nonce,
+                codeChallenge: PendingStateStore.CodeChallenge(pending.CodeVerifier),
+                codeChallengeMethod: "S256");
+
+        _logger.LogInformation(
+            "Self-service link started by user {UserId} for provider {Id}",
+            userId, KnownProviderId(provider.Id));
+
+        return Ok(new { AuthorizeUrl = authorizeUrl });
+    }
+
+    /// <summary>Removes the signed-in user's own link.</summary>
+    [HttpDelete("link/self")]
+    [Authorize]
+    public IActionResult RemoveOwnLink([FromQuery] string? providerId)
+    {
+        var config = Plugin.Instance!.Configuration;
+
+        if (CurrentUserId() is not { } userId)
+            return Unauthorized("No Jellyfin user in this request.");
+
+        var removed = config.Links.RemoveAll(l =>
+            l.JellyfinUserId == userId
+            && (providerId is null || l.ProviderId == providerId));
+
+        if (removed == 0)
+            return NotFound("No link found for this account.");
+
+        Plugin.Instance.SaveConfiguration();
+        return Ok();
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -362,25 +576,146 @@ public sealed class SsoController : ControllerBase
         return Content(html, "text/html");
     }
 
+    /// <summary>Attaches the identity to the account the user is already signed into.</summary>
+    private IActionResult CompleteSelfServiceLink(
+        ProviderConfig provider, OidcIdentity identity, Guid linkUserId)
+    {
+        var config = Plugin.Instance!.Configuration;
+
+        var existing = config.Links.FirstOrDefault(l =>
+            l.ProviderId == provider.Id &&
+            string.Equals(l.Sub, identity.Sub, StringComparison.Ordinal));
+
+        if (existing is not null)
+        {
+            if (existing.JellyfinUserId == linkUserId)
+                return LinkResultPage("This account is already linked.", success: true);
+
+            // The identity belongs to somebody else's account; linking would hand it over.
+            _logger.LogWarning(
+                "Self-service link refused for user {UserId}: the identity is already linked "
+                + "to user {OwnerId} on provider {Id}.",
+                linkUserId, existing.JellyfinUserId, KnownProviderId(provider.Id));
+            return LinkResultPage(
+                "That identity is already linked to another Jellyfin account. "
+                + "Ask an administrator if this is unexpected.",
+                success: false);
+        }
+
+        if (config.Links.Any(l => l.ProviderId == provider.Id && l.JellyfinUserId == linkUserId))
+            return LinkResultPage("This account is already linked for that provider.", success: true);
+
+        config.Links.Add(new LinkConfig
+        {
+            ProviderId = provider.Id,
+            Sub = identity.Sub,
+            JellyfinUserId = linkUserId,
+        });
+        Plugin.Instance.SaveConfiguration();
+
+        _logger.LogInformation(
+            "Self-service link created for user {UserId} on provider {Id}",
+            linkUserId, KnownProviderId(provider.Id));
+
+        return LinkResultPage(
+            "Linked. Your library access is applied the next time you sign in with SSO.",
+            success: true);
+    }
+
+    private IActionResult LinkResultPage(string message, bool success)
+    {
+        var html = $$"""
+            <!DOCTYPE html>
+            <html><head><meta charset="utf-8"/><title>SSO linking</title>
+            <style>
+              body{font-family:system-ui,sans-serif;background:#1c1c1c;color:#ddd;display:flex;
+                   align-items:center;justify-content:center;height:100vh;margin:0}
+              .card{max-width:30em;padding:2em;line-height:1.5;text-align:center}
+              a{color:#9bf}
+            </style>
+            </head><body><div class="card">
+            <h1>{{(success ? "Account linked" : "Linking failed")}}</h1>
+            <p>{{Html(message)}}</p>
+            <p><a href="/web/index.html">Back to Jellyfin</a></p>
+            </div></body></html>
+            """;
+
+        return Content(html, "text/html");
+    }
+
+    /// <summary>Lets the user choose when more than one provider is enabled.</summary>
+    private IActionResult ProviderPicker(IReadOnlyList<ProviderConfig> providers, string queryString)
+    {
+        var buttons = string.Join("\n", providers.Select(p =>
+            $"<a class=\"choice\" href=\"/sso/oidc/start/{Uri.EscapeDataString(p.Id)}{queryString}\">"
+            + $"{Html(p.Name)}</a>"));
+
+        var html = $$"""
+            <!DOCTYPE html>
+            <html><head><meta charset="utf-8"/><title>Choose a login provider</title>
+            <style>
+              body{font-family:system-ui,sans-serif;background:#1c1c1c;color:#ddd;display:flex;
+                   align-items:center;justify-content:center;height:100vh;margin:0}
+              .card{max-width:24em;padding:2em;text-align:center}
+              .choice{display:block;margin:.5em 0;padding:.75em 1em;background:#2c2c2c;color:#ddd;
+                      border-radius:.25em;text-decoration:none}
+              .choice:hover{background:#3a3a3a}
+            </style>
+            </head><body><div class="card">
+            <h1>Sign in with</h1>
+            {{buttons}}
+            </div></body></html>
+            """;
+
+        return Content(html, "text/html");
+    }
+
+    private static List<ProviderConfig> EnabledProviders()
+        => Plugin.Instance?.Configuration.Providers.Where(p => p.Enabled).ToList() ?? [];
+
+    /// <summary>
+    /// The Jellyfin user behind the request. Jellyfin's own claim name is checked first,
+    /// with the standard ones as a fallback so a server-side rename does not break linking.
+    /// </summary>
+    private Guid? CurrentUserId()
+    {
+        foreach (var claimType in new[]
+                 {
+                     "Jellyfin-UserId",
+                     System.Security.Claims.ClaimTypes.NameIdentifier,
+                     "sub",
+                 })
+        {
+            if (Guid.TryParse(HttpContext.User.FindFirst(claimType)?.Value, out var id))
+                return id;
+        }
+
+        return null;
+    }
+
+    /// <summary>The server's externally visible base address, honouring proxy headers.</summary>
+    private string ExternalBaseUri()
+    {
+        var req = HttpContext.Request;
+        var scheme = req.Headers["X-Forwarded-Proto"].FirstOrDefault()
+            ?? req.Headers["X-Forwarded-Scheme"].FirstOrDefault()
+            ?? req.Scheme;
+        var host = req.Headers["X-Forwarded-Host"].FirstOrDefault() ?? req.Host.ToString();
+        return $"{scheme}://{host}";
+    }
+
+    /// <summary>Minimal HTML escaping for the few values these pages print.</summary>
+    private static string Html(string? value)
+        => System.Net.WebUtility.HtmlEncode(value ?? string.Empty);
+
     private static ProviderConfig? GetEnabledProvider(string providerId)
         => Plugin.Instance?.Configuration.Providers
             .FirstOrDefault(p => p.Enabled &&
                 string.Equals(p.Id, providerId, StringComparison.Ordinal));
 
+    // Honours reverse-proxy forwarded headers (Jellyfin runs behind HTTPS termination).
     private string BuildCallbackUri(string providerId)
-    {
-        var req = HttpContext.Request;
-
-        // Honour reverse-proxy forwarded headers (Jellyfin runs behind HTTPS termination).
-        var scheme = req.Headers["X-Forwarded-Proto"].FirstOrDefault()
-            ?? req.Headers["X-Forwarded-Scheme"].FirstOrDefault()
-            ?? req.Scheme;
-
-        var host = req.Headers["X-Forwarded-Host"].FirstOrDefault()
-            ?? req.Host.ToString();
-
-        return $"{scheme}://{host}/sso/oidc/callback/{providerId}";
-    }
+        => $"{ExternalBaseUri()}/sso/oidc/callback/{providerId}";
 
     /// <summary>
     /// The id of the configured provider the request refers to, or "unknown". Logging the

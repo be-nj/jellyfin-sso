@@ -42,6 +42,7 @@
     }
     .sso-admin-toggle { flex: 0 0 auto; margin: 0; white-space: nowrap; }
     .sso-remove-btn { flex: 0 0 auto; }
+    .sso-provider { padding: .75em; margin-bottom: .75em; }
     .sso-libs-section { margin-top: .5em; }
     .sso-perms-section { margin-top: .5em; }
     .sso-rating-field { max-width: 18em; margin-top: .25em; }
@@ -86,35 +87,40 @@
           <button type="button" class="sso-tab" data-tab="links"><h3>Account Links</h3></button>
         </div>
 
-        <!-- Provider -->
+        <!-- Providers -->
         <div class="sso-panel" data-panel="provider">
           <div class="verticalSection">
+            <div class="fieldDescription">
+              With more than one enabled provider, <code>/sso/oidc/start</code> asks the user
+              which one to use.
+            </div>
+            <div id="Providers" class="sso-mt"></div>
+            <button is="emby-button" type="button" id="AddProvider" class="raised sso-mt-sm">
+              + Add Provider
+            </button>
+          </div>
+
+          <div class="verticalSection sso-mt">
+            <h3 class="checkboxListLabel">Sessions</h3>
             <div class="checkboxContainer">
               <label>
-                <input id="ProviderEnabled" type="checkbox" is="emby-checkbox" />
-                <span>Enable SSO login</span>
+                <input id="SignOutOfIdentityProvider" type="checkbox" is="emby-checkbox" />
+                <span>Sign out of the identity provider too</span>
               </label>
-            </div>
-            <div class="inputContainer">
-              <input id="Authority" type="url" is="emby-input" label="Issuer URL (Authority)"
-                     placeholder="https://auth.example.com/application/o/jellyfin" />
-              <div class="fieldDescription">Base URL for OIDC discovery — must serve <code>/.well-known/openid-configuration</code>.</div>
-            </div>
-            <div class="inputContainer">
-              <input id="ClientId" type="text" is="emby-input" label="Client ID" />
-            </div>
-            <div class="inputContainer">
-              <input id="GroupsClaim" type="text" is="emby-input" label="Groups claim name" placeholder="groups" />
-              <div class="fieldDescription">Default <code>groups</code> works for Authentik and Authelia.</div>
+              <div class="fieldDescription">
+                Send clients to <code>/sso/oidc/logout</code> after signing out of Jellyfin to
+                end the provider session as well, so the next login asks for credentials.
+              </div>
             </div>
             <div class="checkboxContainer">
               <label>
-                <input id="GroupsFromUserInfo" type="checkbox" is="emby-checkbox" />
-                <span>Fetch groups from userinfo endpoint instead of ID token</span>
+                <input id="AllowSelfServiceLinking" type="checkbox" is="emby-checkbox" />
+                <span>Let users link their own account</span>
               </label>
-            </div>
-            <div class="fieldDescription sso-mt">
-              Login URL: <code id="SsoLoginUrl">(save first)</code>
+              <div class="fieldDescription">
+                Signed-in users can link an SSO identity themselves at <code>/sso/link</code>.
+                An identity already linked to another account is refused.
+              </div>
             </div>
           </div>
         </div>

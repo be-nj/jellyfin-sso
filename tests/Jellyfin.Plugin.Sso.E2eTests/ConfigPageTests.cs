@@ -87,6 +87,55 @@ public sealed class ConfigPageTests : IAsyncLifetime
         Assert.Contains("jellyfin-admins", groups);
     }
 
+    [Fact]
+    public async Task The_admin_page_adds_a_second_provider()
+    {
+        var page = await OpenConfigPageAsync();
+        await page.ClickAsync(".sso-tab[data-tab=\"provider\"]");
+
+        await page.ClickAsync("#AddProvider");
+        var card = page.Locator(".sso-provider").Last;
+        await card.Locator(".sso-provider-name").FillAsync("Second IdP");
+        await card.Locator(".sso-provider-authority").FillAsync("https://idp.example.com/app/o/jf");
+        await card.Locator(".sso-provider-client").FillAsync("second-client");
+
+        await page.ClickAsync("#Save");
+
+        var config = await WaitForConfigAsync(c => c["Providers"]!.AsArray().Count == 2);
+        var added = config["Providers"]!.AsArray()
+            .First(p => p!["Name"]!.GetValue<string>() == "Second IdP")!;
+        Assert.True(added["Enabled"]!.GetValue<bool>());
+        Assert.Equal("second-client", added["ClientId"]!.GetValue<string>());
+        Assert.Equal("groups", added["GroupsClaim"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task The_admin_page_saves_the_session_settings()
+    {
+        var page = await OpenConfigPageAsync();
+        await page.ClickAsync(".sso-tab[data-tab=\"provider\"]");
+
+        await page.CheckAsync("#SignOutOfIdentityProvider", new PageCheckOptions { Force = true });
+        await page.UncheckAsync("#AllowSelfServiceLinking", new PageUncheckOptions { Force = true });
+
+        await page.ClickAsync("#Save");
+
+        await WaitForConfigAsync(config =>
+            config["SignOutOfIdentityProvider"]!.GetValue<bool>()
+            && !config["AllowSelfServiceLinking"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task The_admin_page_shows_the_configured_provider()
+    {
+        var page = await OpenConfigPageAsync();
+        await page.ClickAsync(".sso-tab[data-tab=\"provider\"]");
+
+        var card = page.Locator(".sso-provider").First;
+        Assert.Equal("Fake IdP", await card.Locator(".sso-provider-name").InputValueAsync());
+        Assert.Equal(JellyfinEnvironment.ClientId, await card.Locator(".sso-provider-client").InputValueAsync());
+    }
+
     /// <summary>
     /// Opens the plugin's page inside the dashboard with a seeded admin session, and fails
     /// with the page's own console output if the page never initialises.

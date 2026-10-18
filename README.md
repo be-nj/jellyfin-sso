@@ -26,6 +26,10 @@ in a native Jellyfin dashboard page.
 - **Native apps via Quick Connect.**
 - **Manual account linking** for pre-existing local accounts.
 - Native-looking config UI in the Jellyfin dashboard.
+- **Several providers side by side** with a picker at a stable login URL.
+- **Self-service linking** — users attach their own account; identities already linked
+  elsewhere are refused.
+- **RP-initiated logout** — optionally end the provider session together with Jellyfin's.
 - Login button on the web login page via Jellyfin branding / JavaScript Injector.
 
 ---
@@ -161,12 +165,13 @@ Configure an OIDC client with PKCE (public client), the same redirect URI, and e
 
 Dashboard → **Plugins → SSO Authentication**:
 
-- **Enable SSO login**
-- **Issuer URL (Authority)** — e.g. `https://auth.example.com/application/o/jellyfin`
-  (must serve `/.well-known/openid-configuration`).
-- **Client ID**
-- **Groups claim name** — default `groups` (works for Authentik & Authelia).
-- **Fetch groups from userinfo** — only if your IdP omits groups from the ID token.
+- **Providers** — one card per identity provider, each with its own display name, issuer
+  URL (must serve `/.well-known/openid-configuration`), client id, groups claim name and
+  an **Enabled** switch. With several enabled providers, `/sso/oidc/start` asks the user
+  which one to use; with one it goes straight there.
+- **Sessions**:
+  - **Sign out of the identity provider too** — see *Logout* below.
+  - **Let users link their own account** — see *Self-service linking* below.
 - **Group → Library Mappings** — one card per group:
   - Group name (autocompletes from groups seen at login).
   - Libraries the group may access (checkboxes).
@@ -190,6 +195,17 @@ without a limit lifts the limit.
 > groups say. A mistyped admin group therefore costs you a warning in the log, not access
 > to your own server.
 
+### Self-service linking
+
+Signed-in users can link their own account at **`/sso/link`**: the page reads the session
+the web client stored, starts the OIDC flow for that user, and attaches the identity to
+their account. An identity that is already linked to a different Jellyfin account is
+refused — only an administrator can move a link. Users can unlink themselves again with
+`DELETE /sso/link/self`.
+
+Linking grants nothing by itself. Library access and the admin flag are applied on the
+next SSO login, from the groups, as always.
+
 ### Manual linking (existing local accounts)
 
 New users are linked automatically. Use **Manual Account Links** only to connect an
@@ -201,6 +217,24 @@ account that existed before SSO:
   `Sub=…`.
 
 ---
+
+## Logout
+
+Jellyfin's own logout drops its token but leaves the identity provider session alone, so
+the next login goes through without asking for credentials. With **Sign out of the
+identity provider too** enabled, sending the browser to **`/sso/oidc/logout`** after
+Jellyfin's logout ends the provider session as well and comes back to the web client.
+
+The plugin cannot hook Jellyfin's logout button from the server, so wire it up in the
+JavaScript Injector alongside the login button:
+
+```js
+// After Jellyfin's own logout has completed.
+window.location.href = '/sso/oidc/logout';
+```
+
+If the provider advertises no `end_session_endpoint`, or cannot be reached, the user still
+lands back in Jellyfin — a broken provider must never block a logout.
 
 ## Login button
 
@@ -295,9 +329,8 @@ commit on `main`.
 ## Roadmap
 
 - Active revocation (background re-sync).
-- RP-initiated logout.
-- Multiple simultaneously-enabled providers + provider picker.
-- Self-service account linking for users (currently admin-only).
+- QR code login for TV and other keyboard-hostile clients (see below).
+- Device-code grant (RFC 8628) once Jellyfin clients speak it.
 
 ## License
 
