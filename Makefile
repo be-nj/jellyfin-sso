@@ -16,7 +16,7 @@ EXTRA_DLLS := IdentityModel.dll \
               Microsoft.IdentityModel.Tokens.dll \
               System.IdentityModel.Tokens.Jwt.dll
 
-.PHONY: build publish deploy clean
+.PHONY: build publish deploy test clean
 
 build:
 	dotnet build $(PLUGIN_SRC) -c Release
@@ -36,3 +36,6 @@ deploy: publish
 
 clean:
 	rm -rf $(PLUGIN_SRC)/bin $(PLUGIN_SRC)/obj
+
+test:
+	dotnet test tests/Jellyfin.Plugin.Sso.Tests -c Release --logger trx

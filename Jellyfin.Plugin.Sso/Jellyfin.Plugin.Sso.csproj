@@ -5,10 +5,15 @@
     <RootNamespace>Jellyfin.Plugin.Sso</RootNamespace>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>1.12.0.0</Version>
+    <Version>1.12.1.0</Version>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The ID token validation rules are internal; the test project asserts them directly. -->
+    <InternalsVisibleTo Include="Jellyfin.Plugin.Sso.Tests" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Jellyfin.Controller" Version="12.1.0" />

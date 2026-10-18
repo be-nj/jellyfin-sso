@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out main
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
@@ -30,7 +30,7 @@ jobs:
             || { echo "tag $GITHUB_REF_NAME is not on main"; exit 1; }
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
 
@@ -46,6 +46,9 @@ jobs:
           esac
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "zip=jellyfin-sso_$version.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Run the test suite
+        run: dotnet test tests/Jellyfin.Plugin.Sso.Tests -c Release
 
       - name: Build the plugin package
         run: scripts/package.sh "${{ steps.version.outputs.version }}"

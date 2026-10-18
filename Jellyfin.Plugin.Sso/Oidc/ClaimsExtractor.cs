@@ -30,7 +30,8 @@ public sealed class ClaimsExtractor
         string expectedNonce,
         CancellationToken ct = default)
     {
-        var (sub, preferredUsername, groups) = ValidateIdToken(provider, disco, idToken, expectedNonce);
+        var (sub, preferredUsername, groups) = ValidateIdToken(
+            provider, disco.Issuer, SigningKeysFrom(disco), idToken, expectedNonce);
 
         if (provider.GroupsFromUserInfo)
         {
@@ -41,9 +42,23 @@ public sealed class ClaimsExtractor
         return new OidcIdentity(sub, preferredUsername, groups);
     }
 
-    private (string Sub, string Username, List<string> Groups) ValidateIdToken(
+    /// <summary>Reads the signing keys out of the provider's JWKS.</summary>
+    private static List<SecurityKey> SigningKeysFrom(DiscoveryDocumentResponse disco)
+        => disco.KeySet?.Keys?
+            .Select(k => new JsonWebKey(JsonSerializer.Serialize(k)))
+            .Cast<SecurityKey>()
+            .ToList()
+            ?? throw new SecurityTokenException("No signing keys in discovery document.");
+
+    /// <summary>
+    /// Validates signature, issuer, audience, lifetime and nonce, then reads the claims
+    /// the plugin relies on. Internal so the validation rules can be tested without a
+    /// live identity provider.
+    /// </summary>
+    internal static (string Sub, string Username, List<string> Groups) ValidateIdToken(
         ProviderConfig provider,
-        DiscoveryDocumentResponse disco,
+        string? issuer,
+        IEnumerable<SecurityKey> signingKeys,
         string idToken,
         string expectedNonce)
     {
@@ -52,15 +67,9 @@ public sealed class ClaimsExtractor
         // original names instead of being renamed to long WS-Security URN strings.
         handler.InboundClaimTypeMap.Clear();
 
-        var signingKeys = disco.KeySet?.Keys?
-            .Select(k => new JsonWebKey(JsonSerializer.Serialize(k)))
-            .Cast<SecurityKey>()
-            .ToList()
-            ?? throw new SecurityTokenException("No signing keys in discovery document.");
-
         var parameters = new TokenValidationParameters
         {
-            ValidIssuer = disco.Issuer,
+            ValidIssuer = issuer,
             ValidAudience = provider.ClientId,
             IssuerSigningKeys = signingKeys,
             ValidateLifetime = true,

@@ -223,7 +223,20 @@ server-side).
   `data-controller="__plugin/SSO Authentication.js"`).
 - `make build` / `make publish` / `make deploy`.
 
-Tests live under `tests/` with outputs in `tests/runs/` (gitignored).
+### Tests
+
+```bash
+make test        # dotnet test tests/Jellyfin.Plugin.Sso.Tests -c Release --logger trx
+```
+
+Tests live under `tests/`; everything a run produces (binaries, obj, TRX results) goes to
+`tests/runs/`, which is gitignored. They cover the security-relevant paths: ID token
+validation (signature, issuer, audience, lifetime, nonce, `alg=none`), the ephemeral
+secret bridge (single use, no empty password, no cross-user use), PKCE state handling, and
+the provisioning and permission rules (never adopt an account by username, revoke access
+when groups disappear).
+
+The suite runs on every push and pull request, and again before a release is published.
 
 ### Cutting a release
 

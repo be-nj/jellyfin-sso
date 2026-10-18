@@ -1,0 +1,10 @@
+<Project>
+
+  <!-- Everything a test run produces stays under tests/runs/, which is gitignored. -->
+  <PropertyGroup>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)runs/dotnet/bin/$(MSBuildProjectName)/</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)runs/dotnet/obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
+    <VSTestResultsDirectory>$(MSBuildThisFileDirectory)runs/dotnet/results/</VSTestResultsDirectory>
+  </PropertyGroup>
+
+</Project>
