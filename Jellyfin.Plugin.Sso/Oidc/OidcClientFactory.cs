@@ -35,17 +35,17 @@ public sealed class OidcClientFactory : IDisposable
         // Authentik (and some other IdPs) use a shared authorize endpoint
         // (e.g. /application/o/authorize/) that differs from the per-app issuer path.
         // IdentityModel's strict endpoint validation rejects this — disable it.
-        var doc = await _http.GetDiscoveryDocumentAsync(
-            new DiscoveryDocumentRequest
+        using var request = new DiscoveryDocumentRequest
+        {
+            Address = provider.Authority,
+            Policy = new DiscoveryPolicy
             {
-                Address = provider.Authority,
-                Policy = new DiscoveryPolicy
-                {
-                    ValidateEndpoints = false,
-                    ValidateIssuerName = false,
-                },
-            }, ct)
-            .ConfigureAwait(false);
+                ValidateEndpoints = false,
+                ValidateIssuerName = false,
+            },
+        };
+
+        var doc = await _http.GetDiscoveryDocumentAsync(request, ct).ConfigureAwait(false);
 
         if (doc.IsError)
             throw new InvalidOperationException(
@@ -66,7 +66,7 @@ public sealed class OidcClientFactory : IDisposable
         string codeVerifier,
         CancellationToken ct = default)
     {
-        var req = new AuthorizationCodeTokenRequest
+        using var req = new AuthorizationCodeTokenRequest
         {
             Address = disco.TokenEndpoint,
             ClientId = provider.ClientId,
@@ -94,11 +94,13 @@ public sealed class OidcClientFactory : IDisposable
     public async Task<UserInfoResponse> GetUserInfoAsync(
         DiscoveryDocumentResponse disco, string accessToken, CancellationToken ct = default)
     {
-        var response = await _http.GetUserInfoAsync(new UserInfoRequest
+        using var request = new UserInfoRequest
         {
             Address = disco.UserInfoEndpoint,
             Token = accessToken,
-        }, ct).ConfigureAwait(false);
+        };
+
+        var response = await _http.GetUserInfoAsync(request, ct).ConfigureAwait(false);
 
         if (response.IsError)
             throw new InvalidOperationException($"Userinfo request failed: {response.Error}");

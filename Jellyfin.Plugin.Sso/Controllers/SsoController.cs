@@ -152,7 +152,9 @@ public sealed class SsoController : ControllerBase
     {
         if (!string.IsNullOrEmpty(error))
         {
-            _logger.LogWarning("OIDC callback error for provider {Id}: {Error}", providerId, error);
+            _logger.LogWarning(
+                "OIDC callback error for provider {Id}: {Error}",
+                Loggable(providerId), Loggable(error));
             return BadRequest($"IdP returned error: {error}");
         }
 
@@ -191,7 +193,7 @@ public sealed class SsoController : ControllerBase
         }
         catch (InvalidOperationException ex)
         {
-            _logger.LogWarning(ex, "SSO login failed for provider {Id}", providerId);
+            _logger.LogWarning(ex, "SSO login failed for provider {Id}", Loggable(providerId));
             return BadRequest(ex.Message);
         }
     }
@@ -378,6 +380,22 @@ public sealed class SsoController : ControllerBase
             ?? req.Host.ToString();
 
         return $"{scheme}://{host}/sso/oidc/callback/{providerId}";
+    }
+
+    /// <summary>
+    /// Makes a value from the query string safe to write to the log: control characters
+    /// would let a caller forge extra log lines, and an unbounded value would let them
+    /// flood the log.
+    /// </summary>
+    internal static string Loggable(string? value, int maxLength = 200)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        var clean = new string(value.Where(ch => !char.IsControl(ch)).ToArray());
+        return clean.Length <= maxLength ? clean : clean[..maxLength] + "…";
     }
 
     private static string JsonEscape(string s)
