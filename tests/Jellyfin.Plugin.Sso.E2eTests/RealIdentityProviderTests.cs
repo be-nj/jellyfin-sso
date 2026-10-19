@@ -11,7 +11,7 @@ namespace Jellyfin.Plugin.Sso.E2eTests;
 /// </summary>
 public abstract class RealIdentityProviderTests : IAsyncLifetime
 {
-    private const string ProviderId = "real-provider";
+    internal const string ProviderId = "real-provider";
 
     // The provider container and the browser are expensive and stateless between tests,
     // so they are started once per provider and live until the test run ends; Ryuk cleans
@@ -70,11 +70,9 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
                 ["Enabled"] = true,
                 ["Authority"] = _idp.Authority,
                 ["ClientId"] = _idp.ClientId,
-                // Deliberately the defaults only: Keycloak has no "groups" scope unless
-                // someone creates one, and asking for it fails the whole authorization.
-                ["Scopes"] = new JsonArray { "openid", "profile", "email" },
+                ["Scopes"] = new JsonArray(_idp.Scopes.Select(s => (JsonNode)s!).ToArray()),
                 ["GroupsClaim"] = _idp.GroupsClaim,
-                ["GroupsFromUserInfo"] = false,
+                ["GroupsFromUserInfo"] = _idp.GroupsFromUserInfo,
             },
         });
     }
@@ -125,7 +123,7 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
     {
         await using var context = await _browser!.NewContextAsync(new BrowserNewContextOptions
         {
-            BaseURL = _env.BaseUrl,
+            BaseURL = _idp.ServerBaseUrl ?? _env.BaseUrl,
             IgnoreHTTPSErrors = true,
         });
         var page = await context.NewPageAsync();
@@ -198,8 +196,24 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
     }
 }
 
+/// <summary>Authelia, which keeps the groups out of the ID token.</summary>
+[Collection(JellyfinCollection.Name)]
+[Trait("Category", "RealIdp")]
+public sealed class AutheliaTests : RealIdentityProviderTests
+{
+    public AutheliaTests(JellyfinEnvironment env)
+        : base(env)
+    {
+    }
+
+    internal override async Task<IRealIdentityProvider> StartProviderAsync(JellyfinEnvironment env)
+        => await AutheliaProvider.StartAsync(
+            env.Certificate, env.WorkDirectory, env.LocalhostBaseUrl, ProviderId);
+}
+
 /// <summary>Keycloak, the provider most of the plugin's issues mention after Authentik.</summary>
 [Collection(JellyfinCollection.Name)]
+[Trait("Category", "RealIdp")]
 public sealed class KeycloakTests : RealIdentityProviderTests
 {
     public KeycloakTests(JellyfinEnvironment env)

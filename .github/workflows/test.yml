@@ -41,13 +41,44 @@ jobs:
       # Drives a throwaway Jellyfin container with the real plugin ZIP, a fake identity
       # provider and a headless browser.
       - name: Run the e2e suite
-        run: dotnet test tests/Jellyfin.Plugin.Sso.E2eTests -c Release --logger trx
+        run: >
+          dotnet test tests/Jellyfin.Plugin.Sso.E2eTests -c Release --logger trx
+          --filter "Category!=RealIdp"
 
       - name: Upload e2e artifacts
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: e2e-results
+          path: |
+            tests/runs/dotnet/results/
+            tests/runs/playwright/*.png
+            tests/runs/playwright/*.html
+          if-no-files-found: ignore
+
+  # Real identity providers in containers: slower, and separate so a Keycloak or Authelia
+  # release breaking its own container image does not look like a plugin regression.
+  real-idp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Run the suite against Keycloak and Authelia
+        run: >
+          dotnet test tests/Jellyfin.Plugin.Sso.E2eTests -c Release --logger trx
+          --filter "Category=RealIdp"
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: real-idp-results
           path: |
             tests/runs/dotnet/results/
             tests/runs/playwright/*.png

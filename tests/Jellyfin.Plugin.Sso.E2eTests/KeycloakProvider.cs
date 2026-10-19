@@ -33,6 +33,14 @@ internal sealed class KeycloakProvider : IRealIdentityProvider
 
     public string GroupsClaim => "groups";
 
+    // Keycloak has no "groups" scope unless somebody creates one, and asking for an unknown
+    // scope fails the whole authorization. The group mapper puts the claim in the ID token.
+    public string[] Scopes => ["openid", "profile", "email"];
+
+    public bool GroupsFromUserInfo => false;
+
+    public string? ServerBaseUrl => null;
+
     /// <summary>Users and groups come from the realm import, so they are known up front.</summary>
     public RealIdentityUser MemberUser { get; } = new("kc-member", ["media"]);
 

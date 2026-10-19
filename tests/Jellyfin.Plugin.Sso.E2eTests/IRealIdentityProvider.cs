@@ -21,11 +21,23 @@ internal interface IRealIdentityProvider : IAsyncDisposable
 
     string GroupsClaim { get; }
 
+    /// <summary>Scopes to request — providers disagree about which ones exist.</summary>
+    string[] Scopes { get; }
+
+    /// <summary>Whether the groups have to be read from the userinfo endpoint.</summary>
+    bool GroupsFromUserInfo { get; }
+
     /// <summary>A user in a group that maps to a library.</summary>
     RealIdentityUser MemberUser { get; }
 
     /// <summary>A user in the group that maps to Jellyfin administrator.</summary>
     RealIdentityUser AdminUser { get; }
+
+    /// <summary>
+    /// The address the browser should use for Jellyfin, when the provider is picky about
+    /// the redirect URI. Null means the environment's own base URL is fine.
+    /// </summary>
+    string? ServerBaseUrl { get; }
 
     /// <summary>Fills in this provider's own login form.</summary>
     Task SignInAsync(IPage page, RealIdentityUser user);

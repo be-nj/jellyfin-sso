@@ -26,7 +26,11 @@ public sealed class OidcClientFactory : IDisposable
     public async Task<DiscoveryDocumentResponse> GetDiscoveryDocumentAsync(
         ProviderConfig provider, CancellationToken ct = default)
     {
-        if (_cache.TryGetValue(provider.Id, out var cached) && !cached.IsError)
+        // Keyed by authority as well as id: an administrator who corrects the issuer URL
+        // would otherwise keep talking to the old provider until Jellyfin restarts.
+        var cacheKey = $"{provider.Id}|{provider.Authority}";
+
+        if (_cache.TryGetValue(cacheKey, out var cached) && !cached.IsError)
             return cached;
 
         _logger.LogInformation("Fetching OIDC discovery for provider {Name} ({Authority})",
@@ -51,7 +55,7 @@ public sealed class OidcClientFactory : IDisposable
             throw new InvalidOperationException(
                 $"OIDC discovery failed for {provider.Authority}: {doc.Error}");
 
-        _cache[provider.Id] = doc;
+        _cache[cacheKey] = doc;
         return doc;
     }
 

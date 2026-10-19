@@ -33,10 +33,27 @@ public sealed class ClaimsExtractor
         var (sub, preferredUsername, groups) = ValidateIdToken(
             provider, disco.Issuer, SigningKeysFrom(disco), idToken, expectedNonce);
 
-        if (provider.GroupsFromUserInfo)
+        // Some providers — Authelia among them — keep the profile claims out of the ID
+        // token, which left the JIT-created Jellyfin user named after the opaque subject.
+        // Ask userinfo when the groups have to come from there anyway, or when the token
+        // carried no name at all.
+        var nameMissing = string.Equals(preferredUsername, sub, StringComparison.Ordinal);
+        if (provider.GroupsFromUserInfo || nameMissing)
         {
             var userInfo = await _factory.GetUserInfoAsync(disco, accessToken, ct).ConfigureAwait(false);
-            groups = ExtractGroupsFromElement(userInfo.Json, provider.GroupsClaim);
+
+            if (provider.GroupsFromUserInfo)
+            {
+                groups = ExtractGroupsFromElement(userInfo.Json, provider.GroupsClaim);
+            }
+
+            if (nameMissing)
+            {
+                preferredUsername =
+                    StringClaim(userInfo.Json, "preferred_username")
+                    ?? StringClaim(userInfo.Json, "name")
+                    ?? preferredUsername;
+            }
         }
 
         return new OidcIdentity(sub, preferredUsername, groups);
@@ -94,6 +111,23 @@ public sealed class ClaimsExtractor
             .ToList();
 
         return (sub, username, groups);
+    }
+
+    /// <summary>Reads a string claim out of the userinfo response, if it is there.</summary>
+    private static string? StringClaim(JsonElement? nullableRoot, string name)
+    {
+        if (nullableRoot is not { } root || root.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        if (!root.TryGetProperty(name, out var value) || value.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        var text = value.GetString();
+        return string.IsNullOrWhiteSpace(text) ? null : text;
     }
 
     // UserInfoResponse.Json is JsonElement? in IdentityModel

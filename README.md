@@ -7,7 +7,8 @@ Users log in through your identity provider; their library access is derived fro
 IdP groups and re-applied on every login. Admins configure the group → library mapping
 in a native Jellyfin dashboard page.
 
-- **Providers:** Authentik (in production), Keycloak (covered by e2e tests), Authelia.
+- **Providers:** Authentik (in production), Keycloak and Authelia (both covered by e2e
+  tests against the real thing).
 - **Target:** Jellyfin **12.1.x**, `net10.0`. `Jellyfin.Controller` must match the server version exactly.
 - **Install:** add the [plugin repository](#from-the-plugin-repository-recommended) to your
   Jellyfin dashboard — no manual DLL copying.
@@ -312,10 +313,19 @@ artifact users download is the one under test. Alongside it runs a fake OIDC pro
 small ASP.NET host in the test process, serving HTTPS with a self-signed certificate the
 container is made to trust), and the browser hop is driven by Playwright.
 
-One tier up, the suite also starts a **real Keycloak** from a realm file and signs in
-through its own login form in the browser, which is the only way to prove that the groups
-really arrive in the claims and that the plugin copes with a provider nobody here
-controls.
+One tier up, the suite starts **real identity providers** in containers — Keycloak from a
+realm file and Authelia from a generated config — and signs in through their own login
+forms in the browser. That is the only way to prove the groups really arrive in the claims
+and that the plugin copes with providers nobody here controls. These tests carry the trait
+`Category=RealIdp` and run as their own CI job:
+
+```bash
+make e2e E2E_FILTER='--filter "Category=RealIdp"'
+```
+
+Both found real bugs the fake provider could not: Keycloak rejects an unknown `groups`
+scope, and Authelia keeps the profile claims out of the ID token, which used to leave the
+new Jellyfin user named after the opaque subject.
 
 Covered there: the plugin loads in a real server, the redirect and PKCE code exchange, JIT
 provisioning, group-to-library permissions applied through Jellyfin's own user policy,

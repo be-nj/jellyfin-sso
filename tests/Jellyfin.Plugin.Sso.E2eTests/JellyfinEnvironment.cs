@@ -41,6 +41,12 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
     /// <summary>Base URL of the server as seen from the test process and the browser.</summary>
     public string BaseUrl { get; private set; } = string.Empty;
 
+    /// <summary>
+    /// The same server under a name that ends in "localhost", which some providers insist
+    /// on before they accept a plain-HTTP redirect URI.
+    /// </summary>
+    public string LocalhostBaseUrl => $"http://jellyfin.localhost:{new Uri(BaseUrl).Port}";
+
     public string AdminToken { get; private set; } = string.Empty;
 
     /// <summary>Identity of the setup administrator, for seeding a dashboard session.</summary>

@@ -41,7 +41,9 @@ test:
 	dotnet test tests/Jellyfin.Plugin.Sso.Tests -c Release --logger trx
 
 # The e2e suite starts a throwaway Jellyfin container, a fake identity provider and a
-# headless browser. There is no local dotnet SDK, so it runs inside the SDK image: the
+# headless browser. E2E_FILTER passes a vstest filter through, e.g.
+#   make e2e E2E_FILTER='--filter "Category=RealIdp"'   # only Keycloak and Authelia
+#   make e2e E2E_FILTER='--filter "Category!=RealIdp"'  # skip the container-heavy tier There is no local dotnet SDK, so it runs inside the SDK image: the
 # repo is mounted at its own path so that bind mounts created from inside still resolve
 # on the host's docker daemon, and the host network makes the fake provider reachable.
 e2e:
@@ -51,5 +53,5 @@ e2e:
 	  -e HOME=/tmp -e NUGET_PACKAGES="$(CURDIR)/tests/runs/nuget" \
 	  -e E2E_PLAYWRIGHT_WITH_DEPS=1 \
 	  mcr.microsoft.com/dotnet/sdk:10.0 \
-	  bash -c 'apt-get update -qq && apt-get install -y -qq zip >/dev/null \
-	    && dotnet test tests/Jellyfin.Plugin.Sso.E2eTests -c Release --logger trx'
+	  bash -c 'apt-get update -qq && apt-get install -y -qq zip docker.io >/dev/null \
+	    && dotnet test tests/Jellyfin.Plugin.Sso.E2eTests -c Release --logger trx $(E2E_FILTER)'
