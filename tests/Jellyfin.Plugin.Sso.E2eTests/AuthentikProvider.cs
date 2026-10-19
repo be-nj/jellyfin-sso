@@ -316,9 +316,30 @@ internal sealed class AuthentikProvider : IRealIdentityProvider
         throw new InvalidOperationException($"Authentik never became ready: {last?.Message}");
     }
 
+    /// <summary>
+    /// Looks up a built-in flow, waiting for it: the worker imports the default blueprints
+    /// in the background, so they can still be missing when the API already answers.
+    /// </summary>
     private static async Task<string> FlowAsync(HttpClient api, string slug)
-        => (await GetAsync(api, $"flows/instances/?slug={slug}"))["results"]!
-            .AsArray()[0]!["pk"]!.GetValue<string>();
+    {
+        var deadline = DateTimeOffset.UtcNow.AddMinutes(2);
+
+        while (true)
+        {
+            var flows = (await GetAsync(api, $"flows/instances/?slug={slug}"))["results"]!.AsArray();
+            if (flows.Count > 0)
+            {
+                return flows[0]!["pk"]!.GetValue<string>();
+            }
+
+            if (DateTimeOffset.UtcNow > deadline)
+            {
+                throw new InvalidOperationException($"Authentik never imported the flow '{slug}'.");
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(2));
+        }
+    }
 
     private static async Task<JsonNode> GetAsync(HttpClient api, string path)
         => JsonNode.Parse(await api.GetStringAsync(path))!;

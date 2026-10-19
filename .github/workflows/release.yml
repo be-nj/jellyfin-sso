@@ -50,8 +50,12 @@ jobs:
       - name: Run the test suite
         run: dotnet test tests/Jellyfin.Plugin.Sso.Tests -c Release
 
+      # The container-backed providers run on every push; a release must not hinge on
+      # three upstream images being healthy at that minute.
       - name: Run the e2e suite
-        run: dotnet test tests/Jellyfin.Plugin.Sso.E2eTests -c Release
+        run: >
+          dotnet test tests/Jellyfin.Plugin.Sso.E2eTests -c Release
+          --filter "Category!=RealIdp"
 
       - name: Build the plugin package
         run: scripts/package.sh "${{ steps.version.outputs.version }}"
