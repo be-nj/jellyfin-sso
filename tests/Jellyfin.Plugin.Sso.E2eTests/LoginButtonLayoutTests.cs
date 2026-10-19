@@ -10,6 +10,10 @@ namespace Jellyfin.Plugin.Sso.E2eTests;
 [Collection(JellyfinCollection.Name)]
 public sealed class LoginButtonLayoutTests : IAsyncLifetime
 {
+    /// <summary>Authentik's own colour, which a branded button is painted in.</summary>
+    private const string Orange = "#FD4B2D";
+
+
     private readonly JellyfinEnvironment _env;
     private IPlaywright _playwright = null!;
     private IBrowser _browser = null!;
@@ -88,30 +92,32 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
     [Fact]
     public async Task The_plain_button_wears_jellyfins_own_surface()
     {
-        var (background, ink, mark) = await ButtonColoursAsync(branded: false);
+        var painted = await ButtonColoursAsync(branded: false);
 
         // Jellyfin's secondary button, whatever shade this release paints it: the test
         // cares that the plugin did not paint it something of its own.
         var theirs = await JellyfinButtonBackgroundAsync();
-        Assert.Equal(theirs, background);
-        Assert.Equal("none", mark);
-        Assert.NotEqual(string.Empty, ink);
+        Assert.Equal(theirs, painted.Background);
+        Assert.Equal("none", painted.Mark);
+        Assert.NotEqual(string.Empty, painted.Ink);
     }
 
     [Fact]
     public async Task A_branded_button_takes_the_providers_colour_and_a_readable_mark()
     {
-        var (background, ink, mark) = await ButtonColoursAsync(branded: true);
+        var painted = await ButtonColoursAsync(branded: true);
 
         // Authentik's orange, which is light enough that the mark and the label go black.
-        Assert.Equal("rgb(253, 75, 45)", background);
-        Assert.Equal("rgb(16, 20, 24)", ink);
-        Assert.Equal("brightness(0)", mark);
-        Assert.NotEqual(await JellyfinButtonBackgroundAsync(), background);
+        Assert.True(
+            painted.Background == "rgb(253, 75, 45)",
+            $"the button is {painted.Background}, not Authentik's orange — {painted.Markup}");
+        Assert.Equal("rgb(16, 20, 24)", painted.Ink);
+        Assert.Equal("brightness(0)", painted.Mark);
+        Assert.NotEqual(await JellyfinButtonBackgroundAsync(), painted.Background);
     }
 
     /// <summary>What the browser actually paints: surface, text, and the mark's filter.</summary>
-    private async Task<(string Background, string Ink, string Mark)> ButtonColoursAsync(bool branded)
+    private async Task<Painted> ButtonColoursAsync(bool branded)
     {
         await _env.PatchConfigAsync(config =>
         {
@@ -120,20 +126,40 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
             provider["BrandedLoginButton"] = branded;
         });
 
+        // Saving the configuration returns before the branding carries the new stylesheet,
+        // by a few hundred milliseconds on a loaded server. A page opened inside that
+        // window is styled by the previous setting, and the test then measures Jellyfin's
+        // own grey and calls it the plugin's — which is how this passed on 12.0 and 12.1
+        // and failed on 12.2.
+        var served = await ServedCssAsync(
+            branded ? "background:" + Orange : "--sso-mark:",
+            TimeSpan.FromSeconds(30));
+
         await using var context = await NewPageContextAsync();
         var page = await ShowLoginPageAsync(context);
-
-        var colours = await page.EvaluateAsync<string[]>(
+        var painted = await page.EvaluateAsync<string[]>(
             """
             () => {
               const button = document.querySelector('button.sso-login-button');
               const style = getComputedStyle(button);
               const mark = getComputedStyle(button.querySelector('.sso-login-mark'));
-              return [style.backgroundColor, style.color, mark.filter];
+              return [style.backgroundColor, style.color, mark.filter, button.outerHTML];
             }
             """);
 
-        return (colours[0], colours[1], colours[2]);
+        var inPage = await page.EvaluateAsync<string>(
+            """
+            () => [...document.querySelectorAll('style')]
+              .map(s => s.textContent || '')
+              .filter(t => t.includes('sso-login-button'))
+              .join(' | ')
+            """);
+
+        return new Painted(
+            painted[0],
+            painted[1],
+            painted[2],
+            $"{painted[3]}\nserved: {Excerpt(served)}\nin page: {Excerpt(inPage)}");
     }
 
     /// <summary>
@@ -157,6 +183,42 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
             """);
     }
 
+    /// <summary>
+    /// The stylesheet Jellyfin serves — where the plugin writes — once it carries
+    /// <paramref name="expected"/>. Fails with what it did carry instead.
+    /// </summary>
+    private async Task<string> ServedCssAsync(string expected, TimeSpan within)
+    {
+        using var client = JellyfinEnvironment.TrustingClient();
+        var deadline = DateTime.UtcNow + within;
+        var css = string.Empty;
+
+        while (DateTime.UtcNow < deadline)
+        {
+            var branding = System.Text.Json.Nodes.JsonNode.Parse(
+                await client.GetStringAsync($"{_env.BaseUrl}/Branding/Configuration"));
+            css = branding?["CustomCss"]?.GetValue<string>() ?? string.Empty;
+
+            if (css.Contains(expected, StringComparison.Ordinal))
+            {
+                return css;
+            }
+
+            await Task.Delay(200);
+        }
+
+        Assert.Fail(
+            $"The branding never carried \"{expected}\" within {within.TotalSeconds:0}s.\n"
+            + $"served: {Excerpt(css)}");
+        return css;
+    }
+
+    private static string Excerpt(string css)
+    {
+        var at = css.IndexOf("data-provider", StringComparison.Ordinal);
+        return at < 0 ? css : css[at..Math.Min(css.Length, at + 220)];
+    }
+
     private Task<IBrowserContext> NewPageContextAsync()
         => _browser.NewContextAsync(new BrowserNewContextOptions
         {
@@ -177,4 +239,7 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
 
         return page;
     }
+
+    /// <summary>What the browser paints, and the element it painted, for a failure.</summary>
+    private sealed record Painted(string Background, string Ink, string Mark, string Markup);
 }
