@@ -42,13 +42,18 @@ public static class LoginButtonMarkup
               + ".loginDisclaimerContainer{display:block;margin:1.2em 0 0;padding:0;}"
               + ".loginDisclaimer{margin:0;padding:0;width:100%;}"
               // Spaced away from Jellyfin's own buttons, because it does something else:
-              // it leaves this server.
-              + ".loginDisclaimer .sso-login-button{display:flex;align-items:center;"
-              + "justify-content:center;gap:.7em;width:100%;margin:.4em 0;"
+              // it leaves this server. The margin is !important because jellyfin-web's
+              // own .emby-button{margin:.3em} otherwise wins it and the button stands
+              // 3.7px right of the column of buttons above it; the branding stylesheet
+              // is loaded before the app's, so equal specificity is not enough.
+              // LoginButtonLayoutTests measures that.
+              + ".loginDisclaimer a.sso-login-button{display:flex;align-items:center;"
+              + "justify-content:center;gap:.7em;width:100%;box-sizing:border-box;"
+              + "margin:.4em 0 0 !important;"
               + "font-weight:600;letter-spacing:.01em;"
               + "border-left:3px solid var(--sso-mark, #00a4dc);"
               + "transition:background .15s ease;}"
-              + ".loginDisclaimer .sso-login-button:hover{background:#4a4a4a;}"
+              + ".loginDisclaimer a.sso-login-button:hover{background:#4a4a4a;}"
               + ".sso-login-mark{flex:0 0 auto;display:block;}"
               + ".sso-login-label{display:block;font-weight:600;}"
               + string.Concat(providers.Select(p =>
