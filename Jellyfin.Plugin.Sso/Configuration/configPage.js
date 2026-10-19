@@ -16,7 +16,7 @@ export default function (view) {
 
     view.querySelector('#AddProvider').addEventListener('click', function () {
         var c = view.querySelector('#Providers');
-        c.appendChild(buildProviderCard({ Id: newId(), Enabled: true }, c.children.length));
+        c.appendChild(buildProviderCard({ Id: newId(), Enabled: false }, c.children.length));
         renumberProviders(view);
     });
 
@@ -160,6 +160,8 @@ function buildProviderCard(p, i) {
     card.dataset.providerId = p.Id || newId();
 
     var loginUrl = '/sso/oidc/start/' + card.dataset.providerId;
+    var redirectUri = window.location.origin + '/sso/oidc/callback/' + card.dataset.providerId;
+    var scopes = (p.Scopes || []).join(' ');
 
     card.innerHTML =
         '<h3 class="checkboxListLabel sso-provider-title">Provider ' + (i + 1) + '</h3>' +
@@ -193,7 +195,18 @@ function buildProviderCard(p, i) {
             '<input type="checkbox" is="emby-checkbox" class="sso-provider-userinfo"' +
             (p.GroupsFromUserInfo ? ' checked' : '') +
             ' /><span>Fetch groups from userinfo endpoint instead of ID token</span></label></div>' +
-        '<div class="fieldDescription">Login URL: <code>' + escHtml(loginUrl) + '</code></div>';
+        '<div class="inputContainer">' +
+            '<input type="text" is="emby-input" class="sso-provider-scopes" ' +
+                'label="Scopes (space separated, empty = openid profile email)" ' +
+                'value="' + escAttr(scopes) + '" />' +
+            '<div class="fieldDescription">Authelia needs <code>groups</code> added here; ' +
+                'Keycloak rejects it. Leave empty unless your provider says otherwise.</div>' +
+        '</div>' +
+        '<div class="fieldDescription sso-provider-urls">' +
+            'Provider ID: <code>' + escHtml(card.dataset.providerId) + '</code><br/>' +
+            'Redirect URI for your provider: <code>' + escHtml(redirectUri) + '</code><br/>' +
+            'Login URL: <code>' + escHtml(loginUrl) + '</code>' +
+        '</div>';
 
     card.querySelector('.sso-provider-remove').addEventListener('click', function () {
         card.remove();
@@ -234,7 +247,7 @@ function collectProviders(view) {
             ClientId: clientId,
             ClientType: previous.ClientType || 0,
             ConfidentialSecretRef: previous.ConfidentialSecretRef || null,
-            Scopes: previous.Scopes && previous.Scopes.length ? previous.Scopes : [],
+            Scopes: val('.sso-provider-scopes').split(/\s+/).filter(Boolean),
             GroupsClaim: val('.sso-provider-groups-claim') || 'groups',
             GroupsFromUserInfo: card.querySelector('.sso-provider-userinfo').checked,
         };

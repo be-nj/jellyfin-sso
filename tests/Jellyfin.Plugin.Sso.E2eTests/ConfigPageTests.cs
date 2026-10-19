@@ -104,7 +104,9 @@ public sealed class ConfigPageTests : IAsyncLifetime
         var config = await WaitForConfigAsync(c => c["Providers"]!.AsArray().Count == 2);
         var added = config["Providers"]!.AsArray()
             .First(p => p!["Name"]!.GetValue<string>() == "Second IdP")!;
-        Assert.True(added["Enabled"]!.GetValue<bool>());
+        // New providers are saved disabled; the administrator turns them on when the
+        // identity provider side is finished.
+        Assert.False(added["Enabled"]!.GetValue<bool>());
         Assert.Equal("second-client", added["ClientId"]!.GetValue<string>());
         Assert.Equal("groups", added["GroupsClaim"]!.GetValue<string>());
     }
@@ -127,6 +129,40 @@ public sealed class ConfigPageTests : IAsyncLifetime
         var saved = config["Providers"]!.AsArray()
             .First(p => p!["Name"]!.GetValue<string>() == "Half filled")!;
         Assert.False(string.IsNullOrWhiteSpace(saved["Id"]!.GetValue<string>()));
+
+        // Disabled until it is finished: an enabled half-configured provider would put a
+        // button on everyone's login page that leads nowhere.
+        Assert.False(saved["Enabled"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task The_card_shows_the_redirect_uri_the_provider_needs()
+    {
+        var page = await OpenConfigPageAsync();
+        await page.ClickAsync(".sso-tab[data-tab=\"provider\"]");
+
+        var text = await page.Locator(".sso-provider").First.Locator(".sso-provider-urls").InnerTextAsync();
+
+        Assert.Contains($"{_env.BaseUrl}/sso/oidc/callback/{JellyfinEnvironment.ProviderId}", text);
+        Assert.Contains(JellyfinEnvironment.ProviderId, text);
+    }
+
+    [Fact]
+    public async Task Scopes_can_be_set_for_a_provider_that_needs_an_extra_one()
+    {
+        var page = await OpenConfigPageAsync();
+        await page.ClickAsync(".sso-tab[data-tab=\"provider\"]");
+
+        // Authelia only reports groups when the groups scope is requested.
+        await page.Locator(".sso-provider").First.Locator(".sso-provider-scopes")
+            .FillAsync("openid profile email groups");
+        await page.ClickAsync("#Save");
+
+        var config = await WaitForConfigAsync(c => c["Providers"]!.AsArray()[0]!["Scopes"]!
+            .AsArray().Any(s => s!.GetValue<string>() == "groups"));
+        Assert.Equal(
+            ["openid", "profile", "email", "groups"],
+            config["Providers"]!.AsArray()[0]!["Scopes"]!.AsArray().Select(s => s!.GetValue<string>()));
     }
 
     [Fact]
