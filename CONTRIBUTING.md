@@ -1,7 +1,7 @@
 # Contributing
 
 Everything about building, testing and releasing the plugin lives here, so the README can
-stay about running it.
+stay about installing it and [docs/](docs/README.md) about running it.
 
 ## Layout
 
@@ -103,16 +103,17 @@ If the DLL is dropped without its dependencies, Jellyfin logs
 `Failed to load assembly … IdentityModel …` and deletes the plugin folder on the next
 restart. Always deploy all of them together.
 
-## How the README was checked
+## How the documentation was checked
 
-The README claims to be followable by someone who runs Jellyfin in Docker and does not
+The documentation claims to be followable by someone who runs Jellyfin in Docker and does not
 write code. That claim was tested, and it is worth knowing exactly how, because the method
 has a ceiling.
 
-Seven times, a reader with no knowledge of this project was given the README and nothing
-else — no source, no other files — and asked to walk the setup in their head, name the
-first line that stopped them, and rate it. Each round's findings were fixed before the
-next. The ratings went 3, 8, 7, 7, 7, 7, 9; the last round reported no blockers.
+Seven times, a reader with no knowledge of this project was given the documentation and
+nothing else — no source, no other files — and asked to walk the setup in their head, name
+the first line that stopped them, and rate it. At that point all of it was one long README,
+since split into the README and [docs/](docs/README.md). Each round's findings were fixed
+before the next. The ratings went 3, 8, 7, 7, 7, 7, 9; the last round reported no blockers.
 
 Three of those rounds found defects in the **code**, not the text: the configuration page
 dropped a provider saved with only a name (the state the documented first step produces),
@@ -130,7 +131,8 @@ another round of the above.
 
 ## Screenshots
 
-The images in the README come out of the running plugin, not out of a screenshot tool:
+The images in the README and under `docs/` come out of the running plugin, not out of a
+screenshot tool:
 
 ```bash
 make screenshots

@@ -5,7 +5,7 @@ using Microsoft.Playwright;
 namespace Jellyfin.Plugin.Sso.E2eTests;
 
 /// <summary>
-/// Produces the screenshots the README embeds, from the real plugin page running in a
+/// Produces the screenshots the README and docs/ embed, from the real plugin page in a
 /// real Jellyfin. Keeping them here rather than taking them by hand means they cannot
 /// quietly drift away from the UI they document: regenerate with
 ///
@@ -45,8 +45,8 @@ public sealed class ScreenshotTests : IAsyncLifetime
         var directory = Path.Combine(BrowserSupport.RepositoryRoot(), "docs", "img");
         Directory.CreateDirectory(directory);
 
-        // The screenshots carry the same example values as the README, so a reader can
-        // match what they see here against what they are told to type.
+        // The screenshots carry the same example values as the documentation, so a reader
+        // can match what they see here against what they are told to type.
         await _env.PatchConfigAsync(config =>
         {
             var provider = config["Providers"]!.AsArray()[0]!;
@@ -72,7 +72,7 @@ public sealed class ScreenshotTests : IAsyncLifetime
             Path = Path.Combine(directory, "group-mapping.png"),
         });
 
-        // The manual linking form, the fiddliest screen and the one the README can only
+        // The manual linking form, the fiddliest screen and the one the docs can only
         // describe in words.
         await page.ClickAsync(".sso-tab[data-tab=\"links\"]");
         // The form lives in a collapsed <details>; a screenshot of it closed shows a line.
