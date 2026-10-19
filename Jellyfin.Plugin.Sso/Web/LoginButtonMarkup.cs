@@ -46,7 +46,11 @@ public static class LoginButtonMarkup
                 .Append(prefix)
                 .Append("/sso/oidc/start/")
                 .Append(WebUtility.UrlEncode(provider.Id))
-                .Append("\">")
+                .Append("\"><img src=\"")
+                .Append(prefix)
+                .Append("/sso/icon/")
+                .Append(ProviderIcons.SlugFor(provider.Name, provider.Authority))
+                .Append("\" alt=\"\" width=\"20\" height=\"20\"/>&nbsp;")
                 .Append(WebUtility.HtmlEncode(label))
                 .Append("</a>");
         }

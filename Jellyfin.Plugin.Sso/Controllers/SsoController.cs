@@ -1,6 +1,7 @@
 using Duende.IdentityModel.Client;
 using Jellyfin.Plugin.Sso.Auth;
 using Jellyfin.Plugin.Sso.Configuration;
+using Jellyfin.Plugin.Sso.Web;
 using Jellyfin.Plugin.Sso.Oidc;
 using Jellyfin.Plugin.Sso.Provisioning;
 using MediaBrowser.Controller.QuickConnect;
@@ -52,6 +53,19 @@ public sealed class SsoController : ControllerBase
     /// Stable entry point. With one enabled provider it goes straight there; with several
     /// it asks which one. The URL never changes, so the login button can be static.
     /// </summary>
+    /// <summary>
+    /// The mark on a provider's login button. Served from here rather than from a CDN so
+    /// that a login page on a LAN without internet still renders it, and so that nobody
+    /// outside learns who visits the login page.
+    /// </summary>
+    [HttpGet("icon/{slug}")]
+    [AllowAnonymous]
+    public IActionResult Icon(string slug)
+    {
+        Response.Headers.CacheControl = "public, max-age=86400";
+        return Content(ProviderIcons.Svg(slug), "image/svg+xml");
+    }
+
     [HttpGet("oidc/start")]
     [AllowAnonymous]
     public async Task<IActionResult> StartDefault(CancellationToken ct)

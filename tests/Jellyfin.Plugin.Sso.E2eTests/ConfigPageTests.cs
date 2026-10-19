@@ -193,6 +193,30 @@ public sealed class ConfigPageTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// Jellyfin's dashboard loads only the page element out of configPage.html, so a
+    /// stylesheet in that file's &lt;head&gt; never reaches the DOM and the page renders
+    /// with raw browser widgets. This catches that the day it happens again.
+    /// </summary>
+    [Fact]
+    public async Task The_pages_own_stylesheet_reaches_the_dashboard()
+    {
+        var page = await OpenConfigPageAsync();
+
+        var applied = await page.EvaluateAsync<bool>(
+            """
+            () => {
+              const tab = document.querySelector('.sso-tab');
+              if (!tab) return false;
+              // The stylesheet gives every tab a 2px bottom border; the browser default
+              // for a <button> has none.
+              return getComputedStyle(tab).borderBottomWidth === '2px';
+            }
+            """);
+
+        Assert.True(applied, "configPage.html's stylesheet did not reach the rendered page.");
+    }
+
+    /// <summary>
     /// Opens the plugin's page inside the dashboard with a seeded admin session, and fails
     /// with the page's own console output if the page never initialises.
     /// </summary>

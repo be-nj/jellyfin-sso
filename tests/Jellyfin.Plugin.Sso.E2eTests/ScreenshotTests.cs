@@ -66,6 +66,10 @@ public sealed class ScreenshotTests : IAsyncLifetime
 
         var page = await OpenConfigPageAsync();
 
+        // The whole page, into tests/runs: not documentation, but the artifact that shows
+        // whether the page's own stylesheet survived Jellyfin's loader.
+        await BrowserSupport.CaptureAsync(page, "config-page");
+
         // The provider card, with the redirect URI the quick start tells people to copy.
         await page.ClickAsync(".sso-tab[data-tab=\"provider\"]");
         await ShootAsync(page, ".sso-provider", Path.Combine(directory, "provider-card.png"));
