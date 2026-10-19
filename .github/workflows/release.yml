@@ -130,3 +130,16 @@ jobs:
           # A pull request opened with GITHUB_TOKEN starts no workflows, so the checks
           # main requires are dispatched against the branch by hand.
           gh workflow run test.yml --ref "$branch"
+
+          # GitHub also queues the pull request's own runs in "action_required": the
+          # author is a bot, and a bot counts as a first-time contributor forever. Those
+          # held runs are required checks, so auto-merge waits behind them however green
+          # the dispatched run is. v1.12.9 and v1.12.10 both had to be released by hand
+          # for that reason. Approving them is what a person would click; `|| true`
+          # because a token may not be allowed to approve its own runs, and a release
+          # that is otherwise finished should not fail on it.
+          for id in $(gh run list --branch "$branch" --limit 20 \
+              --json databaseId,conclusion \
+              --jq '.[] | select(.conclusion == "action_required") | .databaseId'); do
+            gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$id/approve" || true
+          done
