@@ -18,8 +18,9 @@ jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
-      # Pushes the manifest commit and creates the release.
+      # Creates the release and the manifest pull request.
       contents: write
+      pull-requests: write
       # Provenance: the attestation is signed for this repository and run.
       id-token: write
       attestations: write
@@ -77,10 +78,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            "dist/${{ steps.version.outputs.zip }}" \
-            --title "${{ steps.version.outputs.version }}" \
-            --generate-notes
+          zip="dist/${{ steps.version.outputs.zip }}"
+          # Idempotent: a rerun after a later step failed must not stop here.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$zip" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$zip" \
+              --title "${{ steps.version.outputs.version }}" \
+              --generate-notes
+          fi
 
       - name: Add the version to manifest.json
         run: |
@@ -92,10 +98,27 @@ jobs:
             "${{ github.server_url }}/${{ github.repository }}/releases/download/$GITHUB_REF_NAME/$zip" \
             "See the release notes for $GITHUB_REF_NAME."
 
-      - name: Commit the manifest
+      # The manifest goes to main the same way every other change does: through a pull
+      # request that has to pass the test matrix. Nothing bypasses the rules on main,
+      # and the release is still hands-off — auto-merge lands it once CI is green.
+      - name: Open a pull request with the manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          version='${{ steps.version.outputs.version }}'
+          branch="manifest/$GITHUB_REF_NAME"
+
           git config user.name 'github-actions[bot]'
-          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -b "$branch"
           git add manifest.json m.json
-          git commit -m "Publish ${{ steps.version.outputs.version }} in the plugin manifest"
-          git push origin main
+          git commit -m "Publish $version in the plugin manifest"
+          git push --force origin "$branch"
+
+          if ! gh pr view "$branch" >/dev/null 2>&1; then
+            gh pr create --base main --head "$branch" \
+              --title "Publish $version in the plugin manifest" \
+              --body "Built from $GITHUB_REF_NAME. The catalog offers this version once this lands."
+          fi
+
+          gh pr merge "$branch" --auto --squash --delete-branch
