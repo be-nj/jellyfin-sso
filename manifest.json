@@ -6,6 +6,7 @@
     "overview": "Single sign-on for Jellyfin against any OIDC provider, with users and library permissions driven by IdP groups.",
     "owner": "be-nj",
     "category": "Authentication",
+    "imageUrl": "https://jf.be-nj.net/docs/img/icon.png",
     "versions": [
       {
         "version": "1.12.5.0",

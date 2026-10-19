@@ -1,12 +1,6 @@
 <div align="center">
 
-<img src="https://cdn.simpleicons.org/jellyfin/00A4DC" height="52" alt="Jellyfin">
-&nbsp;&nbsp;
-<img src="https://cdn.simpleicons.org/authentik/FD4B2D" height="52" alt="Authentik">
-&nbsp;&nbsp;
-<img src="https://cdn.simpleicons.org/keycloak/8A8A8A" height="52" alt="Keycloak">
-&nbsp;&nbsp;
-<img src="https://cdn.simpleicons.org/authelia/113155" height="52" alt="Authelia">
+<img src="docs/img/stack.svg" alt="Authentik, Keycloak and Authelia sign users in to Jellyfin" width="560">
 
 # Jellyfin SSO Authentication
 

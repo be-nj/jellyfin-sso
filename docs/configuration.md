@@ -61,7 +61,9 @@ SSO sync for user …: admin=False, libraries=1, groups=media
 ```
 
 > Mappings are applied on **every login**, over anything set by hand in Jellyfin's user
-> screen.
+> screen. Nothing happens between logins: an edit you make by hand takes effect at once,
+> for sessions that are already open too, and survives until that person signs in through
+> SSO again.
 
 A user in several groups gets the union: every library of every matched group, each
 permission any group grants, and the most permissive parental rating — a group without a

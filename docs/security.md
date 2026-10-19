@@ -6,7 +6,11 @@ Two things that affect how you run this:
 
 - **Revocation is not immediate.** Removing someone from a group at the provider changes
   nothing until their next login, and Jellyfin sessions last a long time. To cut someone
-  off now, end their session under Dashboard → **Devices**, or delete the account.
+  off now, take the libraries away in Jellyfin's own user screen — the server enforces
+  that on the next request, even mid-session, though an open app may show stale tiles
+  until it reloads — and end their session under Dashboard → **Devices**, or delete the
+  account. Note that the hand-edit lasts only until that person's next SSO login, when
+  the group mapping is written over it again.
 - **No password and no client secret is stored.** The plugin never sees a password, and
   the default client holds no secret — PKCE proves it started the login.
 

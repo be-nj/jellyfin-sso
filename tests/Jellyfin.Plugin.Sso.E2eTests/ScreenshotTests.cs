@@ -53,9 +53,16 @@ public sealed class ScreenshotTests : IAsyncLifetime
             provider["Name"] = "Authentik";
             provider["Authority"] = "https://auth.example.com/application/o/jellyfin/";
             provider["ClientId"] = "jellyfin";
-            provider["Enabled"] = false;
+            provider["Enabled"] = true;
             provider["Scopes"] = new JsonArray();
         });
+
+        // The login page as a household sees it: saving the configuration above put the
+        // button into Jellyfin's branding, and nothing else was touched.
+        await CaptureLoginPageAsync(Path.Combine(directory, "login-button.png"));
+
+        // From here the provider is the half-filled, disabled one the setup steps describe.
+        await _env.PatchConfigAsync(config => config["Providers"]!.AsArray()[0]!["Enabled"] = false);
 
         var page = await OpenConfigPageAsync();
 
@@ -79,10 +86,68 @@ public sealed class ScreenshotTests : IAsyncLifetime
         });
         await ShootAsync(page, "[data-panel='links']", Path.Combine(directory, "account-links.png"));
 
-        foreach (var file in new[] { "provider-card.png", "group-mapping.png", "account-links.png" })
+        foreach (var file in new[]
+                 { "login-button.png", "provider-card.png", "group-mapping.png", "account-links.png" })
         {
             Assert.True(new FileInfo(Path.Combine(directory, file)).Length > 5_000, file);
         }
+    }
+
+    /// <summary>
+    /// Jellyfin's login page with the button the plugin splices into the branding. Shot
+    /// from a browser with no session, the way a member of the household arrives.
+    /// </summary>
+    private async Task CaptureLoginPageAsync(string path)
+    {
+        var context = await _browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            BaseURL = _env.BaseUrl,
+            IgnoreHTTPSErrors = true,
+            ViewportSize = new ViewportSize { Width = 900, Height = 820 },
+            DeviceScaleFactor = 2,
+        });
+
+        var page = await context.NewPageAsync();
+        await page.GotoAsync("/web/index.html#/login.html");
+
+        try
+        {
+            await page.WaitForSelectorAsync("a[href*='/sso/oidc/start/']", new PageWaitForSelectorOptions
+            {
+                State = WaitForSelectorState.Visible,
+                Timeout = 20_000,
+            });
+        }
+        catch (TimeoutException)
+        {
+            using var client = JellyfinEnvironment.TrustingClient();
+            var branding = await client.GetStringAsync($"{_env.BaseUrl}/Branding/Configuration");
+            await BrowserSupport.CaptureAsync(page, "login-page");
+            Assert.Fail(
+                $"No SSO button on the login page.\nurl: {page.Url}\n"
+                + $"branding: {branding}\n"
+                + $"body: {(await page.InnerTextAsync("body")).ReplaceLineEndings(" / ")}");
+        }
+
+        // Frame the form together with the button below it — the smallest element that
+        // holds both, whatever jellyfin-web calls its wrappers this release.
+        var framed = await page.EvaluateAsync<bool>(
+            """
+            () => {
+              const link = document.querySelector("a[href*='/sso/oidc/start/']");
+              const form = document.querySelector('form');
+              if (!link || !form) return false;
+              let node = form;
+              while (node && !node.contains(link)) node = node.parentElement;
+              if (!node) return false;
+              node.setAttribute('data-shot-target', '');
+              return true;
+            }
+            """);
+
+        Assert.True(framed, "Could not find the login form and the SSO button on the login page.");
+        await ShootAsync(page, "[data-shot-target]", path);
+        await context.CloseAsync();
     }
 
     /// <summary>

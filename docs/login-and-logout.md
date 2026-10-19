@@ -9,7 +9,10 @@ Jellyfin's *Login Disclaimer*. The buttons sit between `<!-- sso-login-buttons:s
 and `:end`; only that part is ever rewritten, so your own text stays, and disabling every
 provider removes the block alone.
 
-Under a sub-path the links pick up Jellyfin's *Base URL*, so
+<a href="img/login-button.png"><img src="img/login-button.png" alt="Jellyfin's login page with a Login with Authentik button" width="520"></a>
+
+The button is an anchor in Jellyfin's own button classes, so themes style it like the
+others. Under a sub-path the links pick up Jellyfin's *Base URL*, so
 `/jellyfin/sso/oidc/start/<providerId>` works.
 
 **JavaScript Injector**, if you run that community plugin, puts the button inside the

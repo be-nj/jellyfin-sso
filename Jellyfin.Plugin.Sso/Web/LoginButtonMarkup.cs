@@ -36,9 +36,13 @@ public static class LoginButtonMarkup
                 ? "Login with SSO"
                 : $"Login with {provider.Name}";
 
+            // Inline styles are stripped from the disclaimer before it is rendered, so the
+            // look has to come from Jellyfin's own classes: "emby-button block" makes a
+            // full-width button, "raised" gives it the secondary surface, and the themes
+            // style an anchor's text only under a[data-role=button] — without it the label
+            // keeps the link colour and disappears on a coloured button.
             markup
-                .Append("<a class=\"raised emby-button block\" style=\"display:block;")
-                .Append("text-align:center;margin-top:.5em\" href=\"")
+                .Append("<a data-role=\"button\" class=\"raised block emby-button\" href=\"")
                 .Append(prefix)
                 .Append("/sso/oidc/start/")
                 .Append(WebUtility.UrlEncode(provider.Id))

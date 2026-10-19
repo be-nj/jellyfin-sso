@@ -1,4 +1,5 @@
 using Jellyfin.Plugin.Sso.Configuration;
+using Jellyfin.Plugin.Sso.Web;
 using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -15,11 +16,14 @@ public sealed class AdminController : ControllerBase
 {
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
+    private readonly LoginBranding _branding;
 
-    public AdminController(ILibraryManager libraryManager, IUserManager userManager)
+    public AdminController(
+        ILibraryManager libraryManager, IUserManager userManager, LoginBranding branding)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _branding = branding;
     }
 
     // ─── Config ──────────────────────────────────────────────────────────────
@@ -33,6 +37,10 @@ public sealed class AdminController : ControllerBase
     public IActionResult SaveConfig([FromBody] PluginConfiguration config)
     {
         Plugin.Instance!.UpdateConfiguration(config);
+
+        // The login buttons live in Jellyfin's branding, so they are rewritten here —
+        // this is the only place a provider is ever enabled, renamed or disabled.
+        _branding.Apply();
         return Ok();
     }
 
