@@ -66,7 +66,11 @@ its signature is checked, and the group names that arrive with it.
 - 139 unit tests and 52 browser-driven end-to-end tests run on every push, against
   Jellyfin 12.0, 12.1 and 12.2.
 - Every release signs in through real Authentik, Keycloak and Authelia containers.
-- CodeQL runs on every push; no alert is open.
+- CodeQL runs on every push, and Scorecard rates the repository from outside. Alerts that
+  are dismissed carry the reason at the alert.
+- Release artifacts carry a provenance attestation (`gh attestation verify`). Byte-for-byte
+  rebuilds match on one machine but not yet across machines —
+  [#14](https://github.com/be-nj/jellyfin-sso/issues/14).
 - Mutation testing checks that those tests would notice a defect at all; the score and its
   floor are in CI.
 - Every defect found in this plugin is filed as an issue with the test that now covers it,
