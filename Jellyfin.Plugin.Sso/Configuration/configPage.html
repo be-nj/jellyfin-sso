@@ -9,55 +9,86 @@
        data-require="emby-input,emby-button,emby-select,emby-checkbox"
        data-controller="__plugin/SSO Authentication.js">
   <style>
-    /* ── Tabs (horizontal, Media-Bar style) ── */
-    .sso-title-rule { margin: 1em 0; }
-    .sso-copy-row {
-      display: flex; align-items: center; gap: .6em;
-      padding: .15em 0; flex-wrap: wrap;
+    /* Jellyfin lays a .checkboxContainer out as a flex row, which drops the description
+       into a column beside the control it belongs to: two ragged columns with nothing
+       lining up. Every setting here is a block — control, then its description under it. */
+    .sso-panel .checkboxContainer { display: block; margin: 0 0 1.15em; }
+    .sso-panel .checkboxContainer > label {
+      display: inline-flex; align-items: center; gap: .65em; margin: 0;
     }
-    .sso-copy-label { min-width: 14em; }
-    .sso-copy-row code { word-break: break-all; }
-    .sso-copy { padding: .2em .8em; font-size: .85em; margin: 0; }
+    .sso-panel .fieldDescription {
+      margin: .35em 0 0; max-width: 54em; line-height: 1.45; opacity: .8;
+    }
+    .sso-panel .checkboxContainer > .fieldDescription { margin-left: 2.9em; }
+    .sso-panel .inputContainer, .sso-panel .selectContainer { margin-bottom: 1.15em; }
+
+    /* ── Page furniture ── */
+    .sso-title-rule { margin: 1em 0 1.25em; }
     .sso-tabs { display: flex; flex-wrap: wrap; gap: .25em; margin-bottom: 1.5em; }
     .sso-tab {
       background: none; border: none; cursor: pointer;
-      color: #ccc; padding: .5em 1em;
+      color: #ccc; padding: .55em 1.1em;
       border-bottom: 2px solid transparent;
-      transition: color .3s, border-bottom .3s;
+      transition: color .2s, border-color .2s;
     }
     .sso-tab h3 { margin: 0; font-weight: 400; }
     .sso-tab:hover { color: #fff; }
     .sso-tab.is-active { color: #fff; border-bottom-color: #00a4dc; }
     .sso-panel[hidden] { display: none; }
+    .sso-intro { max-width: 54em; margin-bottom: 1.25em; opacity: .8; }
 
-    /* ── Group mapping cards ── */
-    .sso-mapping.paperList {
-      border-left: 4px solid #00a4dc;
-      padding: 1em 1.25em 1.25em;
-      margin-bottom: 1.5em;
+    /* ── Cards: one subject each, so the page reads as groups rather than a list ── */
+    .sso-card {
+      background: rgba(255, 255, 255, .035);
+      border-radius: 8px;
+      padding: 1.1em 1.3em .25em;
+      margin-bottom: 1.25em;
     }
-    .sso-mapping-title {
-      margin: 0 0 .85em;
-      padding-bottom: .5em;
-      border-bottom: 1px solid rgba(255,255,255,.12);
+    .sso-card-title {
+      margin: 0 0 1em; font-size: 1.05em; font-weight: 600;
+      padding-bottom: .5em; border-bottom: 1px solid rgba(255, 255, 255, .1);
+    }
+
+    /* ── Foldable cards: a page of three providers is unreadable unfolded ── */
+    .sso-card-summary {
+      cursor: pointer; list-style: none;
+      display: flex; align-items: baseline; gap: .8em; flex-wrap: wrap;
+      padding: .9em 1.3em;
+      border-bottom: 1px solid rgba(255, 255, 255, .1);
+    }
+    .sso-card-summary::-webkit-details-marker { display: none; }
+    .sso-card-summary::before {
+      content: ''; flex: 0 0 auto;
+      width: 0; height: 0;
+      border-left: .42em solid currentColor;
+      border-top: .3em solid transparent;
+      border-bottom: .3em solid transparent;
+      transition: transform .15s ease;
+      opacity: .7;
+    }
+    details[open] > .sso-card-summary::before { transform: rotate(90deg); }
+    .sso-card-name { font-size: 1.05em; font-weight: 600; }
+    .sso-card-sub { opacity: .55; font-size: .85em; overflow-wrap: anywhere; }
+    .sso-card-body { padding: 1.1em 1.3em .1em; }
+
+    /* ── Provider and mapping cards ── */
+    .sso-mapping.sso-card, .sso-provider.sso-card {
+      border-left: 3px solid #00a4dc;
+      padding: 0;
     }
     .sso-mapping-head {
-      display: flex;
-      align-items: flex-end;
-      gap: 1.5em;
-      flex-wrap: wrap;
+      display: flex; align-items: flex-end; gap: 1.5em; flex-wrap: wrap;
     }
-    .sso-mapping-head .sso-group-field {
-      flex: 1 1 16em;
-      min-width: 12em;
-      margin: 0;
+    .sso-mapping-head .sso-group-field { flex: 1 1 18em; min-width: 12em; margin-bottom: 1.15em; }
+    /* The row's own controls stay on the row; only standalone settings are blocks. */
+    .sso-mapping-head .checkboxContainer {
+      display: inline-block; flex: 0 0 auto; margin: 0 0 1.5em; white-space: nowrap;
     }
-    .sso-admin-toggle { flex: 0 0 auto; margin: 0; white-space: nowrap; }
-    .sso-remove-btn { flex: 0 0 auto; }
-    .sso-provider { padding: .75em; margin-bottom: .75em; }
-    .sso-libs-section { margin-top: .5em; }
-    .sso-perms-section { margin-top: .5em; }
-    .sso-rating-field { max-width: 18em; margin-top: .25em; }
+    .sso-remove-btn { flex: 0 0 auto; margin-bottom: 1.3em; }
+    .sso-colour-field { max-width: 20em; }
+    .sso-colour-field[hidden] { display: none; }
+    .sso-libs-section, .sso-perms-section { margin-top: .5em; }
+    .sso-rating-field { max-width: 18em; }
     .sso-libs-grid.checkboxList {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(15em, 1fr));
@@ -65,19 +96,38 @@
       background: transparent;
       box-shadow: none;
     }
+    .sso-libs-grid .checkboxContainer { margin-bottom: .35em; }
+
+    /* ── The three addresses a provider has to be told, in aligned columns ── */
+    .sso-copy-list {
+      display: grid;
+      grid-template-columns: max-content minmax(0, 1fr) max-content;
+      align-items: center;
+      gap: .5em .9em;
+      margin: .4em 0 1.2em;
+    }
+    .sso-copy-label { opacity: .75; }
+    .sso-copy-list code {
+      background: rgba(0, 0, 0, .3); border-radius: 4px;
+      padding: .3em .55em; overflow-wrap: anywhere;
+    }
+    .sso-copy { padding: .25em .9em; font-size: .85em; margin: 0; }
 
     /* ── Links table ── */
     .sso-links-table { width: 100%; border-collapse: collapse; margin-top: .5em; }
     .sso-links-table th,
-    .sso-links-table td { padding: .4em .6em; text-align: left; border-bottom: 1px solid #444; font-size: .9em; }
+    .sso-links-table td {
+      padding: .5em .6em; text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, .1); font-size: .9em;
+    }
     .sso-links-table code { font-size: .8em; word-break: break-all; }
 
     /* ── Spacing utilities (no inline styles) ── */
-    .sso-mt    { margin-top: .75em; }
+    .sso-mt    { margin-top: 1em; }
     .sso-mt-sm { margin-top: .5em; }
-    .sso-save-bar { margin-top: 1.5em; }
-    .sso-link-form { padding: .75em 0; display: flex; flex-direction: column; gap: .75em; max-width: 34em; }
-    .sso-link-form-summary { cursor: pointer; }
+    .sso-save-bar { margin-top: 1.75em; }
+    .sso-link-form { padding: .75em 0; display: flex; flex-direction: column; gap: .25em; max-width: 34em; }
+    .sso-link-form-summary { cursor: pointer; padding: .4em 0; }
   </style>
     <div data-role="content">
       <div class="content-primary">
@@ -97,7 +147,7 @@
         <!-- Providers -->
         <div class="sso-panel" data-panel="provider">
           <div class="verticalSection">
-            <div class="fieldDescription">
+            <div class="fieldDescription sso-intro">
               With more than one enabled provider, <code>/sso/oidc/start</code> asks the user
               which one to use.
             </div>
@@ -107,8 +157,8 @@
             </button>
           </div>
 
-          <div class="verticalSection sso-mt">
-            <h3 class="checkboxListLabel">Sessions</h3>
+          <div class="sso-card sso-mt">
+            <h3 class="sso-card-title">Sessions and the login page</h3>
             <div class="checkboxContainer">
               <label>
                 <input id="SignOutOfIdentityProvider" type="checkbox" is="emby-checkbox" />
@@ -171,7 +221,7 @@
         <!-- Group Mappings -->
         <div class="sso-panel" data-panel="mappings" hidden>
           <div class="verticalSection">
-            <div class="fieldDescription">
+            <div class="fieldDescription sso-intro">
               Applied <strong>declaratively on every login</strong> — Jellyfin user UI changes are overwritten.
             </div>
             <div id="GroupMappings" class="sso-mt"></div>
@@ -180,8 +230,8 @@
             </button>
           </div>
 
-          <div class="verticalSection sso-mt">
-            <h3 class="checkboxListLabel">Safety</h3>
+          <div class="sso-card sso-mt">
+            <h3 class="sso-card-title">Safety</h3>
             <div class="checkboxContainer">
               <label>
                 <input id="PreserveAdminPermissions" type="checkbox" is="emby-checkbox" />
@@ -193,7 +243,7 @@
               </div>
             </div>
 
-            <h3 class="checkboxListLabel sso-mt-sm">Excluded from sync</h3>
+            <h3 class="sso-card-title sso-mt">Excluded from sync</h3>
             <div class="fieldDescription">
               These users keep the permissions you set in Jellyfin. They can still log in via SSO.
             </div>
@@ -209,7 +259,7 @@
         <!-- Account Links -->
         <div class="sso-panel" data-panel="links" hidden>
           <div class="verticalSection">
-            <div class="fieldDescription">New SSO users are linked automatically (JIT). Use this only to connect existing local Jellyfin accounts.</div>
+            <div class="fieldDescription sso-intro">New SSO users are linked automatically (JIT). Use this only to connect existing local Jellyfin accounts.</div>
             <div id="Links" class="sso-mt"></div>
             <details class="sso-mt">
               <summary class="sso-link-form-summary">Add manual link</summary>

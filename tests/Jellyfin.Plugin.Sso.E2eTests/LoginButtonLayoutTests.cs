@@ -92,7 +92,7 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
     [Fact]
     public async Task The_plain_button_wears_jellyfins_own_surface()
     {
-        var painted = await ButtonColoursAsync(branded: false);
+        var painted = await ButtonColoursAsync(branded: false, providerLogos: false);
 
         // Jellyfin's secondary button, whatever shade this release paints it: the test
         // cares that the plugin did not paint it something of its own.
@@ -105,7 +105,7 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
     [Fact]
     public async Task A_branded_button_takes_the_providers_colour_and_a_readable_mark()
     {
-        var painted = await ButtonColoursAsync(branded: true);
+        var painted = await ButtonColoursAsync(branded: true, providerLogos: false);
 
         // Authentik's orange, which is light enough that the mark and the label go black.
         Assert.True(
@@ -116,11 +116,24 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
         Assert.NotEqual(await JellyfinButtonBackgroundAsync(), painted.Background);
     }
 
+    [Fact]
+    public async Task A_logo_fetched_from_the_provider_is_not_flattened_to_one_colour()
+    {
+        var painted = await ButtonColoursAsync(branded: true, providerLogos: true);
+
+        // brightness(0) turns a logo that carries its own background into a black
+        // rectangle, which is what a household saw on its own Authentik's logo. It keeps
+        // its colours and gets something light to sit on instead.
+        Assert.Equal("none", painted.Mark);
+        Assert.Equal("rgb(255, 255, 255)", painted.MarkBackground);
+    }
+
     /// <summary>What the browser actually paints: surface, text, and the mark's filter.</summary>
-    private async Task<Painted> ButtonColoursAsync(bool branded)
+    private async Task<Painted> ButtonColoursAsync(bool branded, bool providerLogos)
     {
         await _env.PatchConfigAsync(config =>
         {
+            config["UseProviderLogos"] = providerLogos;
             var provider = config["Providers"]!.AsArray()[0]!;
             provider["Name"] = "Authentik";
             provider["BrandedLoginButton"] = branded;
@@ -132,18 +145,37 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
         // own grey and calls it the plugin's — which is how this passed on 12.0 and 12.1
         // and failed on 12.2.
         var served = await ServedCssAsync(
-            branded ? "background:" + Orange : "--sso-mark:",
+            branded
+                ? "background:" + Orange
+                : $".sso-login-button[data-provider=\"{JellyfinEnvironment.ProviderId}\"]{{--sso-mark:",
             TimeSpan.FromSeconds(30));
 
         await using var context = await NewPageContextAsync();
         var page = await ShowLoginPageAsync(context);
+        // The button fades into its colour — .15s on background — so a single reading can
+        // catch a blend of Jellyfin's grey and the provider's colour. Two equal readings
+        // mean the transition has finished.
+        await page.WaitForFunctionAsync(
+            """
+            () => new Promise(resolve => {
+              const button = document.querySelector('button.sso-login-button');
+              const first = getComputedStyle(button).backgroundColor;
+              setTimeout(() => resolve(getComputedStyle(button).backgroundColor === first), 120);
+            })
+            """,
+            null,
+            new PageWaitForFunctionOptions { Timeout = 15_000 });
+
         var painted = await page.EvaluateAsync<string[]>(
             """
             () => {
               const button = document.querySelector('button.sso-login-button');
               const style = getComputedStyle(button);
               const mark = getComputedStyle(button.querySelector('.sso-login-mark'));
-              return [style.backgroundColor, style.color, mark.filter, button.outerHTML];
+              return [
+                style.backgroundColor, style.color, mark.filter,
+                mark.backgroundColor, button.outerHTML,
+              ];
             }
             """);
 
@@ -159,7 +191,8 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
             painted[0],
             painted[1],
             painted[2],
-            $"{painted[3]}\nserved: {Excerpt(served)}\nin page: {Excerpt(inPage)}");
+            painted[3],
+            $"{painted[4]}\nserved: {Excerpt(served)}\nin page: {Excerpt(inPage)}");
     }
 
     /// <summary>
@@ -241,5 +274,6 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
     }
 
     /// <summary>What the browser paints, and the element it painted, for a failure.</summary>
-    private sealed record Painted(string Background, string Ink, string Mark, string Markup);
+    private sealed record Painted(
+        string Background, string Ink, string Mark, string MarkBackground, string Markup);
 }

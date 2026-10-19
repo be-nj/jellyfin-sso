@@ -161,8 +161,11 @@ function renderProviders(view, providers) {
 }
 
 function buildProviderCard(p, i) {
-    var card = document.createElement('div');
-    card.className = 'sso-provider paperList';
+    // A card per provider, foldable: with three of them the page is otherwise a wall of
+    // fields, and the one being edited is the only one worth seeing.
+    var card = document.createElement('details');
+    card.className = 'sso-provider sso-card';
+    card.open = true;
     card.dataset.providerId = p.Id || newId();
 
     var loginUrl = '/sso/oidc/start/' + card.dataset.providerId;
@@ -170,8 +173,13 @@ function buildProviderCard(p, i) {
     var scopes = (p.Scopes || []).join(' ');
 
     card.innerHTML =
-        '<h3 class="checkboxListLabel sso-provider-title">' +
-            escHtml(p.Name || ('Provider ' + (i + 1))) + '</h3>' +
+        '<summary class="sso-card-summary">' +
+            '<span class="sso-provider-title sso-card-name">' +
+                escHtml(p.Name || ('Provider ' + (i + 1))) + '</span>' +
+            '<span class="sso-card-sub">' +
+                escHtml(p.Authority || 'no issuer yet') + '</span>' +
+        '</summary>' +
+        '<div class="sso-card-body">' +
         '<div class="sso-mapping-head">' +
             '<div class="inputContainer sso-group-field">' +
                 '<input type="text" is="emby-input" class="sso-provider-name" label="Display name" ' +
@@ -202,13 +210,23 @@ function buildProviderCard(p, i) {
             '<input type="checkbox" is="emby-checkbox" class="sso-provider-userinfo"' +
             (p.GroupsFromUserInfo ? ' checked' : '') +
             ' /><span>Fetch groups from userinfo endpoint instead of ID token</span></label></div>' +
-        '<div class="checkboxContainer"><label>' +
-            '<input type="checkbox" is="emby-checkbox" class="sso-provider-branded"' +
+        '<div class="checkboxContainer">' +
+            '<label><input type="checkbox" is="emby-checkbox" class="sso-provider-branded"' +
             (p.BrandedLoginButton ? ' checked' : '') +
-            ' /><span>Paint the login button in this provider\'s colour</span></label></div>' +
-        '<div class="fieldDescription">Off, the button looks like Jellyfin\'s other buttons ' +
-            'with the provider\'s colour on its left edge. On, the whole button carries that ' +
-            'colour and the mark turns black or white, whichever reads on it.</div>' +
+            ' /><span>Paint the login button in this provider\'s colour</span></label>' +
+            '<div class="fieldDescription">Off, the button looks like Jellyfin\'s other ' +
+                'buttons with the provider\'s colour on its left edge. On, the whole button ' +
+                'carries that colour.</div>' +
+        '</div>' +
+        '<div class="inputContainer sso-colour-field"' +
+            (p.BrandedLoginButton ? '' : ' hidden') + '>' +
+            '<input type="text" is="emby-input" class="sso-provider-colour" ' +
+                'label="Button colour" placeholder="#FD4B2D" ' +
+                'value="' + escAttr(p.ButtonColour || '') + '" />' +
+            '<div class="fieldDescription">Empty uses the colour the provider is ' +
+                'recognised by. <code>#rgb</code> or <code>#rrggbb</code>; anything else ' +
+                'is ignored.</div>' +
+        '</div>' +
         '<div class="inputContainer">' +
             '<input type="text" is="emby-input" class="sso-provider-scopes" ' +
                 'label="Scopes (space separated, empty = openid profile email)" ' +
@@ -216,10 +234,11 @@ function buildProviderCard(p, i) {
             '<div class="fieldDescription">Authelia needs <code>groups</code> added here; ' +
                 'Keycloak rejects it. Leave empty unless your provider says otherwise.</div>' +
         '</div>' +
-        '<div class="fieldDescription sso-provider-urls">' +
+        '<div class="sso-copy-list">' +
             copyRow('Redirect URI for your provider', redirectUri) +
             copyRow('Login URL', window.location.origin + loginUrl) +
             copyRow('Provider ID', card.dataset.providerId) +
+        '</div>' +
         '</div>';
 
     card.querySelector('.sso-provider-remove').addEventListener('click', function () {
@@ -228,6 +247,17 @@ function buildProviderCard(p, i) {
 
     card.querySelector('.sso-provider-name').addEventListener('input', function () {
         retitleProviders(card.closest('.sso-panel') || document);
+    });
+
+    // The colour only applies to a painted button, so it only appears with one.
+    var authority = card.querySelector('.sso-provider-authority');
+    authority.addEventListener('input', function () {
+        card.querySelector('.sso-card-sub').textContent = authority.value.trim() || 'no issuer yet';
+    });
+
+    var branded = card.querySelector('.sso-provider-branded');
+    branded.addEventListener('change', function () {
+        card.querySelector('.sso-colour-field').hidden = !branded.checked;
     });
 
     card.querySelectorAll('.sso-copy').forEach(function (button) {
@@ -286,6 +316,7 @@ function collectProviders(view) {
             GroupsClaim: val('.sso-provider-groups-claim') || 'groups',
             GroupsFromUserInfo: card.querySelector('.sso-provider-userinfo').checked,
             BrandedLoginButton: card.querySelector('.sso-provider-branded').checked,
+            ButtonColour: val('.sso-provider-colour'),
         };
     }).filter(Boolean);
 }
@@ -299,8 +330,9 @@ function renderMappings(view, mappings) {
 }
 
 function buildRow(view, m, i) {
-    var card = document.createElement('div');
-    card.className = 'sso-mapping paperList';
+    var card = document.createElement('details');
+    card.className = 'sso-mapping sso-card';
+    card.open = true;
 
     var listId = 'sso-gl-' + i;
     var dlOpts = _seenGroups.map(function (g) {
@@ -325,7 +357,14 @@ function buildRow(view, m, i) {
 
     // Built as innerHTML so Jellyfin's emby-* custom elements auto-upgrade on DOM insertion.
     card.innerHTML =
-        '<h3 class="checkboxListLabel sso-mapping-title">Group ' + (i + 1) + '</h3>' +
+        '<summary class="sso-card-summary">' +
+            '<span class="sso-mapping-title sso-card-name">' +
+                escHtml(m.Group || ('Group ' + (i + 1))) + '</span>' +
+            '<span class="sso-card-sub">' +
+                (m.IsAdministrator ? 'administrator' : ((m.LibraryIds || []).length + ' librar'
+                    + (((m.LibraryIds || []).length === 1) ? 'y' : 'ies'))) + '</span>' +
+        '</summary>' +
+        '<div class="sso-card-body">' +
         '<div class="sso-mapping-head">' +
             '<div class="inputContainer sso-group-field">' +
                 '<input type="text" is="emby-input" class="sso-group-input" label="Group name" list="' + listId +
@@ -351,6 +390,7 @@ function buildRow(view, m, i) {
                 '<input type="number" is="emby-input" class="sso-rating-input" min="0" ' +
                     'label="Max parental rating (empty = no limit)" value="' + escAttr(String(rating)) + '" />' +
             '</div>' +
+        '</div>' +
         '</div>';
 
     var ac = card.querySelector('.sso-admin-check');
@@ -368,6 +408,12 @@ function buildRow(view, m, i) {
     card.querySelector('.sso-remove-btn').addEventListener('click', function () {
         card.remove();
         renumber(view);
+    });
+
+    var group = card.querySelector('.sso-group-input');
+    group.addEventListener('input', function () {
+        card.querySelector('.sso-card-name').textContent =
+            group.value.trim() || ('Group ' + (i + 1));
     });
 
     return card;
@@ -463,13 +509,13 @@ function getChk(view, id) { var e = view.querySelector('#' + id); return e ? e.c
 function setChk(view, id, v) { var e = view.querySelector('#' + id); if (e) e.checked = v; }
 function newId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 /// One printed value with a button that puts it on the clipboard.
+/// One row of the address grid: label, value, button — three cells of the same grid, so
+/// the columns line up however long the values are.
 function copyRow(label, value) {
-    return '<div class="sso-copy-row">' +
-        '<span class="sso-copy-label">' + escHtml(label) + '</span>' +
+    return '<span class="sso-copy-label">' + escHtml(label) + '</span>' +
         '<code>' + escHtml(value) + '</code>' +
         '<button type="button" is="emby-button" class="raised sso-copy" ' +
-            'data-copy="' + escAttr(value) + '"><span>Copy</span></button>' +
-        '</div>';
+            'data-copy="' + escAttr(value) + '"><span>Copy</span></button>';
 }
 
 /// navigator.clipboard needs a secure context, which a LAN server over plain HTTP is

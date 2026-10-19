@@ -32,6 +32,17 @@ public static class LoginButtonMarkup
     /// colour on its edge rather than all of them looking alike.
     /// </summary>
     public static string Css(bool anyProvider, IReadOnlyList<ProviderConfig> providers)
+        => Css(anyProvider, providers, providerLogos: false);
+
+    /// <summary>
+    /// The styling, told whether the marks on those buttons are the providers' own logos.
+    /// It matters for a branded button: the plugin's own marks are flat shapes that can be
+    /// recoloured to whatever reads on the button, while a logo fetched from the provider
+    /// is an image of any shape and colour, and flattening that to one colour turns a
+    /// rounded logo into a black rectangle.
+    /// </summary>
+    public static string Css(
+        bool anyProvider, IReadOnlyList<ProviderConfig> providers, bool providerLogos)
         => anyProvider
             ? CssStart
               // The disclaimer is a centred flex row that shrink-wraps whatever is in it,
@@ -57,7 +68,7 @@ public static class LoginButtonMarkup
               + ".loginDisclaimer .sso-login-button:hover{background:#4a4a4a;}"
               + ".sso-login-mark{flex:0 0 auto;display:block;}"
               + ".sso-login-label{display:block;font-weight:600;}"
-              + string.Concat(providers.Select(PerProvider))
+              + string.Concat(providers.Select(p => PerProvider(p, providerLogos)))
               + CssEnd
             : string.Empty;
 
@@ -70,7 +81,7 @@ public static class LoginButtonMarkup
     /// that image can be any shape or colour. brightness(0) flattens whatever arrives to
     /// black; invert(1) after it makes that white.
     /// </summary>
-    private static string PerProvider(ProviderConfig provider)
+    private static string PerProvider(ProviderConfig provider, bool providerLogos)
     {
         var selector = $".loginDisclaimer .sso-login-button[data-provider=\"{WebUtility.HtmlEncode(provider.Id)}\"]";
         var mark = ProviderIcons.ColourFor(provider.Name, provider.Authority);
@@ -80,15 +91,24 @@ public static class LoginButtonMarkup
             return selector + "{--sso-mark:" + mark + ";}";
         }
 
-        var brand = ProviderIcons.BrandFor(provider.Name, provider.Authority);
+        var brand = ProviderIcons.SanitiseColour(provider.ButtonColour)
+            ?? ProviderIcons.BrandFor(provider.Name, provider.Authority);
         var ink = ProviderIcons.ReadableOn(brand);
+
+        // The provider's own logo keeps its colours and gets a light chip to sit on, so
+        // that a dark logo stays visible on a dark button. The plugin's own mark is a flat
+        // shape, so it is simply turned to whichever of black and white reads here.
+        var markRule = providerLogos
+            ? selector + " .sso-login-mark{background:#fff;border-radius:4px;padding:2px;"
+              + "box-sizing:content-box;}"
+            : selector + " .sso-login-mark{filter:brightness(0)"
+              + (ink == "#ffffff" ? " invert(1)" : string.Empty) + ";}";
 
         return selector + "{--sso-mark:" + brand + ";background:" + brand + " !important;"
             + "color:" + ink + " !important;}"
             + selector + ":hover{background:" + ProviderIcons.HoverShadeOf(brand) + " !important;}"
             + selector + " .sso-login-label{color:" + ink + ";}"
-            + selector + " .sso-login-mark{filter:brightness(0)"
-            + (ink == "#ffffff" ? " invert(1)" : string.Empty) + ";}";
+            + markRule;
     }
 
     /// <summary>Puts the styling into the administrator's own custom CSS, fenced.</summary>

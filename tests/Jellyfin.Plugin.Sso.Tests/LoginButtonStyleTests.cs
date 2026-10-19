@@ -100,6 +100,64 @@ public sealed class LoginButtonStyleTests
     }
 
     [Fact]
+    public void A_fetched_logo_keeps_its_colours_and_gets_something_to_sit_on()
+    {
+        var css = LoginButtonMarkup.Css(
+            anyProvider: true, [Provider("Authentik", branded: true)], providerLogos: true);
+
+        // brightness(0) turns a logo with an opaque background into a black rectangle,
+        // which is what a household saw on its own Authentik's logo.
+        Assert.DoesNotContain("filter:brightness(0)", css);
+        Assert.Contains(".sso-login-mark{background:#fff;", css);
+    }
+
+    [Fact]
+    public void The_plugins_own_mark_is_still_recoloured()
+    {
+        var css = LoginButtonMarkup.Css(
+            anyProvider: true, [Provider("Keycloak", branded: true)], providerLogos: false);
+
+        Assert.Contains(".sso-login-mark{filter:brightness(0) invert(1);}", css);
+    }
+
+    [Fact]
+    public void An_administrator_can_name_the_colour_themselves()
+    {
+        var provider = Provider("Our own IdP", branded: true);
+        provider.ButtonColour = "#7B2D8E";
+
+        var css = LoginButtonMarkup.Css(anyProvider: true, [provider]);
+
+        Assert.Contains("background:#7B2D8E !important", css);
+        Assert.Contains("color:#ffffff !important", css);
+    }
+
+    [Theory]
+    [InlineData("red")]
+    [InlineData("#12345")]
+    [InlineData("#ff0000;}body{display:none")]
+    public void A_colour_that_is_not_a_colour_is_ignored_rather_than_written_into_the_css(
+        string typed)
+    {
+        var provider = Provider("Authentik", branded: true);
+        provider.ButtonColour = typed;
+
+        var css = LoginButtonMarkup.Css(anyProvider: true, [provider]);
+
+        Assert.DoesNotContain(typed.Trim(), css, StringComparison.Ordinal);
+        Assert.Contains("background:#FD4B2D !important", css);
+    }
+
+    [Theory]
+    [InlineData("#abc", "#abc")]
+    [InlineData(" #AABBCC ", "#AABBCC")]
+    [InlineData("#abcd", null)]
+    [InlineData("rgb(1,2,3)", null)]
+    [InlineData(null, null)]
+    public void A_typed_colour_is_accepted_only_as_hex(string? typed, string? expected)
+        => Assert.Equal(expected, ProviderIcons.SanitiseColour(typed));
+
+    [Fact]
     public void Nonsense_instead_of_a_colour_never_throws()
     {
         Assert.Equal("#ffffff", ProviderIcons.ReadableOn("not a colour"));

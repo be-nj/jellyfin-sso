@@ -12,10 +12,14 @@ public sealed class ProviderIconsTests
 {
     [Theory]
     [InlineData("Authentik", "", "authentik")]
-    [InlineData("Our SSO", "https://auth.example.com/application/o/jellyfin/", "generic")]
+    // A renamed provider is still recognised by the path it issues from: only authentik
+    // serves /application/o/, only Keycloak serves /realms/. A household that calls its
+    // provider "Our SSO" on auth.example.com otherwise gets the plugin's own mark and,
+    // on a branded button, the plugin's own colour.
+    [InlineData("Our SSO", "https://auth.example.com/application/o/jellyfin/", "authentik")]
     [InlineData("", "https://authentik.example.com/application/o/jf/", "authentik")]
     [InlineData("Keycloak", "", "keycloak")]
-    [InlineData("", "https://kc.example.com/realms/home", "generic")]
+    [InlineData("", "https://kc.example.com/realms/home", "keycloak")]
     [InlineData("Authelia", "", "authelia")]
     [InlineData("Work account", "https://accounts.google.com", "google")]
     [InlineData("Okta", "", "okta")]

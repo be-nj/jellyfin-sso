@@ -22,10 +22,18 @@ chooses for itself.
 <a href="img/login-button.png"><img src="img/login-button.png" alt="The plain button: Jellyfin's surface with an orange edge" width="400"></a>
 <a href="img/login-button-branded.png"><img src="img/login-button-branded.png" alt="The branded button: Authentik's orange with a black mark" width="400"></a>
 
-The colour is the provider's own, recognised from its name or issuer — Authentik's orange,
-Keycloak's grey, Authelia's and Google's blue, Okta's, Auth0's — and anything unrecognised
-gets Jellyfin's blue. Black or white is picked by measuring the colour's luminance, not by
-taste, so a light brand does not end up with white text nobody can read.
+The colour is the provider's own, recognised from its name or its issuer — Authentik's
+orange, Keycloak's grey, Authelia's and Google's blue, Okta's, Auth0's. A provider you
+renamed is recognised by the path it issues from, because only authentik serves
+`/application/o/` and only Keycloak serves `/realms/`. *Button colour* on the provider's
+card overrides all of it; `#rgb` or `#rrggbb`, and anything else is ignored, because the
+value is written into Jellyfin's custom CSS.
+
+Black or white on top is picked by measuring the colour's luminance, not by taste, so a
+light brand does not end up with white text nobody can read. The plugin's own marks are
+flat shapes and are recoloured to match. A logo fetched from your provider is not: it can
+be any shape and colour, and flattening it to one colour turns a rounded logo into a black
+rectangle — so it keeps its colours and gets a light chip to sit on.
 
 The whole login, recorded against a real Authentik in the test suite:
 
