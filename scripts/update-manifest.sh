@@ -37,4 +37,8 @@ jq --argjson entry "$entry" --arg version "$VERSION" \
     "$MANIFEST" > "$tmp"
 mv "$tmp" "$MANIFEST"
 
-echo "manifest.json now lists $VERSION (targetAbi $TARGET_ABI)"
+# The same file under a short name, so the URL people type into Jellyfin can be
+# jf.be-nj.net/m.json. Generated rather than maintained, so the two cannot drift.
+cp "$MANIFEST" "$REPO_ROOT/m.json"
+
+echo "manifest.json (and its m.json copy) now list $VERSION (targetAbi $TARGET_ABI)"

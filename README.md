@@ -53,11 +53,16 @@ and Authelia containers in a browser, on top of 72 unit tests, in CI.
 Dashboard → **Plugins → Repositories → +**, name it `SSO Authentication`, URL:
 
 ```
-https://jf.be-nj.net/manifest.json
+https://jf.be-nj.net/m.json
 ```
 
 Then **Plugins → Catalog → Authentication → SSO Authentication → Install** and restart
 Jellyfin. Updates arrive in the catalog like any other plugin.
+
+<sub>The same file is served at
+[`jf.be-nj.net/manifest.json`](https://jf.be-nj.net/manifest.json) and at the original
+`raw.githubusercontent.com/be-nj/jellyfin-sso/main/manifest.json`; servers that already
+use one of those keep working.</sub>
 
 Needs **Jellyfin 12.2.x** — each build matches one server version, and the catalog hides
 the ones that do not fit, so an empty catalog means your server is older than any build
