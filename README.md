@@ -1,14 +1,15 @@
 # Jellyfin SSO Authentication Plugin
 
-OIDC/OAuth2 single sign-on for Jellyfin with **group-based library access**, built for
-**Authentik** and **Authelia**. Replaces the deprecated [9p4/jellyfin-plugin-sso](https://github.com/9p4/jellyfin-plugin-sso).
+OIDC/OAuth2 single sign-on for Jellyfin with **group-based library access**, for
+**Authentik**, **Authelia** and **Keycloak**. Replaces the deprecated
+[9p4/jellyfin-plugin-sso](https://github.com/9p4/jellyfin-plugin-sso).
 
 Users log in through your identity provider; their library access is derived from their
 IdP groups and re-applied on every login. Admins configure the group → library mapping
 in a native Jellyfin dashboard page.
 
-- **Providers:** Authentik (in production), Keycloak and Authelia (both covered by e2e
-  tests against the real thing).
+- **Providers:** Authentik, Keycloak and Authelia — each one started as a container in
+  the test suite and logged into through its own login form.
 - **Target:** Jellyfin **12.1.x**, `net10.0`. `Jellyfin.Controller` must match the server version exactly.
 - **Install:** add the [plugin repository](#from-the-plugin-repository-recommended) to your
   Jellyfin dashboard — no manual DLL copying.
@@ -55,36 +56,36 @@ for the domain glossary.
 
 ---
 
-## Identity matching & the IdP "subject"
+## Requirements
 
-The plugin keys each Jellyfin user to an OIDC identity by `(provider, sub)` — **never by
-username** (that is the source of the old plugin's admin-takeover bug). A user is matched
-only via an explicit link; an unknown `sub` always becomes a new account.
+- **Jellyfin 12.1.x.** The plugin is compiled against one server version; the catalog
+  hides builds that do not match.
+- **An OIDC identity provider** you control: Authentik, Authelia and Keycloak are all
+  tested, anything that speaks OpenID Connect discovery should work.
+- **Administrator access** to both, and the URL your users reach Jellyfin on.
+- **HTTPS in front of Jellyfin** is strongly recommended. Over plain HTTP the browser
+  withholds some APIs the login page uses, and tokens travel unencrypted.
 
-### Authentik: choose a Subject mode
+---
 
-In **Applications → Providers → (your provider) → Advanced protocol settings → Subject
-mode**, Authentik decides what `sub` contains:
+## Quick start
 
-| Subject mode | `sub` value | Notes |
-|---|---|---|
-| Based on the User's hashed ID (default) | opaque SHA256 hash | Stable, but invisible in the UI — only learnable from a login. |
-| **Based on the User's username** | the username | Easy to link manually; **this repo's deployment uses this.** |
-| Based on the User's UUID | the user UUID | Stable; only readable via the API (`/api/v3/core/users/`). |
+Five steps, roughly fifteen minutes.
 
-**This deployment uses "Based on the User's username".** Trade-offs of that choice:
+1. **Install the plugin** from the [plugin repository](#from-the-plugin-repository-recommended)
+   and restart Jellyfin.
+2. **Create a client at your provider** — public client, PKCE `S256`, redirect URI
+   `https://<your-jellyfin>/sso/oidc/callback/<providerId>`. The `providerId` is shown in
+   the plugin's configuration page once you save the provider, so save first and come back.
+   Provider-specific steps are under [Identity provider setup](#identity-provider-setup).
+3. **Fill in the provider** in **Dashboard → Plugins → SSO Authentication**: issuer URL,
+   client id, and the name of the claim your groups arrive in (usually `groups`). Save.
+4. **Map a group to a library** on the same page, for example `media` → *Movies*. Without
+   a mapping a user can log in but sees nothing.
+5. **Log in.** Open `/sso/oidc/start` in a private window, or use the button the plugin
+   adds to the login page. The first login creates the Jellyfin account.
 
-- **Renaming a user in the IdP breaks their link** (the `sub` changes) → they must be
-  re-linked. Acceptable here because usernames are LLDAP-managed and stable.
-- **Username recycling is a risk**: deleting user `ben` and later creating a *different*
-  person as `ben` would let them inherit the old account's link. Mitigated by the fact
-  that only the admin can provision usernames (LLDAP-backed); don't recycle usernames.
-- In return: `sub` == Jellyfin username == Authentik username, so manual linking is
-  trivial and no UUID/hash hunting is needed.
-
-If you prefer the stable choice, keep the hashed default and collect each existing user's
-`sub` once from the rejected-collision log line (see *Manual linking* below). New users
-never need this — they are linked automatically by JIT.
+If something goes wrong, [Troubleshooting](#troubleshooting) lists what each error means.
 
 ---
 
@@ -111,7 +112,7 @@ Jellyfin runs in Docker; the plugin folder lives in the config volume.
 
 ```bash
 # Build a ZIP identical to the released one (dist/jellyfin-sso_<version>.zip)
-scripts/package.sh 1.12.0.0
+scripts/package.sh 1.12.2.0
 
 # Build a plain publish output (includes the IdentityModel deps)
 make publish
@@ -234,6 +235,41 @@ account that existed before SSO:
 
 ---
 
+## Identity matching & the IdP "subject"
+
+The plugin keys each Jellyfin user to an OIDC identity by `(provider, sub)` — **never by
+username** (that is the source of the old plugin's admin-takeover bug). A user is matched
+only via an explicit link; an unknown `sub` always becomes a new account.
+
+### Authentik: choose a Subject mode
+
+In **Applications → Providers → (your provider) → Advanced protocol settings → Subject
+mode**, Authentik decides what `sub` contains:
+
+| Subject mode | `sub` value | Notes |
+|---|---|---|
+| Based on the User's hashed ID (default) | opaque SHA256 hash | Stable, but invisible in the UI — only learnable from a login. |
+| **Based on the User's username** | the username | Easy to link manually; **this repo's deployment uses this.** |
+| Based on the User's UUID | the user UUID | Stable; only readable via the API (`/api/v3/core/users/`). |
+
+**This deployment uses "Based on the User's username".** Trade-offs of that choice:
+
+- **Renaming a user in the IdP breaks their link** (the `sub` changes) → they must be
+  re-linked. Acceptable here because usernames are LLDAP-managed and stable.
+- **Username recycling is a risk**: deleting user `ben` and later creating a *different*
+  person as `ben` would let them inherit the old account's link. Mitigated by the fact
+  that only the admin can provision usernames (LLDAP-backed); don't recycle usernames.
+- In return: `sub` == Jellyfin username == Authentik username, so manual linking is
+  trivial and no UUID/hash hunting is needed.
+
+If you prefer the stable choice, keep the hashed default and collect each existing user's
+`sub` once from the rejected-collision log line (see *Manual linking* below). New users
+never need this — they are linked automatically by JIT.
+
+---
+
+---
+
 ## Logout
 
 Jellyfin's own logout drops its token but leaves the identity provider session alone, so
@@ -254,8 +290,14 @@ lands back in Jellyfin — a broken provider must never block a logout.
 
 ## Login button
 
-- **Branding (built in):** the plugin sets Jellyfin's *Login Disclaimer* to an SSO link
-  when a provider is enabled.
+- **Branding (built in):** the plugin adds one button per enabled provider to Jellyfin's
+  *Login Disclaimer* whenever the configuration is saved. The buttons sit between
+  `<!-- sso-login-buttons:start -->` and `:end`, and only that part is ever rewritten —
+  anything else you put in the disclaimer stays. Disabling every provider removes the
+  block and leaves your text alone.
+
+  If Jellyfin is served under a sub-path, the links pick it up from the server's network
+  configuration, so `/jellyfin/sso/oidc/start/<providerId>` works as well.
 - **JavaScript Injector (nicer button):** point its script at the stable login URL:
 
   ```js
@@ -278,6 +320,24 @@ server-side).
 - Identity is matched by `(provider, sub)`, never by username.
 - Revocation latency: group changes take effect on the user's **next login** (no active
   re-sync in this version).
+
+---
+
+## Troubleshooting
+
+| What you see | What it means |
+|---|---|
+| Plugin shows **NotSupported** in the dashboard | The plugin was built for a different Jellyfin version. Install the build whose `targetAbi` matches your server. |
+| `invalid_scope` from Keycloak | Keycloak has no `groups` scope unless you create one. Leave the plugin's scopes at the default `openid profile email`. |
+| Login works, but the user sees **no libraries** | No group mapping matched. Check the group name in the mapping against what the provider sends; the names the plugin has seen are offered as autocomplete. |
+| New accounts are named like `01HQ3M…` | The provider sends no `preferred_username`. The plugin falls back to the userinfo endpoint; if that is empty too, add the claim at the provider. |
+| `SSO login failed: crypto.randomUUID is not a function` | An old plugin build on a server reached over plain HTTP. Update the plugin, or put HTTPS in front of Jellyfin. |
+| `redirect_uri` mismatch at the provider | The provider's registered URI must match exactly, including scheme, host, port and the `providerId` at the end. |
+| Everyone lost administrator rights after a group rename | Turn on **Never remove administrator rights on login** while you fix the mapping. The last remaining administrator is never demoted. |
+| Nothing happens on the login page | The login button is injected into Jellyfin's branding. Check **Dashboard → General → Branding → Login Disclaimer**, or open `/sso/oidc/start` directly. |
+
+Jellyfin's log is the first place to look: every rejection the plugin makes is logged with
+the provider and the reason.
 
 ---
 

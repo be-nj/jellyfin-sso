@@ -27,35 +27,37 @@ public sealed class LoginBranding
         var branding = (_configManager.GetConfiguration("branding") as BrandingOptions)
             ?? new BrandingOptions();
 
-        if (enabled.Count == 0)
-        {
-            // No enabled provider — remove the button if it was previously set by us.
-            if (branding.LoginDisclaimer?.Contains("/sso/oidc/start") == true)
-            {
-                branding.LoginDisclaimer = string.Empty;
-                _configManager.SaveConfiguration("branding", branding);
-            }
-            return;
-        }
+        var block = LoginButtonMarkup.Build(enabled, BasePath());
+        var disclaimer = LoginButtonMarkup.Splice(branding.LoginDisclaimer, block);
 
-        // With several providers the button goes to the stable entry point, which asks
-        // which one; with a single provider it skips that step.
-        var href = enabled.Count == 1 ? $"/sso/oidc/start/{enabled[0].Id}" : "/sso/oidc/start";
-        var label = enabled.Count == 1 ? $"Login with SSO ({enabled[0].Name})" : "Login with SSO";
-
-        // Inject a link styled with Jellyfin's own button classes.
-        // Using the native Jellyfin web button CSS to blend in.
-        var link = $"<a class=\"raised emby-button block\" " +
-                   $"href=\"{href}\" " +
-                   $"style=\"display:block;text-align:center;margin-top:.5em\">" +
-                   $"{label}</a>";
-
-        if (string.Equals(branding.LoginDisclaimer, link, StringComparison.Ordinal))
+        if (string.Equals(branding.LoginDisclaimer, disclaimer, StringComparison.Ordinal))
             return; // no change needed
 
-        branding.LoginDisclaimer = link;
+        branding.LoginDisclaimer = disclaimer;
         _configManager.SaveConfiguration("branding", branding);
+
         _logger.LogInformation(
-            "SSO: login button set in Jellyfin branding for {Count} enabled provider(s).", enabled.Count);
+            "SSO: login buttons updated in Jellyfin branding for {Count} enabled provider(s).",
+            enabled.Count);
+    }
+
+    /// <summary>
+    /// The sub-path Jellyfin is served under, if any. Branding holds plain HTML, so the
+    /// links have to carry the prefix themselves.
+    /// </summary>
+    private string BasePath()
+    {
+        try
+        {
+            var network = _configManager.GetConfiguration("network");
+            var property = network?.GetType().GetProperty("BaseUrl");
+            return property?.GetValue(network) as string ?? string.Empty;
+        }
+        catch (Exception ex)
+        {
+            // A missing or renamed network configuration must not keep the button away.
+            _logger.LogDebug(ex, "SSO: could not read the server's base URL; assuming none.");
+            return string.Empty;
+        }
     }
 }

@@ -1,11 +1,17 @@
 # Implementation Plan — Jellyfin SSO Plugin
 
-Executable plan for the implementer (Sonnet). All design decisions are fixed in
+> **Historical.** This is the plan the first version was built from, kept because it
+> records why the pieces are shaped the way they are. It describes the original target,
+> Jellyfin 10.11.10 on `net9.0`; the plugin has since been ported to Jellyfin 12 and
+> gained features this plan never mentions. For what is true today see
+> [README.md](README.md) and [CONTEXT.md](CONTEXT.md).
+
+Executable plan for the implementer. All design decisions are fixed in
 [CONTEXT.md](CONTEXT.md) and [docs/adr/](docs/adr/). Do not re-litigate them; if a
 decision blocks implementation, surface it rather than silently diverging.
 
-Target: Jellyfin **10.11.10** on `diana.home`, `net9.0`. `Jellyfin.Controller` version
-**must** equal the server version or the plugin loads as `NotSupported`.
+Target at the time of writing: Jellyfin **10.11.10**, `net9.0`. `Jellyfin.Controller`
+version **must** equal the server version or the plugin loads as `NotSupported`.
 
 ---
 
