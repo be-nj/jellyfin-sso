@@ -13,8 +13,15 @@ provider removes the block alone.
 
 <a href="img/login-button.png"><img src="img/login-button.png" alt="Jellyfin's login page with a Login with Authentik button" width="520"></a>
 
-The button is an anchor in Jellyfin's own button classes, so themes style it like the
-others. Under a sub-path the links pick up Jellyfin's *Base URL*, so
+The whole login, recorded against a real Authentik in the test suite:
+
+<a href="img/login-flow.mp4"><img src="img/login-flow.gif" alt="A login through the button: Jellyfin's login page, Authentik's form, the home screen" width="640"></a>
+
+The button is a small form in Jellyfin's own button classes, so themes style it like the
+others. A form rather than a link because jellyfin-web rewrites every link in the
+disclaimer to open in a new tab and routes the rest through its own router, which does not
+know the plugin's addresses — see [issue 30](https://github.com/be-nj/jellyfin-sso/issues/30).
+Under a sub-path the action picks up Jellyfin's *Base URL*, so
 `/jellyfin/sso/oidc/start/<providerId>` works.
 
 **Inside the login form (built in):** switch on *Put the button inside the login form* on

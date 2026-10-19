@@ -16,7 +16,7 @@ EXTRA_DLLS := Duende.IdentityModel.dll \
               Microsoft.IdentityModel.Tokens.dll \
               System.IdentityModel.Tokens.Jwt.dll
 
-.PHONY: build publish deploy test e2e screenshots clean
+.PHONY: build publish deploy test e2e screenshots demo clean
 
 build:
 	dotnet build $(PLUGIN_SRC) -c Release
@@ -70,6 +70,13 @@ mutants:
 # Regenerates the screenshots the README embeds, from the real plugin page.
 screenshots:
 	$(MAKE) e2e E2E_FILTER='--filter "Category=Screenshots"'
+
+# Records the login clip the README shows, against a real Authentik, and turns the raw
+# webm into the GIF and the MP4 that are committed. Minutes, because authentik starts
+# four containers — run it when the login looks different, not on every change.
+demo:
+	$(MAKE) e2e E2E_FILTER='--filter "Category=Demo"'
+	scripts/demo-clip.sh
 
 e2e:
 	docker run --rm --network host \
