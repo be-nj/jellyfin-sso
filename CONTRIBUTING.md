@@ -103,6 +103,31 @@ If the DLL is dropped without its dependencies, Jellyfin logs
 `Failed to load assembly … IdentityModel …` and deletes the plugin folder on the next
 restart. Always deploy all of them together.
 
+## How the README was checked
+
+The README claims to be followable by someone who runs Jellyfin in Docker and does not
+write code. That claim was tested, and it is worth knowing exactly how, because the method
+has a ceiling.
+
+Seven times, a reader with no knowledge of this project was given the README and nothing
+else — no source, no other files — and asked to walk the setup in their head, name the
+first line that stopped them, and rate it. Each round's findings were fixed before the
+next. The ratings went 3, 8, 7, 7, 7, 7, 9; the last round reported no blockers.
+
+Three of those rounds found defects in the **code**, not the text: the configuration page
+dropped a provider saved with only a name (the state the documented first step produces),
+a newly added provider was enabled immediately and put a dead login button on the
+household's login page, and the requested scopes could only be set through the API while
+the Authelia and Keycloak guides gave contradictory advice about them. A fourth found a
+link that returned 404.
+
+**The ceiling:** those readers were language models in a role, not people. No human
+newcomer has read this document. If you are reading this and you are one, the four
+questions worth answering are: could you do it tonight without asking anyone, where did
+you stop, was it ever unclear whether you were in Jellyfin or at your provider, and which
+sentence made you guess. Open an issue with the answers; that evidence is worth more than
+another round of the above.
+
 ## Screenshots
 
 The images in the README come out of the running plugin, not out of a screenshot tool:
