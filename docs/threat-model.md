@@ -48,13 +48,14 @@ its signature is checked, and the group names that arrive with it.
 - **Revocation is not immediate.** Removing someone from a group at the provider changes
   nothing until their next login. The remedy today is Jellyfin's own user screen plus
   ending the session under Dashboard → Devices. See [Security notes](security.md).
-- **Quick Connect approval has no second step.** Opening
-  `/sso/oidc/start/qc?code=…` and signing in approves that code. Someone who gets a
-  household member to open a link with their own code gets a session as that member. The
-  fix — a confirmation page that shows the code before approving — is
-  [issue #3](https://github.com/be-nj/jellyfin-sso/issues/3).
+- **Quick Connect needs the person to approve.** Opening `/sso/oidc/start/qc?code=…` and
+  signing in no longer authorizes the code on its own — the login ends on a page that
+  names the account and shows the code, and approval is a separate click
+  ([#1](https://github.com/be-nj/jellyfin-sso/issues/1)). A household member who is sent
+  such a link therefore sees whose code they are about to let in.
 - **No rate limit on login starts.** Each `/sso/oidc/start` allocates a pending state for
-  ten minutes. Bounded in time, not in count.
+  ten minutes. Bounded in time, not in count
+  ([#8](https://github.com/be-nj/jellyfin-sso/issues/8)).
 - **The plugin cannot restrict who a provider admits.** That gate belongs at the provider
   (Authentik policies, Keycloak client scopes, Authelia access rules). Providers without
   per-application assignment — Google among them — therefore admit anyone with an
@@ -62,8 +63,13 @@ its signature is checked, and the group names that arrive with it.
 
 ## How the claims are kept honest
 
-- 109 unit tests and 49 browser-driven end-to-end tests run on every push.
+- 139 unit tests and 52 browser-driven end-to-end tests run on every push, against
+  Jellyfin 12.0, 12.1 and 12.2.
 - Every release signs in through real Authentik, Keycloak and Authelia containers.
 - CodeQL runs on every push; no alert is open.
-- The defects found in this plugin are filed as issues with the test that now covers them,
-  including the ones found by its own author.
+- Mutation testing checks that those tests would notice a defect at all; the score and its
+  floor are in CI.
+- Every defect found in this plugin is filed as an issue with the test that now covers it,
+  including the ones its own author found — see the
+  [found-in-review](https://github.com/be-nj/jellyfin-sso/issues?q=label%3Afound-in-review)
+  label.

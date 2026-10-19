@@ -20,12 +20,12 @@ decides what `sub` contains:
 | Subject mode | `sub` value | |
 |---|---|---|
 | **Hashed ID (default)** | opaque SHA256 hash | **Recommended.** Survives renames; learnable only from a login. |
-| Username | the username | Trivial to link, brittle — see below. |
+| Username | the username | Easy to link by hand; changes when the person is renamed. |
 | UUID | the user UUID | Stable; readable via `/api/v3/core/users/`. |
 
-Username mode breaks every link when someone is renamed, and hands the old account to
-whoever gets a recycled username. Take it only if usernames in your directory are never
-reused.
+In username mode a rename at the provider breaks that person's link, and a username that
+is later given to someone else would reach the old account. It is a good fit when
+usernames in your directory are never reused, and worth avoiding otherwise.
 
 ## Manual linking
 

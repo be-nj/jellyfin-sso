@@ -141,6 +141,17 @@ That pass has found defects in the code as often as in the text — most recentl
 URI built without the server's sub-path, which broke SSO for anyone running Jellyfin under
 a *Base URL*.
 
+### Review policy
+
+Anything touching the login, the token handling or account linking gets reviewed before it
+is merged — by a second person where there is one, and otherwise by a deliberate second
+pass with a different lens than the one that wrote it. Current practice, and what the last
+round of it found, is in [docs/reviews/](docs/reviews/).
+
+The project is open to co-maintainers, and the rule above is the part of it that does not
+wait for one: no change to the authentication path goes in on the strength of a green test
+run alone.
+
 ## Screenshots
 
 The images in the README and under `docs/` come out of the running plugin, not out of a

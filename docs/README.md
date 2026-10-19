@@ -21,6 +21,10 @@ The [README](../README.md) installs the plugin and walks the setup. The detail i
 
 **Behind the decisions**
 
+- [Threat model](threat-model.md) — what the plugin trusts, and the test that holds each
+  claim
+- [Reviews](reviews/) — what the last review found, and how it was done
+
 - [Architecture decision records](adr/) — the authentication bridge, Quick Connect for
   native clients, IdP groups as the source of truth, no stored client secret
 - [CONTEXT.md](../CONTEXT.md) — domain vocabulary

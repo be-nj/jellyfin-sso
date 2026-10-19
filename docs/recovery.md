@@ -24,8 +24,9 @@ or put the image tag back (`jellyfin/jellyfin:12.2`, not `latest`) and pull agai
 [Requirements](requirements.md).
 
 **I am coming from the old 9p4 plugin.** Different plugin, not an update: own id, own
-configuration, own links, nothing migrated. Disable the old one first, set this one up,
-then link existing accounts ([how](linking.md#manual-linking)).
+configuration, own links, nothing migrated. Disable the old one first, set this one up, then link existing accounts
+([how](linking.md#manual-linking)) — running both at the same time makes it hard to tell
+which one handled a login.
 
 ## Backup and restore
 

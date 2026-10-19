@@ -79,7 +79,8 @@ Same tab as the group mappings:
   their permissions are never touched. Tick your local administrator.
 
 > **Lockout guard:** the last remaining administrator is never demoted, whatever the
-> groups say. A mistyped admin group costs a warning in the log, not your server.
+> groups say, so a mistyped admin group leaves a warning in the log rather than locking
+> everyone out.
 
 ## Account Links
 
