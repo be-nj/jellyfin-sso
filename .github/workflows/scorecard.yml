@@ -1,8 +1,8 @@
 name: Scorecard
 
 # OpenSSF Scorecard rates the repository's supply-chain hygiene — pinned actions, branch
-# protection, signed releases, dependency updates — from the outside. The number is worth
-# more than any claim made in the README, including when it is unflattering.
+# protection, signed releases, dependency updates — from the outside, which makes it a
+# more useful number than anything the README could say about itself.
 on:
   branch_protection_rule:
   schedule:

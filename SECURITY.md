@@ -1,8 +1,8 @@
 # Security
 
-This plugin stands between an identity provider and a Jellyfin server's user accounts. A
-defect here does not break a feature — it hands someone a library, or an administrator
-flag, that nobody granted them. Reports are welcome and taken seriously.
+This plugin sits between an identity provider and a Jellyfin server's user accounts, so a
+defect here can mean someone reaching a library or an administrator flag that was never
+meant for them. Reports are welcome and taken seriously.
 
 ## Reporting a vulnerability
 
@@ -30,7 +30,7 @@ Out of scope: Jellyfin itself, the identity providers, and a server configured a
 own documentation — a plugin cannot fix an identity provider that hands out groups to the
 wrong people.
 
-## What the plugin does to earn the trust
+## What the plugin does on its side
 
 - **No password and no client secret is stored.** The default client holds no secret at
   all (PKCE); a confidential client reads its secret from an environment variable or a

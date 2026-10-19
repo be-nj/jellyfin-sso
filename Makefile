@@ -47,9 +47,9 @@ test:
 	  dotnet test tests/Jellyfin.Plugin.Sso.Tests -c Release --logger trx
 
 # Mutation testing: changes the code (a < into a <=, a condition into its opposite) and
-# counts how many of those changes the tests notice. A green suite that notices nothing
-# is the failure mode this catches, and it is the one tests written alongside the code
-# are most prone to. Slow — minutes, not seconds — so it is not part of `make test`.
+# counts how many of those changes the tests notice. It answers the question a passing
+# suite cannot — whether the tests would catch a defect at all. Slow, minutes rather than
+# seconds, so it is not part of `make test`.
 mutants:
 	docker run --rm \
 	  -v "$(CURDIR)":"$(CURDIR)" -w "$(CURDIR)" \

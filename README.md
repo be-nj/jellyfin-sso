@@ -37,44 +37,50 @@ OpenID Connect single sign-on for Jellyfin, for households that already run
 
 ## How it is tested
 
-Authentication plugins fail in ways nobody notices until the wrong person is an
-administrator, so this one is checked against running software rather than mocks. Every
-push runs:
+A login either works or it does not, and the ways it can go subtly wrong are hard to spot
+from the outside — so the tests run against real software rather than mocks. Every push
+runs:
 
 | | |
 |---|---|
-| **72 unit tests** | Token validation — signature, `iss`, `aud`, `exp`, `nonce`, `state` — permission resolution, the lockout guards, the login-button markup |
-| **40 end-to-end tests** | A throwaway Jellyfin container with the packaged plugin, a fake provider and a real browser: logins, rejected callbacks, the configuration page, linking, sessions |
-| **9 real-provider logins** | **Authentik**, **Keycloak** and **Authelia** in containers, each driven through its own login form in the browser, asserting the Jellyfin policy that comes out |
-| **CodeQL** | On every push, currently zero alerts |
+| **139 unit tests** | Token validation — signature, `iss`, `aud`, `exp`, `nonce`, `state` — permission resolution, the lockout guards, the login-button markup |
+| **52 end-to-end tests** | A throwaway Jellyfin container with the packaged plugin, a fake provider and a real browser: logins, rejected callbacks, the configuration page, linking, Quick Connect |
+| **Three Jellyfin versions** | The same build against 12.0, 12.1 and 12.2 |
+| **9 real-provider logins** | **Authentik**, **Keycloak** and **Authelia** in containers, each driven through its own login form in the browser |
+| **Mutation testing** | Stryker changes the code and checks that the tests notice; the score is published and has a floor in CI |
+| **CodeQL** | On every push, currently no open alerts |
 
-The provider guides in [docs/](docs/README.md) are the configuration the test suite
-actually applies to those containers, and the screenshots are generated from the running
-plugin — neither can quietly drift from what the code does.
+The provider guides in [docs/](docs/README.md) are the same configuration the test suite
+applies to those containers, and the screenshots come out of the running plugin, so both
+stay in step with the code. What the plugin trusts, and which test holds each claim, is
+written down in the [threat model](docs/threat-model.md).
 
 ## Compared with the other plugins
 
-**This is not a fork.** It solves the same problem as the archived
-[9p4/jellyfin-plugin-sso](https://github.com/9p4/jellyfin-plugin-sso) and its forks, but
-shares no code with them: measured against 9p4's sources, 30 of this plugin's 1,092
-significant lines also appear there, and all thirty are `using` directives, Jellyfin's own
-CSS class names and one-line property declarations. That is why it can be MIT-licensed
-while the others are GPL-3.0.
+Several plugins solve this problem, most of them forks of the archived
+[9p4/jellyfin-plugin-sso](https://github.com/9p4/jellyfin-plugin-sso).
+[K0lin's](https://github.com/K0lin/jellyfin-plugin-sso) is the most active of those, and
+it supports SAML and more providers than this one does — worth a look if you need either.
 
-The differences that matter when one of these sits in front of your media:
+This plugin is a separate implementation rather than a fork: measured against 9p4's
+sources, 30 of its 1,092 significant lines also appear there, and all thirty are `using`
+directives, Jellyfin CSS class names and one-line property declarations. That is also why
+it is MIT-licensed where the forks are GPL-3.0.
 
-- **Identity is keyed by `(provider, sub)`, never by username.** Matching on names is what
-  let a stranger with the right username inherit an administrator account. Existing
-  accounts are linked [explicitly](docs/linking.md).
+Where it takes a different route:
+
+- **Identity is keyed by `(provider, sub)`, never by username**, so an account cannot be
+  reached by registering the right name at the provider. Accounts that existed before SSO
+  are [linked explicitly](docs/linking.md).
 - **The last administrator is never demoted**, and individual users can be excluded from
-  sync — a typo in a group name costs a log line, not your server.
+  sync, so a mistyped group name is recoverable.
 - **No client secret in the configuration file.** PKCE by default; a confidential client
   reads its secret from the environment or a file at login.
-- **The supported Jellyfin range is tested, not claimed** — every push runs the whole
-  end-to-end suite against 12.0, 12.1 and 12.2.
+- **The supported Jellyfin range is measured** — every push runs the end-to-end suite
+  against 12.0, 12.1 and 12.2.
 - **Self-service linking, several providers at once, RP-initiated logout** and Quick
   Connect for TVs.
-- **No SAML**, deliberately — OIDC is what self-hosted providers speak.
+- **OIDC only.** SAML is out of scope here; if you need it, K0lin's fork has it.
 
 ## Install
 
