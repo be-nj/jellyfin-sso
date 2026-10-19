@@ -41,4 +41,7 @@ internal interface IRealIdentityProvider : IAsyncDisposable
 
     /// <summary>Fills in this provider's own login form.</summary>
     Task SignInAsync(IPage page, RealIdentityUser user);
+
+    /// <summary>Whatever the provider can say about a failed login; shown when a test fails.</summary>
+    Task<string> DiagnosticsAsync() => Task.FromResult(string.Empty);
 }

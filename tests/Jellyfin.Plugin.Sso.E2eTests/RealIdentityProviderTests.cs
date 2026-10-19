@@ -168,8 +168,15 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
         catch (TimeoutException)
         {
             await BrowserSupport.CaptureAsync(page, $"{_idp.Name.ToLowerInvariant()}-form");
+            var logs = (await _env.ServerLogsAsync()).Split('\n')
+                .Where(l => l.Contains("Sso", StringComparison.Ordinal)
+                    || l.Contains("Exception", StringComparison.Ordinal)
+                    || l.Contains("[ERR]", StringComparison.Ordinal))
+                .TakeLast(5);
             Assert.Fail(
                 $"{_idp.Name}'s login form never appeared.\n"
+                + $"server log: {string.Join(" / ", logs)}\n"
+                + $"provider log: {await _idp.DiagnosticsAsync()}\n"
                 + $"url:     {page.Url}\n"
                 + $"text:    {(await page.InnerTextAsync("body")).Split('\n').FirstOrDefault()}\n"
                 + $"console: {string.Join(" | ", consoleErrors)}");
@@ -185,8 +192,13 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
         catch (TimeoutException)
         {
             await BrowserSupport.CaptureAsync(page, $"{_idp.Name.ToLowerInvariant()}-login");
+            var serverLog = (await _env.ServerLogsAsync()).Split('\n')
+                .Where(l => l.Contains("Sso", StringComparison.Ordinal)
+                    || l.Contains("Exception", StringComparison.Ordinal))
+                .TakeLast(5);
             Assert.Fail(
                 $"The login through {_idp.Name} never reached a signed-in web client.\n"
+                + $"server log: {string.Join(" / ", serverLog)}\n"
                 + $"url:     {page.Url}\n"
                 + $"text:    {await page.InnerTextAsync("body")}\n"
                 + $"console: {string.Join(" | ", consoleErrors)}");
@@ -194,6 +206,21 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
 
         return page;
     }
+}
+
+/// <summary>Authentik — the provider this plugin was written for.</summary>
+[Collection(JellyfinCollection.Name)]
+[Trait("Category", "RealIdp")]
+public sealed class AuthentikTests : RealIdentityProviderTests
+{
+    public AuthentikTests(JellyfinEnvironment env)
+        : base(env)
+    {
+    }
+
+    internal override async Task<IRealIdentityProvider> StartProviderAsync(JellyfinEnvironment env)
+        => await AuthentikProvider.StartAsync(
+            env.Certificate, env.WorkDirectory, $"{env.BaseUrl}/sso/oidc/callback/{ProviderId}");
 }
 
 /// <summary>Authelia, which keeps the groups out of the ID token.</summary>
