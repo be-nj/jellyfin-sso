@@ -268,17 +268,19 @@ public sealed class SsoController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Logout(string? providerId, CancellationToken ct)
     {
+        // Local by construction: BasePath is either empty or a validated path, so this
+        // is a path and never an address somewhere else. LocalRedirect enforces that.
         var home = $"{BasePath()}/web/index.html";
         var config = Plugin.Instance?.Configuration;
         if (config is null || !config.SignOutOfIdentityProvider)
-            return Redirect(home);
+            return LocalRedirect(home);
 
         var provider = providerId is null
             ? EnabledProviders().FirstOrDefault()
             : GetEnabledProvider(providerId);
 
         if (provider is null)
-            return Redirect(home);
+            return LocalRedirect(home);
 
         try
         {
@@ -288,7 +290,7 @@ public sealed class SsoController : ControllerBase
                 _logger.LogInformation(
                     "Provider {Id} advertises no end_session_endpoint; skipping provider logout.",
                     KnownProviderId(provider.Id));
-                return Redirect(home);
+                return LocalRedirect(home);
             }
 
             var returnTo = $"{ExternalBaseUri()}{home}";
@@ -305,7 +307,7 @@ public sealed class SsoController : ControllerBase
         {
             // A provider that cannot be reached must not keep the user from logging out.
             _logger.LogWarning(ex, "Provider logout failed for {Id}", KnownProviderId(provider.Id));
-            return Redirect(home);
+            return LocalRedirect(home);
         }
     }
 

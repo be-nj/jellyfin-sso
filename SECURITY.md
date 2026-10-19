@@ -14,9 +14,11 @@ What helps: the plugin version, the Jellyfin version, the identity provider and 
 settings, and the shortest sequence that shows the problem. A log excerpt around the
 failed or unexpected login usually carries the rest.
 
-Expect a first answer within a week. A fix for anything that grants access goes out as a
-release of its own rather than waiting for other work, and the advisory names what was
-affected and from which version.
+**What to expect.** A first answer within **7 days**, and an assessment within **14 days**
+of the report. A fix for anything that grants access is released on its own rather than
+waiting for other work; the advisory then names what was affected, from which version, and
+what a server owner should check. Coordinated disclosure: the advisory is published once a
+fixed release exists, and the reporter is credited unless they prefer otherwise.
 
 Anything that is not about access — a crash, a wrong button, a missing field — belongs in
 a normal [issue](https://github.com/be-nj/jellyfin-sso/issues), in the open.
