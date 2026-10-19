@@ -208,12 +208,11 @@ public sealed class DemoRecordingTests : IAsyncLifetime
             null,
             new PageWaitForFunctionOptions { Timeout = 30_000 });
 
-        await Beat(page, 2_000);
+        await Beat(page, 2_500);
 
-        // Hovering first: the clip should show this is a button, not a line of text.
-        await button.HoverAsync();
-        await Beat(page, 900);
-
+        // One action, one click. Hovering the button first reads better on a live screen,
+        // but the recording decorates every pointer action with a ring, so a hover and a
+        // click look like somebody clicking twice and the page ignoring the first.
         var clock = Stopwatch.StartNew();
         await button.ClickAsync();
         try
