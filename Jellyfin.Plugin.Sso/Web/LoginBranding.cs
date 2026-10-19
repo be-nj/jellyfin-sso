@@ -39,8 +39,7 @@ public sealed class LoginBranding
             LoginButtonMarkup.Css(
                 enabled.Count > 0, enabled, config is { UseProviderLogos: true }));
 
-        if (string.Equals(branding.LoginDisclaimer, disclaimer, StringComparison.Ordinal)
-            && string.Equals(branding.CustomCss, css, StringComparison.Ordinal))
+        if (Unchanged(branding.LoginDisclaimer, disclaimer) && Unchanged(branding.CustomCss, css))
             return; // no change needed
 
         branding.LoginDisclaimer = disclaimer;
@@ -51,6 +50,14 @@ public sealed class LoginBranding
             "SSO: login buttons updated in Jellyfin branding for {Count} enabled provider(s).",
             enabled.Count);
     }
+
+    /// <summary>
+    /// Whether what is in the branding already says what the plugin would write. A field
+    /// Jellyfin has never written is null, and writing "" over it is a configuration file
+    /// rewritten and a log line on every server start, for no change at all.
+    /// </summary>
+    private static bool Unchanged(string? current, string next)
+        => string.Equals(current ?? string.Empty, next, StringComparison.Ordinal);
 
     /// <summary>
     /// The sub-path Jellyfin is served under, if any. Branding holds plain HTML, so the

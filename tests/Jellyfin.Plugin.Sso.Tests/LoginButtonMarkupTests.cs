@@ -70,7 +70,9 @@ public sealed class LoginButtonMarkupTests
     [Fact]
     public void An_empty_block_leaves_an_untouched_disclaimer_exactly_as_it_was()
     {
-        const string House = "<p>Be nice to each other.</p>";
+        // Including whatever whitespace the administrator typed around it: the plugin owns
+        // the part between its markers and there is none here.
+        const string House = "\n  <p>Be nice to each other.</p>\n";
 
         Assert.Equal(House, LoginButtonMarkup.Splice(House, LoginButtonMarkup.Build([], string.Empty)));
     }

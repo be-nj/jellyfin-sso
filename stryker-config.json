@@ -10,9 +10,9 @@
       "json"
     ],
     "thresholds": {
-      "high": 75,
-      "low": 60,
-      "break": 50
+      "high": 80,
+      "low": 70,
+      "break": 65
     },
     "mutate": [
       "Oidc/**/*.cs",
