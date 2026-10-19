@@ -57,11 +57,39 @@ public static class LoginButtonMarkup
               + ".loginDisclaimer .sso-login-button:hover{background:#4a4a4a;}"
               + ".sso-login-mark{flex:0 0 auto;display:block;}"
               + ".sso-login-label{display:block;font-weight:600;}"
-              + string.Concat(providers.Select(p =>
-                  $".sso-login-button[data-provider=\"{WebUtility.HtmlEncode(p.Id)}\"]"
-                  + "{--sso-mark:" + ProviderIcons.ColourFor(p.Name, p.Authority) + ";}"))
+              + string.Concat(providers.Select(PerProvider))
               + CssEnd
             : string.Empty;
+
+    /// <summary>
+    /// One provider's own rules: the colour on its edge, and — when the administrator
+    /// asked for it — the whole button in the provider's colour.
+    ///
+    /// The mark is turned black or white with a filter rather than a second icon, because
+    /// the mark may be the provider's own logo, fetched from the provider itself, and
+    /// that image can be any shape or colour. brightness(0) flattens whatever arrives to
+    /// black; invert(1) after it makes that white.
+    /// </summary>
+    private static string PerProvider(ProviderConfig provider)
+    {
+        var selector = $".loginDisclaimer .sso-login-button[data-provider=\"{WebUtility.HtmlEncode(provider.Id)}\"]";
+        var mark = ProviderIcons.ColourFor(provider.Name, provider.Authority);
+
+        if (!provider.BrandedLoginButton)
+        {
+            return selector + "{--sso-mark:" + mark + ";}";
+        }
+
+        var brand = ProviderIcons.BrandFor(provider.Name, provider.Authority);
+        var ink = ProviderIcons.ReadableOn(brand);
+
+        return selector + "{--sso-mark:" + brand + ";background:" + brand + " !important;"
+            + "color:" + ink + " !important;}"
+            + selector + ":hover{background:" + ProviderIcons.HoverShadeOf(brand) + " !important;}"
+            + selector + " .sso-login-label{color:" + ink + ";}"
+            + selector + " .sso-login-mark{filter:brightness(0)"
+            + (ink == "#ffffff" ? " invert(1)" : string.Empty) + ";}";
+    }
 
     /// <summary>Puts the styling into the administrator's own custom CSS, fenced.</summary>
     public static string SpliceCss(string? customCss, string block)

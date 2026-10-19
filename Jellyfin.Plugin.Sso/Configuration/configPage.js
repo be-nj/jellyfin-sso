@@ -202,6 +202,13 @@ function buildProviderCard(p, i) {
             '<input type="checkbox" is="emby-checkbox" class="sso-provider-userinfo"' +
             (p.GroupsFromUserInfo ? ' checked' : '') +
             ' /><span>Fetch groups from userinfo endpoint instead of ID token</span></label></div>' +
+        '<div class="checkboxContainer"><label>' +
+            '<input type="checkbox" is="emby-checkbox" class="sso-provider-branded"' +
+            (p.BrandedLoginButton ? ' checked' : '') +
+            ' /><span>Paint the login button in this provider\'s colour</span></label></div>' +
+        '<div class="fieldDescription">Off, the button looks like Jellyfin\'s other buttons ' +
+            'with the provider\'s colour on its left edge. On, the whole button carries that ' +
+            'colour and the mark turns black or white, whichever reads on it.</div>' +
         '<div class="inputContainer">' +
             '<input type="text" is="emby-input" class="sso-provider-scopes" ' +
                 'label="Scopes (space separated, empty = openid profile email)" ' +
@@ -278,6 +285,7 @@ function collectProviders(view) {
             Scopes: val('.sso-provider-scopes').split(/\s+/).filter(Boolean),
             GroupsClaim: val('.sso-provider-groups-claim') || 'groups',
             GroupsFromUserInfo: card.querySelector('.sso-provider-userinfo').checked,
+            BrandedLoginButton: card.querySelector('.sso-provider-branded').checked,
         };
     }).filter(Boolean);
 }

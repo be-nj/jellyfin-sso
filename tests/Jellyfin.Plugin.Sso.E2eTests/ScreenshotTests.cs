@@ -61,6 +61,14 @@ public sealed class ScreenshotTests : IAsyncLifetime
         // button into Jellyfin's branding, and nothing else was touched.
         await CaptureLoginPageAsync(Path.Combine(directory, "login-button.png"));
 
+        // The same button with the provider's colour switched on, because the docs let an
+        // administrator choose between the two and a sentence does not show a colour.
+        await _env.PatchConfigAsync(config =>
+            config["Providers"]!.AsArray()[0]!["BrandedLoginButton"] = true);
+        await CaptureLoginPageAsync(Path.Combine(directory, "login-button-branded.png"));
+        await _env.PatchConfigAsync(config =>
+            config["Providers"]!.AsArray()[0]!["BrandedLoginButton"] = false);
+
         // From here the provider is the half-filled, disabled one the setup steps describe.
         await _env.PatchConfigAsync(config => config["Providers"]!.AsArray()[0]!["Enabled"] = false);
 
@@ -91,7 +99,10 @@ public sealed class ScreenshotTests : IAsyncLifetime
         await ShootAsync(page, "[data-panel='links']", Path.Combine(directory, "account-links.png"));
 
         foreach (var file in new[]
-                 { "login-button.png", "provider-card.png", "group-mapping.png", "account-links.png" })
+                 {
+                     "login-button.png", "login-button-branded.png", "provider-card.png",
+                     "group-mapping.png", "account-links.png",
+                 })
         {
             Assert.True(new FileInfo(Path.Combine(directory, file)).Length > 5_000, file);
         }
