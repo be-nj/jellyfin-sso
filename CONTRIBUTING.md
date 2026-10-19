@@ -172,6 +172,9 @@ gh attestation verify jellyfin-sso_1.12.7.0.zip --owner be-nj
 
 ### Issues
 
+`scripts/check-review-audit.sh` keeps that record honest: it resolves every commit and
+every issue the review document names, and CI runs it on each pull request.
+
 Everything found gets an issue, while it is fresh: a defect noticed in passing, an idea
 put off, a gap a test exposed. A fixed one is closed with the commit, what the cause
 turned out to be, and the test that now covers it; deliberately deferred items live in one

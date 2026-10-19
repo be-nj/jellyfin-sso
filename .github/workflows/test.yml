@@ -35,6 +35,20 @@ jobs:
           path: tests/runs/dotnet/results/
           if-no-files-found: ignore
 
+  # The review document claims that every finding ended in a commit or an issue. That
+  # claim rots the moment one of them is rewritten or deleted, so it is checked.
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Check the review's references
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/check-review-audit.sh
+
   # The plugin is built against the oldest server it claims to support, and the same
   # build is run against every server in that range. The claim in the README is this
   # job's result, not an assumption about ABI stability.
