@@ -152,19 +152,6 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
 
         await using var context = await NewPageContextAsync();
         var page = await ShowLoginPageAsync(context);
-        // The button fades into its colour — .15s on background — so a single reading can
-        // catch a blend of Jellyfin's grey and the provider's colour. Two equal readings
-        // mean the transition has finished.
-        await page.WaitForFunctionAsync(
-            """
-            () => new Promise(resolve => {
-              const button = document.querySelector('button.sso-login-button');
-              const first = getComputedStyle(button).backgroundColor;
-              setTimeout(() => resolve(getComputedStyle(button).backgroundColor === first), 120);
-            })
-            """,
-            null,
-            new PageWaitForFunctionOptions { Timeout = 15_000 });
 
         var painted = await page.EvaluateAsync<string[]>(
             """
@@ -268,6 +255,16 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
         {
             State = WaitForSelectorState.Visible,
             Timeout = 30_000,
+        });
+
+        // The button fades into its colour — .15s on background — and an ease curve is
+        // nearly flat at the end, so two readings 120ms apart both caught
+        // rgb(252, 75, 45) and looked settled one step short of the orange. Taking the
+        // transition away makes the computed value the final one, with nothing to wait
+        // for and nothing to be nearly right about.
+        await page.AddStyleTagAsync(new PageAddStyleTagOptions
+        {
+            Content = "*,*::before,*::after{transition:none !important;animation:none !important;}",
         });
 
         return page;
