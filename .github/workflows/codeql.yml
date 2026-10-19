@@ -5,7 +5,15 @@ name: CodeQL
 on:
   push:
     branches: [main]
+    paths-ignore: &prose
+      - '**/*.md'
+      - 'docs/**'
+      - 'CNAME'
+      - 'LICENSE'
+      - 'manifest.json'
+      - 'm.json'
   pull_request:
+    paths-ignore: *prose
   schedule:
     - cron: '0 5 * * 1'
 

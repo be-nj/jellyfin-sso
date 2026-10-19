@@ -1,9 +1,20 @@
 name: Tests
 
+# Prose, screenshots and the published manifest do not change what the plugin does, and
+# GitHub itself commits to CNAME whenever the Pages domain is touched — none of that is
+# worth a full test matrix.
 on:
   push:
     branches: [main]
+    paths-ignore: &prose
+      - '**/*.md'
+      - 'docs/**'
+      - 'CNAME'
+      - 'LICENSE'
+      - 'manifest.json'
+      - 'm.json'
   pull_request:
+    paths-ignore: *prose
 
 jobs:
   test:
