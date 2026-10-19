@@ -42,12 +42,20 @@ its signature is checked, and the group names that arrive with it.
 | Forged log lines through a crafted provider id | Only configured ids and the fixed RFC 6749 error codes are logged | `LoggableTests` |
 | Provider name injecting markup into the login page | Names are HTML-escaped, ids URL-encoded | `A_provider_name_cannot_inject_markup` |
 | Someone else's identity linked to your account | A link to an identity another account holds is refused | `SessionAndLinkingTests` |
+| Forged back-channel logout ending a session | The logout token is checked against the provider's JWKS, issuer and audience | `A_token_signed_by_nobody_the_provider_knows_is_refused`, `A_token_signed_by_somebody_else_is_rejected` |
+| An ID token replayed as a logout token | A logout token must carry the logout event and must not carry a `nonce` | `An_id_token_cannot_be_replayed_as_a_logout_token`, `A_token_without_the_logout_event_is_rejected` |
+| A captured logout token replayed later | `iat` is required and may be at most five minutes old | `A_token_captured_earlier_cannot_be_replayed_later` |
+| A logout for one account signing out another | The subject is matched by `(provider, sub)`, as a login is | `Another_users_logout_leaves_this_session_alone`, `SessionRevokerTests` |
 
 ## Known gaps
 
-- **Revocation is not immediate.** Removing someone from a group at the provider changes
-  nothing until their next login. The remedy today is Jellyfin's own user screen plus
-  ending the session under Dashboard → Devices. See [Security notes](security.md).
+- **A group change waits for the next login.** Removing someone from a group at the
+  provider changes their permissions only when they sign in again. A session *ended* at
+  the provider now ends in Jellyfin too, where the provider sends back-channel logout
+  (Authentik, Keycloak; not Authelia) — see
+  [Back-channel logout](login-and-logout.md#back-channel-logout). Changing a group without
+  ending the session still needs Jellyfin's own user screen, or ending the session under
+  Dashboard → Devices. See [Security notes](security.md).
 - **Quick Connect needs the person to approve.** Opening `/sso/oidc/start/qc?code=…` and
   signing in no longer authorizes the code on its own — the login ends on a page that
   names the account and shows the code, and approval is a separate click
@@ -63,7 +71,7 @@ its signature is checked, and the group names that arrive with it.
 
 ## How the claims are kept honest
 
-- 139 unit tests and 52 browser-driven end-to-end tests run on every push, against
+- 225 unit tests and 73 browser-driven end-to-end tests run on every push, against
   Jellyfin 12.0, 12.1 and 12.2.
 - Every release signs in through real Authentik, Keycloak and Authelia containers.
 - CodeQL runs on every push, and Scorecard rates the repository from outside. Alerts that

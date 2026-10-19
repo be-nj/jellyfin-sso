@@ -101,6 +101,14 @@ public class ProviderConfig
     public bool GroupsFromUserInfo { get; set; }
 
     /// <summary>
+    /// Whether the plugin accepts back-channel logout notifications from this provider at
+    /// <c>/sso/oidc/backchannel-logout/{id}</c>. On, because the endpoint acts only on a
+    /// logout token the provider signed, and a provider only posts one once an
+    /// administrator has registered the URL with it.
+    /// </summary>
+    public bool AcceptBackChannelLogout { get; set; } = true;
+
+    /// <summary>
     /// When true the login button is painted in the provider's own colour, with its mark
     /// in black or white on top. Off, the button looks like Jellyfin's other buttons and
     /// carries the provider's colour on its left edge alone.

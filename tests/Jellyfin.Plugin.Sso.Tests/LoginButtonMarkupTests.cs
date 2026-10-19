@@ -159,6 +159,53 @@ public sealed class LoginButtonMarkupTests
         Assert.Equal(string.Empty, LoginButtonMarkup.Splice(null, LoginButtonMarkup.Build([], string.Empty)));
     }
 
+    [Fact]
+    public void A_block_at_the_very_start_of_the_disclaimer_is_replaced_in_place()
+    {
+        // The administrator wrote their house rules after the block rather than before
+        // it, so the fence begins at the first character. Appending here would leave two
+        // sets of buttons.
+        const string House = "<p>Be nice to each other.</p>";
+        var first = LoginButtonMarkup.Splice(
+            null, LoginButtonMarkup.Build([Provider("p1", "Authentik")], string.Empty)) + House;
+
+        var second = LoginButtonMarkup.Splice(
+            first, LoginButtonMarkup.Build([Provider("p2", "Keycloak")], string.Empty));
+
+        Assert.EndsWith(House, second);
+        Assert.StartsWith(LoginButtonMarkup.Start, second);
+        Assert.Equal(1, Occurrences(second, LoginButtonMarkup.Start));
+        Assert.DoesNotContain("/sso/oidc/start/p1", second);
+    }
+
+    [Fact]
+    public void Removing_the_block_leaves_no_whitespace_where_it_stood()
+    {
+        const string House = "<p>Be nice to each other.</p>";
+        var withButton = LoginButtonMarkup.Splice(
+            "  " + House + "  ", LoginButtonMarkup.Build([Provider("p1", "Authentik")], string.Empty));
+
+        var cleared = LoginButtonMarkup.Splice(withButton, string.Empty);
+
+        // Jellyfin shows the disclaimer whenever it is not empty, so a leftover newline
+        // is an empty box under the login form.
+        Assert.Equal(House, cleared);
+    }
+
+    [Fact]
+    public void A_disclaimer_whose_markers_are_the_wrong_way_round_is_left_alone()
+    {
+        var crossed = LoginButtonMarkup.End + "<p>House rules</p>" + LoginButtonMarkup.Start;
+        var block = LoginButtonMarkup.Build([Provider("p1", "Authentik")], string.Empty);
+
+        var spliced = LoginButtonMarkup.Splice(crossed, block);
+
+        // Nothing between the markers can be delimited, so the block is appended and the
+        // administrator's text survives.
+        Assert.StartsWith(crossed, spliced);
+        Assert.Contains("/sso/oidc/start/p1", spliced);
+    }
+
     private static int Occurrences(string text, string needle)
     {
         var count = 0;

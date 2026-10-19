@@ -145,6 +145,78 @@ public sealed class UserProvisionerTests : IDisposable
         Assert.Equal(["media", "admins"], _harness.Configuration.SeenGroups);
     }
 
+    [Fact]
+    public async Task A_group_reported_twice_in_one_login_is_remembered_once()
+    {
+        var created = UserNamed("newcomer");
+        _userManager.CreateUserAsync("newcomer").Returns(created);
+
+        await _provisioner.ResolveAsync(
+            _provider, Identity("sub-123", "newcomer", "media", "media"));
+
+        Assert.Equal(["media"], _harness.Configuration.SeenGroups);
+    }
+
+    [Fact]
+    public async Task Groups_that_differ_only_in_case_are_two_groups()
+    {
+        // The name has to match the provider's spelling to grant anything, so the
+        // autocomplete must offer both spellings rather than guess which one is meant.
+        var created = UserNamed("newcomer");
+        _userManager.CreateUserAsync("newcomer").Returns(created);
+        _harness.Configuration.SeenGroups.Add("Media");
+
+        await _provisioner.ResolveAsync(_provider, Identity("sub-123", "newcomer", "media"));
+
+        Assert.Equal(["Media", "media"], _harness.Configuration.SeenGroups);
+    }
+
+    [Fact]
+    public async Task The_remembered_group_names_stop_at_their_cap()
+    {
+        // The names come from the provider, so an IdP with thousands of groups must not
+        // grow the plugin's configuration file without end.
+        var created = UserNamed("newcomer");
+        _userManager.CreateUserAsync("newcomer").Returns(created);
+        _harness.Configuration.SeenGroups.AddRange(
+            Enumerable.Range(0, PluginConfiguration.MaxSeenGroups - 1).Select(i => $"old-{i}"));
+
+        await _provisioner.ResolveAsync(
+            _provider, Identity("sub-123", "newcomer", "first-new", "second-new"));
+
+        Assert.Equal(PluginConfiguration.MaxSeenGroups, _harness.Configuration.SeenGroups.Count);
+        Assert.Contains("first-new", _harness.Configuration.SeenGroups);
+        Assert.DoesNotContain("second-new", _harness.Configuration.SeenGroups);
+    }
+
+    [Fact]
+    public async Task A_group_arriving_at_a_full_list_is_dropped_rather_than_swapped_in()
+    {
+        var created = UserNamed("newcomer");
+        _userManager.CreateUserAsync("newcomer").Returns(created);
+        _harness.Configuration.SeenGroups.AddRange(
+            Enumerable.Range(0, PluginConfiguration.MaxSeenGroups).Select(i => $"old-{i}"));
+
+        await _provisioner.ResolveAsync(_provider, Identity("sub-123", "newcomer", "too-late"));
+
+        Assert.Equal(PluginConfiguration.MaxSeenGroups, _harness.Configuration.SeenGroups.Count);
+        Assert.DoesNotContain("too-late", _harness.Configuration.SeenGroups);
+    }
+
+    [Fact]
+    public async Task A_new_user_may_reset_their_password_the_way_jellyfin_expects()
+    {
+        var created = UserNamed("newcomer");
+        _userManager.CreateUserAsync("newcomer").Returns(created);
+
+        await _provisioner.ResolveAsync(_provider, Identity("sub-123", "newcomer"));
+
+        var policy = CapturedPolicy(created.Id);
+        Assert.Equal(
+            "Emby.Server.Implementations.Library.DefaultPasswordResetProvider",
+            policy.PasswordResetProviderId);
+    }
+
     private UserPolicy CapturedPolicy(Guid userId)
     {
         var calls = _userManager.ReceivedCalls()

@@ -30,7 +30,8 @@ OpenID Connect single sign-on for Jellyfin — for households already running
 - **Phones and TVs** via Jellyfin's [Quick Connect](docs/clients.md).
 - **Several providers at once**, each with its own login button — plain, or painted in
   the provider's colour.
-- **Optional single logout** that ends the provider's session too.
+- **Optional single logout** that ends the provider's session too, and **back-channel
+  logout** so a session ended at the provider ends in Jellyfin as well.
 - **Lockout guards** — the last administrator is never demoted.
 
 ## What it looks like
@@ -51,8 +52,8 @@ Against real software, not mocks. Every push runs:
 
 | | |
 |---|---|
-| **182 unit tests** | Token validation, permissions, lockout guards, markup |
-| **66 end-to-end tests** | Throwaway Jellyfin container, fake provider, real browser |
+| **225 unit tests** | Token validation, permissions, lockout guards, markup, the served pages |
+| **73 end-to-end tests** | Throwaway Jellyfin container, fake provider, real browser |
 | **Three Jellyfin versions** | The same build against 12.0, 12.1 and 12.2 |
 | **9 real-provider logins** | Authentik, Keycloak and Authelia, through their own forms |
 | **Mutation testing** | Stryker checks that the tests notice a defect; floor in CI |

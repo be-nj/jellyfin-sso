@@ -170,6 +170,7 @@ function buildProviderCard(p, i) {
 
     var loginUrl = '/sso/oidc/start/' + card.dataset.providerId;
     var redirectUri = window.location.origin + '/sso/oidc/callback/' + card.dataset.providerId;
+    var logoutUri = window.location.origin + '/sso/oidc/backchannel-logout/' + card.dataset.providerId;
     var scopes = (p.Scopes || []).join(' ');
 
     card.innerHTML =
@@ -211,6 +212,15 @@ function buildProviderCard(p, i) {
             (p.GroupsFromUserInfo ? ' checked' : '') +
             ' /><span>Fetch groups from userinfo endpoint instead of ID token</span></label></div>' +
         '<div class="checkboxContainer">' +
+            '<label><input type="checkbox" is="emby-checkbox" class="sso-provider-backchannel"' +
+            (p.AcceptBackChannelLogout === false ? '' : ' checked') +
+            ' /><span>Accept back-channel logout from this provider</span></label>' +
+            '<div class="fieldDescription">Ends the Jellyfin session when the provider ' +
+                'says the session is over, instead of waiting for the next login. Register ' +
+                'the back-channel logout URL below with the provider; Authelia has no such ' +
+                'notification to send.</div>' +
+        '</div>' +
+        '<div class="checkboxContainer">' +
             '<label><input type="checkbox" is="emby-checkbox" class="sso-provider-branded"' +
             (p.BrandedLoginButton ? ' checked' : '') +
             ' /><span>Paint the login button in this provider\'s colour</span></label>' +
@@ -237,6 +247,7 @@ function buildProviderCard(p, i) {
         '<div class="sso-copy-list">' +
             copyRow('Redirect URI for your provider', redirectUri) +
             copyRow('Login URL', window.location.origin + loginUrl) +
+            copyRow('Back-channel logout URL', logoutUri) +
             copyRow('Provider ID', card.dataset.providerId) +
         '</div>' +
         '</div>';
@@ -316,6 +327,7 @@ function collectProviders(view) {
             GroupsClaim: val('.sso-provider-groups-claim') || 'groups',
             GroupsFromUserInfo: card.querySelector('.sso-provider-userinfo').checked,
             BrandedLoginButton: card.querySelector('.sso-provider-branded').checked,
+            AcceptBackChannelLogout: card.querySelector('.sso-provider-backchannel').checked,
             ButtonColour: val('.sso-provider-colour'),
         };
     }).filter(Boolean);

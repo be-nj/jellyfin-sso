@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using Duende.IdentityModel.Client;
+using Microsoft.IdentityModel.Tokens;
 using Jellyfin.Plugin.Sso.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -126,6 +127,17 @@ public sealed class OidcClientFactory : IDisposable
 
         return response;
     }
+
+    /// <summary>
+    /// The signing keys out of a provider's JWKS. Both the ID token and the back-channel
+    /// logout token are checked against these.
+    /// </summary>
+    public static List<SecurityKey> SigningKeysFrom(DiscoveryDocumentResponse disco)
+        => disco.KeySet?.Keys?
+            .Select(k => new JsonWebKey(System.Text.Json.JsonSerializer.Serialize(k)))
+            .Cast<SecurityKey>()
+            .ToList()
+            ?? throw new SecurityTokenException("No signing keys in discovery document.");
 
     /// <summary>
     /// Reads a confidential client secret from an env var ("env:VAR_NAME") or file ("file:/path").

@@ -108,3 +108,45 @@ document.addEventListener('click', function (event) {
 
 If the provider advertises no `end_session_endpoint`, or cannot be reached, the user still
 lands back in Jellyfin — a broken provider must never block a logout.
+
+## Back-channel logout
+
+The logout above is the one the user starts. The other direction — the provider telling
+Jellyfin a session is over — is **back-channel logout**
+([OpenID Connect Back-Channel Logout 1.0](https://openid.net/specs/openid-connect-backchannel-1_0.html)).
+It is what ends a session when somebody is removed or signed out at the provider instead
+of in Jellyfin. Without it, the Jellyfin session runs until its token is next refused,
+which is to say until the next login.
+
+Each provider card shows the URL to register:
+
+```
+https://jellyfin.example.com/sso/oidc/backchannel-logout/<providerId>
+```
+
+Register it with the provider and leave **Accept back-channel logout from this provider**
+on. The provider then posts a signed `logout_token` there when the session ends, and the
+plugin revokes every Jellyfin token of the account linked to that subject — the devices
+are signed out, the account itself is untouched.
+
+| Provider | Where |
+|---|---|
+| Authentik | the application's provider → *Advanced protocol settings* → **Backchannel logout URL** |
+| Keycloak | the client → *Settings* → *Logout settings* → **Backchannel logout URL** |
+| Authelia | not supported; logout stays what the section above describes |
+
+The endpoint is anonymous, because the caller is the provider's back end and holds no
+Jellyfin token. The logout token is therefore the whole of the authorisation, and it is
+checked the way an ID token is — signature against the provider's JWKS, issuer, audience —
+plus the rules the specification adds for this token in particular:
+
+- the `events` claim has to name the back-channel logout event,
+- a `nonce` must be absent, so an ID token cannot be replayed as a logout token,
+- `iat` has to be there and no more than five minutes old, so a token captured once cannot
+  end a session again tomorrow,
+- `sub`, `sid` or both have to be there.
+
+Anything else is a `400` and a line in the log. A token that names only `sid` is accepted
+and does nothing: the plugin stores subjects, not provider sessions. A valid logout for a
+subject nobody linked here is also a `200` — a provider announces a logout to every
+application the person used, including those that never saw them.

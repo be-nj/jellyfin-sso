@@ -252,6 +252,41 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
+    /// <summary>
+    /// A back-channel logout token for a subject, signed with the same key the ID tokens
+    /// are. This is what a provider posts to the plugin when a session ends on its side.
+    /// </summary>
+    public string MintLogoutToken(string sub, string clientId, string? sid = "session-1")
+    {
+        var payload = new JwtPayload
+        {
+            { "iss", ContainerAuthority },
+            { "aud", clientId },
+            { "sub", sub },
+            { "jti", Guid.NewGuid().ToString("N") },
+            { "iat", DateTimeOffset.UtcNow.ToUnixTimeSeconds() },
+            {
+                "events",
+                new Dictionary<string, object>
+                {
+                    ["http://schemas.openid.net/event/backchannel-logout"]
+                        = new Dictionary<string, object>(),
+                }
+            },
+        };
+
+        if (sid is not null)
+        {
+            payload.Add("sid", sid);
+        }
+
+        var token = new JwtSecurityToken(
+            new JwtHeader(new SigningCredentials(_signingKey, SecurityAlgorithms.RsaSha256)),
+            payload);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
     private static string Challenge(string verifier)
         => Convert.ToBase64String(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)))
             .TrimEnd('=')
