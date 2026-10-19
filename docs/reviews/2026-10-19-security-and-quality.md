@@ -10,7 +10,7 @@ Reviewed at `f66801c`; fixes landed in `0decb9e`, `1c6c6f5`, `279d2a3` and `f44d
 ## What came out of it
 
 | | Finding | Severity | Issue |
-|---|---|---|---|
+|---|---|---|---|---|
 | 1 | Quick Connect: a login approved the code without asking | medium-high | [#1](https://github.com/be-nj/jellyfin-sso/issues/1) |
 | 2 | Every login reset policy settings the plugin does not manage | medium | [#3](https://github.com/be-nj/jellyfin-sso/issues/3) |
 | 3 | The login button was never written to Jellyfin's branding | medium | [#2](https://github.com/be-nj/jellyfin-sso/issues/2) |
@@ -26,40 +26,46 @@ Reviewed at `f66801c`; fixes landed in `0decb9e`, `1c6c6f5`, `279d2a3` and `f44d
 Eighteen findings came out of the five passes and the work that followed. None is only in
 a chat log: each is either fixed with a test, or filed.
 
-| # | Finding | Pass | Where it went |
-|---|---|---|---|
-| 1 | Quick Connect approved a code without asking | 1 | fixed, `279d2a3` · [#1](https://github.com/be-nj/jellyfin-sso/issues/1) |
-| 2 | A provider returning no ID token crashed the callback | 1 | fixed, `279d2a3` |
-| 3 | The provider id was echoed into error responses | 1 | fixed, `279d2a3` |
-| 4 | Pending logins bounded in time, not in count | 1 | fixed, `cbe616e` (cap at 10,000) |
-| 5 | Two admin endpoints for links; hardening on the unused one | 2 | fixed, `1c6c6f5` · [#7](https://github.com/be-nj/jellyfin-sso/issues/7) |
-| 6 | Unlinking removes every link of a user | 2 | documented, no change |
-| 7 | `/sso/link` names providers to anonymous callers | 2 | accepted, documented |
-| 8 | `escAttr` did not escape the apostrophe | 3 | fixed, `cbe616e` |
-| 9 | Discovery document and signing keys never expired | 4 | fixed, `1c6c6f5` · [#6](https://github.com/be-nj/jellyfin-sso/issues/6) |
-| 10 | No HTTP timeout against the provider | 4 | fixed, `1c6c6f5` |
-| 11 | Configuration writes were not serialised | 4 | fixed, `1c6c6f5` |
-| 12 | `SeenGroups` grew without a bound | 4 | fixed, `1c6c6f5` |
-| 13 | Dead wiring: the login button was never written | 5 | fixed, `0decb9e` · [#2](https://github.com/be-nj/jellyfin-sso/issues/2) |
-| 14 | The configuration page's stylesheet never loaded | 5 | fixed, `f66801c` · [#4](https://github.com/be-nj/jellyfin-sso/issues/4) |
-| 15 | The test suite was weaker than its count | 5 | measured, improved 44 → 57 % · [#17](https://github.com/be-nj/jellyfin-sso/issues/17) |
-| 16 | Stale comments | 5 | fixed, `1c6c6f5` |
-| 17 | `SsoController` is 800 lines | 5 | deferred · [#8](https://github.com/be-nj/jellyfin-sso/issues/8) |
-| 18 | Revocation waits for the next login | 5 | deferred, by design · [#8](https://github.com/be-nj/jellyfin-sso/issues/8) |
+| # | Finding | Pass | Where it went | Test that holds it |
+|---|---|---|---|---|
+| 1 | Quick Connect approved a code without asking | 1 | fixed, `279d2a3` · [#1](https://github.com/be-nj/jellyfin-sso/issues/1) | `A_login_approves_the_code_only_after_the_person_says_so` |
+| 2 | A provider returning no ID token crashed the callback | 1 | fixed, `279d2a3` | — |
+| 3 | The provider id was echoed into error responses | 1 | fixed, `279d2a3` | — |
+| 4 | Pending logins bounded in time, not in count | 1 | fixed, `cbe616e` (cap at 10,000) | `The_store_stops_growing_at_its_cap` |
+| 5 | Two admin endpoints for links; hardening on the unused one | 2 | fixed, `1c6c6f5` · [#7](https://github.com/be-nj/jellyfin-sso/issues/7) | `A_link_to_a_user_Jellyfin_does_not_have_is_refused` |
+| 6 | Unlinking removes every link of a user | 2 | documented, no change | — |
+| 7 | `/sso/link` names providers to anonymous callers | 2 | accepted, documented | — |
+| 8 | `escAttr` did not escape the apostrophe | 3 | fixed, `cbe616e` | — |
+| 9 | Discovery document and signing keys never expired | 4 | fixed, `1c6c6f5` · [#6](https://github.com/be-nj/jellyfin-sso/issues/6) | — |
+| 10 | No HTTP timeout against the provider | 4 | fixed, `1c6c6f5` | — |
+| 11 | Configuration writes were not serialised | 4 | fixed, `1c6c6f5` | — |
+| 12 | `SeenGroups` grew without a bound | 4 | fixed, `1c6c6f5` | `The_remembered_group_names_stop_at_the_cap` |
+| 13 | Dead wiring: the login button was never written | 5 | fixed, `0decb9e` · [#2](https://github.com/be-nj/jellyfin-sso/issues/2) | `Saving_the_configuration_puts_a_button_per_provider_into_the_branding` |
+| 14 | The configuration page's stylesheet never loaded | 5 | fixed, `f66801c` · [#4](https://github.com/be-nj/jellyfin-sso/issues/4) | `The_pages_own_stylesheet_reaches_the_dashboard` |
+| 15 | The test suite was weaker than its count | 5 | measured, improved 44 → 57 % · [#17](https://github.com/be-nj/jellyfin-sso/issues/17) | — |
+| 16 | Stale comments | 5 | fixed, `1c6c6f5` | — |
+| 17 | `SsoController` is 800 lines | 5 | deferred · [#8](https://github.com/be-nj/jellyfin-sso/issues/8) | — |
+| 18 | Revocation waits for the next login | 5 | deferred, by design · [#8](https://github.com/be-nj/jellyfin-sso/issues/8) | — |
 
 Found afterwards, while checking the claims this review had made:
 
-| Finding | Where it went |
-|---|---|
-| Every login reset policy settings the plugin does not manage | fixed, `1c6c6f5` · [#3](https://github.com/be-nj/jellyfin-sso/issues/3) |
-| A server under a sub-path could not complete a login | fixed, `0decb9e` · [#5](https://github.com/be-nj/jellyfin-sso/issues/5) |
-| Forwarded headers were trusted — open redirect on logout | fixed, `8721d63` · [#12](https://github.com/be-nj/jellyfin-sso/issues/12) |
-| The generic provider mark rendered as a black dot | fixed, `34cff74` · [#10](https://github.com/be-nj/jellyfin-sso/issues/10) |
-| The login button needed a save after an update | fixed, `1473afb` · [#9](https://github.com/be-nj/jellyfin-sso/issues/9) |
-| Releases were not reproducible on another machine | fixed, `f402f9a` · [#14](https://github.com/be-nj/jellyfin-sso/issues/14) |
-| The release workflow could not publish its manifest | fixed, `cbe616e` |
-| `make` used an SDK the pin forbids | fixed, `7c7d355` |
-| Scorecard counts one unanalysed commit | filed · [#19](https://github.com/be-nj/jellyfin-sso/issues/19) |
+| Finding | Where it went | Test that holds it |
+|---|---|---|
+| Every login reset policy settings the plugin does not manage | fixed, `1c6c6f5` · [#3](https://github.com/be-nj/jellyfin-sso/issues/3) | `Settings_this_plugin_does_not_own_survive_a_sync` |
+| A server under a sub-path could not complete a login | fixed, `0decb9e` · [#5](https://github.com/be-nj/jellyfin-sso/issues/5) | `The_sub_path_is_normalised` |
+| Forwarded headers were trusted — open redirect on logout | fixed, `8721d63` · [#12](https://github.com/be-nj/jellyfin-sso/issues/12) | `A_forwarded_prefix_that_is_not_a_path_is_ignored` |
+| The generic provider mark rendered as a black dot | fixed, `34cff74` · [#10](https://github.com/be-nj/jellyfin-sso/issues/10) | `Every_slug_answers_with_a_drawable_svg` |
+| The login button needed a save after an update | fixed, `1473afb` · [#9](https://github.com/be-nj/jellyfin-sso/issues/9) | `Starting_the_server_writes_the_buttons` |
+| The button could not sit inside the login form | done, `34cff74` · [#11](https://github.com/be-nj/jellyfin-sso/issues/11) | `The_button_appears_in_the_login_form` |
+| Releases were not reproducible on another machine | fixed, `f402f9a` · [#14](https://github.com/be-nj/jellyfin-sso/issues/14) | `scripts/package.sh`, recipe in CONTRIBUTING |
+| The release workflow could not publish its manifest | fixed, `cbe616e` | — |
+| `make` used an SDK the pin forbids | fixed, `7c7d355` | — |
+| Scorecard counts one unanalysed commit | filed · [#19](https://github.com/be-nj/jellyfin-sso/issues/19) | — |
+
+A dash means the fix has no test of its own: an error message, a build script, a
+configuration file. Where a test exists, `scripts/check-review-audit.sh` resolves its name
+against the test sources, so a renamed or deleted test fails the build rather than quietly
+leaving a claim behind.
 
 Two CodeQL notes are dismissed rather than fixed, with the reason recorded at the alert
 and in [#8](https://github.com/be-nj/jellyfin-sso/issues/8): both catch every exception on
