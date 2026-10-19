@@ -10,7 +10,7 @@ the provider and the reason. Dashboard → **Logs**, or `docker logs jellyfin`.
 | Plugin shows **NotSupported** in the dashboard | The plugin was built for a different Jellyfin version. Install the build whose `targetAbi` matches your server — see [Requirements](requirements.md). |
 | `invalid_scope` from Keycloak | Keycloak has no `groups` scope unless you create one. Empty the provider's *Scopes* field, which asks for `openid profile email`. |
 | Login works, but the user sees **no libraries** | No group mapping matched. Check the group name in the mapping against what the provider sends; the names the plugin has seen are offered as autocomplete. |
-| New accounts are named like `01HQ3M…` | The provider sends no `preferred_username`. The plugin falls back to the userinfo endpoint; if that is empty too, add the claim at the provider. |
+| New accounts are named like `01HQ3M…` | The provider sends no `preferred_username`. The plugin tries `name`, then the userinfo endpoint, and falls back to the subject. Add one of the two claims at the provider. |
 | `SSO login failed: crypto.randomUUID is not a function` | A plugin build older than 1.12.1 on a server reached over plain HTTP. Update the plugin; current builds work over HTTP, which is a privacy question, not a functional one. |
 | `redirect_uri` mismatch at the provider | The provider's registered URI must match exactly, including scheme, host, port and the `providerId` at the end. |
 | *"Username 'ben' already exists"* at the first login | Expected: an existing Jellyfin account is never handed to an identity by name. Link it, see [Linking accounts](linking.md#manual-linking). |

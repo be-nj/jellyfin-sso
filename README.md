@@ -81,12 +81,12 @@ the differences that matter when one of them is in front of your media:
 Dashboard → **Plugins → Repositories → +**, name it `SSO Authentication`, URL:
 
 ```
-https://jf.be-nj.net/m.json
+https://jf.be-nj.net/manifest.json
 ```
 
 Then **Plugins → Catalog → Authentication → SSO Authentication → Install**, and restart
-Jellyfin. Servers that added `jf.be-nj.net/manifest.json` or the raw GitHub URL keep
-working — all three serve the same file.
+Jellyfin. Typing it on a screen instead of pasting? `jf.be-nj.net/m.json` is the same
+file.
 
 Needs **Jellyfin 12.2.x**. Each build targets one server version and Jellyfin hides the
 rest, so an empty catalog means no build matches yours

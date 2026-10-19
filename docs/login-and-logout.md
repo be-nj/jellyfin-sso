@@ -36,6 +36,9 @@ login goes through without credentials. With **Sign out of the identity provider
 enabled, sending the browser to **`/sso/oidc/logout`** after Jellyfin's logout ends the
 provider session as well and returns to the web client.
 
+With several providers, `/sso/oidc/logout` uses the first enabled one;
+`/sso/oidc/logout/<providerId>` names it.
+
 **The switch alone changes nothing visible** — it only decides what `/sso/oidc/logout`
 does. A server plugin cannot touch Jellyfin's logout button, so wiring the two together
 needs the **JavaScript Injector** plugin:

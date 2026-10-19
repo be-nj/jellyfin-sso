@@ -129,6 +129,18 @@ you stop, was it ever unclear whether you were in Jellyfin or at your provider, 
 sentence made you guess. Open an issue with the answers; that evidence is worth more than
 another round of the above.
 
+### Checking it against the code
+
+Prose about authentication rots quietly, so the claims are read back against the source,
+not from memory: routes against the controllers' attributes, field names and labels
+against `configPage.html`/`.js` and `PluginConfiguration`, log lines against the string
+that is actually logged, constants (the 90-second secret, the scopes, `ClientType=1`)
+against the code that reads them, and every link, anchor and image path by script.
+
+That pass has found defects in the code as often as in the text — most recently a redirect
+URI built without the server's sub-path, which broke SSO for anyone running Jellyfin under
+a *Base URL*.
+
 ## Screenshots
 
 The images in the README and under `docs/` come out of the running plugin, not out of a
