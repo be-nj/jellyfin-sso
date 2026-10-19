@@ -141,9 +141,11 @@ public sealed class OidcClientFactory : IDisposable
 
     /// <summary>
     /// Reads a confidential client secret from an env var ("env:VAR_NAME") or file ("file:/path").
-    /// The literal secret is never stored in plugin config.
+    /// The literal secret is never stored in plugin config. Internal so the rules can be
+    /// tested without a provider: what this accepts decides whether the secret ends up in
+    /// the configuration file after all.
     /// </summary>
-    private static string ResolveSecret(string? secretRef)
+    internal static string ResolveSecret(string? secretRef)
     {
         if (string.IsNullOrWhiteSpace(secretRef))
             throw new InvalidOperationException(

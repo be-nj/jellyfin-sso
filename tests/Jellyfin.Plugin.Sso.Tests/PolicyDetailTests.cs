@@ -68,6 +68,23 @@ public sealed class PolicyDetailTests : IDisposable
     }
 
     [Fact]
+    public async Task An_administrators_own_group_cannot_put_a_parental_limit_on_them()
+    {
+        // The group that makes somebody an administrator may carry a rating as well —
+        // somebody filled the card in from top to bottom. An administrator with a
+        // parental limit cannot see the libraries they administer.
+        Map("admins", m =>
+        {
+            m.IsAdministrator = true;
+            m.MaxParentalRating = 6;
+        });
+
+        await _sync.SyncAsync(_userId, new OidcIdentity("sub-1", "ben", ["admins"]));
+
+        Assert.Null(Captured().MaxParentalRating);
+    }
+
+    [Fact]
     public async Task Playback_is_allowed_for_every_synced_user()
     {
         Map("media", m => m.LibraryIds = [MoviesId.ToString("N")]);
