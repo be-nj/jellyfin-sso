@@ -43,7 +43,7 @@ jobs:
       - name: Run the e2e suite
         run: >
           dotnet test tests/Jellyfin.Plugin.Sso.E2eTests -c Release --logger trx
-          --filter "Category!=RealIdp"
+          --filter "Category!=RealIdp&Category!=Screenshots"
 
       - name: Upload e2e artifacts
         if: always()

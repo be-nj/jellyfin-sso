@@ -135,8 +135,10 @@ setting that changes what you type in step 6 — all three are written out under
    name saves on purpose, and it is created **disabled** so nobody sees a login button
    that goes nowhere yet.
 
-   The card now prints three values: the **Provider ID**, the **Redirect URI** and the
-   **Login URL**. The redirect URI is built from the address you are looking at the
+   ![The provider card in the plugin's configuration page](docs/img/provider-card.png)
+
+   The card prints three values at the bottom: the **Provider ID**, the **Redirect URI**
+   and the **Login URL**. The redirect URI is built from the address you are looking at the
    dashboard with, so open the dashboard on the **public URL your household uses**
    (`https://jellyfin.example.com`), not on `http://<server>:8096` — otherwise you will
    register a LAN address at your provider and every outside login will fail. Copy the Redirect URI — that is the one your provider needs, complete,
@@ -164,6 +166,8 @@ setting that changes what you type in step 6 — all three are written out under
    next step in it. Then map it **in the plugin**, under its **Group Mappings** tab:
    **+ Add Mapping**, group name `media`, tick the libraries that group may watch,
    **Save**. Without a mapping people can sign in but see nothing.
+
+   ![A group mapping with its libraries and permissions](docs/img/group-mapping.png)
 
    Type the group name exactly as the provider spells it. The field autocompletes, but
    only from groups the plugin has already seen at a login, so the first one is typed
@@ -680,7 +684,8 @@ immediately.
 ## Contributing
 
 Build instructions, the test suites and how releases are cut live in
-[CONTRIBUTING.md](CONTRIBUTING.md). Design decisions are in [docs/adr/](docs/adr/), the
+[CONTRIBUTING.md](CONTRIBUTING.md). The screenshots above are generated from the running
+plugin with `make screenshots`, so they cannot drift away from the page they document. Design decisions are in [docs/adr/](docs/adr/), the
 domain vocabulary in [CONTEXT.md](CONTEXT.md).
 
 ---

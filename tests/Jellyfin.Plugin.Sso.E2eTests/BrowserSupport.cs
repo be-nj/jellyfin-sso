@@ -40,6 +40,18 @@ internal static class BrowserSupport
         return directory;
     }
 
+    /// <summary>The repository root, found by the manifest that sits in it.</summary>
+    public static string RepositoryRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "manifest.json")))
+        {
+            dir = dir.Parent;
+        }
+
+        return dir?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");
+    }
+
     public static string RunsDirectory()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

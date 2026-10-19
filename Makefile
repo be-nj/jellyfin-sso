@@ -16,7 +16,7 @@ EXTRA_DLLS := Duende.IdentityModel.dll \
               Microsoft.IdentityModel.Tokens.dll \
               System.IdentityModel.Tokens.Jwt.dll
 
-.PHONY: build publish deploy test e2e clean
+.PHONY: build publish deploy test e2e screenshots clean
 
 build:
 	dotnet build $(PLUGIN_SRC) -c Release
@@ -46,6 +46,10 @@ test:
 #   make e2e E2E_FILTER='--filter "Category!=RealIdp"'  # skip the container-heavy tier There is no local dotnet SDK, so it runs inside the SDK image: the
 # repo is mounted at its own path so that bind mounts created from inside still resolve
 # on the host's docker daemon, and the host network makes the fake provider reachable.
+# Regenerates the screenshots the README embeds, from the real plugin page.
+screenshots:
+	$(MAKE) e2e E2E_FILTER='--filter "Category=Screenshots"'
+
 e2e:
 	docker run --rm --network host \
 	  -v /var/run/docker.sock:/var/run/docker.sock \

@@ -103,6 +103,19 @@ If the DLL is dropped without its dependencies, Jellyfin logs
 `Failed to load assembly … IdentityModel …` and deletes the plugin folder on the next
 restart. Always deploy all of them together.
 
+## Screenshots
+
+The images in the README come out of the running plugin, not out of a screenshot tool:
+
+```bash
+make screenshots
+```
+
+That starts the e2e environment, opens the real configuration page in a browser and
+writes `docs/img/*.png`. Regenerate them whenever the page changes; the test is tagged
+`Category=Screenshots` and is excluded from ordinary test runs because it writes into the
+repository.
+
 ## Porting to a new Jellyfin version
 
 The plugin pins `Jellyfin.Controller` and `Jellyfin.Model` to one server version; Jellyfin
