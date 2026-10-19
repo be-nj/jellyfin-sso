@@ -24,6 +24,10 @@ jobs:
       # Provenance: the attestation is signed for this repository and run.
       id-token: write
       attestations: write
+      # Dispatches the test workflow against the manifest branch; without it the
+      # dispatch answers "Resource not accessible by integration" and the release
+      # job fails after the release itself is already published.
+      actions: write
     steps:
       - name: Check out main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
