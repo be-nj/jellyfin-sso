@@ -35,7 +35,7 @@ surprise people.
 - **Library permissions become the provider's business.** Whatever your group mapping says
   is written to the user on *every* login. Changes you make by hand in Jellyfin's user
   screen are overwritten the next time that person signs in. (Individual users can be
-  excluded, see [Safety](#plugin-configuration).)
+  excluded, see [Safety](#safety).)
 - **Anyone your provider lets through gets a Jellyfin account.** The first SSO login
   creates the account automatically. The gate is on the provider's side: only people who
   may use the Jellyfin *application* there can get in. Without a matching group they get
@@ -54,10 +54,14 @@ surprise people.
   |---|---|
   | 12.2.x | 1.12.2 and newer |
   | 12.1.x | 1.12.0 – 1.12.1 |
+  | 12.0.x, 11.x | none yet — this plugin started at 12.1 |
   | 10.11.x and older | none — upgrade Jellyfin first |
 
-  Older builds stay in the repository, so a server that has not been upgraded keeps
-  seeing its version. **If the catalog shows nothing after you add the repository, your
+  Upgrading Jellyfin itself is outside this plugin: change the image tag to
+  `jellyfin/jellyfin:12.2`, read [Jellyfin's own upgrade
+  notes](https://jellyfin.org/docs/general/administration/migrate-to-jellyfin-10/), take a
+  backup, and only then come back here. Older plugin builds stay in the repository, so a
+  server that has not been upgraded keeps seeing its own version. **If the catalog shows nothing after you add the repository, your
   Jellyfin is older than any build here** — that is the hiding at work, not a broken URL. The practical consequence: **pin your Jellyfin image tag** instead
   of running `latest`, upgrade deliberately, and check here for a matching plugin build
   first. If a Jellyfin release arrives before the plugin does, your local administrator is
@@ -68,6 +72,17 @@ surprise people.
   a certificate (Caddy, Traefik, nginx) is the right answer for anything beyond a test.
 - **An identity provider you administer:** Authentik, Authelia or Keycloak. Anything that
   speaks OpenID Connect should work, those three are the ones that are tested.
+- **Jellyfin itself must be able to reach that provider.** Not your laptop — the Jellyfin
+  container. It fetches the provider's keys on its own, and in a split-DNS household
+  `https://auth.example.com` often resolves on your laptop and not inside the container.
+  Check it before you start:
+
+  ```bash
+  docker exec jellyfin curl -sSf https://auth.example.com/.well-known/openid-configuration >/dev/null && echo reachable
+  ```
+
+  If that fails, fix the container's DNS or give it an address that resolves there; the
+  plugin cannot work around it.
 - **Admin access to both**, and the public URL your household uses to reach Jellyfin.
 
 ---
@@ -79,9 +94,18 @@ provider in step 4, and Authelia also needs an extra scope in step 5 and Keycloa
 setting that changes what you type in step 6 — all three are written out under
 [Identity provider setup](#identity-provider-setup). Budget half an hour the first time.
 
-1. **Back up Jellyfin's configuration.** In Docker that is whatever you mounted at
-   `/config` — the folder containing `data/`, `plugins/` and `config/`. Everything below is
-   undoable, but a copy costs nothing.
+1. **Back up Jellyfin's configuration — with the server stopped.** Jellyfin keeps live
+   databases in there; copying them while it runs gives you a backup that restores into a
+   broken server.
+
+   ```bash
+   docker compose stop jellyfin
+   cp -a /path/you/mounted/at/config ./jellyfin-config-backup   # bind mount
+   # named volume instead of a folder?
+   docker run --rm -v jellyfin_config:/from -v "$PWD":/to alpine \
+     tar czf /to/jellyfin-config-backup.tar.gz -C /from .
+   docker compose start jellyfin
+   ```
 
 2. **Install the plugin.** Dashboard → **Plugins → Repositories → +**, name it
    `SSO Authentication`, URL:
@@ -91,7 +115,7 @@ setting that changes what you type in step 6 — all three are written out under
    ```
 
    Then **Plugins → Catalog → Authentication → SSO Authentication → Install**, and restart
-   Jellyfin. An empty catalog means your Jellyfin version has no matching build — see the
+   Jellyfin (`docker compose restart jellyfin`, or the Restart button in the dashboard). An empty catalog means your Jellyfin version has no matching build — see the
    table in [Requirements](#requirements).
 
 3. **Create a half-filled provider in the plugin** so it hands you an id. Dashboard →
@@ -101,7 +125,10 @@ setting that changes what you type in step 6 — all three are written out under
    that goes nowhere yet.
 
    The card now prints three values: the **Provider ID**, the **Redirect URI** and the
-   **Login URL**. Copy the Redirect URI — that is the one your provider needs, complete,
+   **Login URL**. The redirect URI is built from the address you are looking at the
+   dashboard with, so open the dashboard on the **public URL your household uses**
+   (`https://jellyfin.example.com`), not on `http://<server>:8096` — otherwise you will
+   register a LAN address at your provider and every outside login will fail. Copy the Redirect URI — that is the one your provider needs, complete,
    with no guessing about which part of the URL is the id. The login URL is what you open
    to test later; the provider id only matters if you build links yourself.
 
@@ -172,7 +199,8 @@ at login, which is the quickest way to spot a typo or a renamed group.
 
 **Almost everyone lost administrator rights.** Not everyone: the last remaining
 administrator is never demoted, by design. Log in as them, switch on *Never remove
-administrator rights on login*, then fix the mapping.
+administrator rights on login* (plugin page, **Group Mappings** tab, under *Safety*), then
+fix the mapping.
 
 **I want my backup back.** Stop Jellyfin (`docker compose stop jellyfin`), move the
 folder you mounted at `/config` aside, put your copy in its place, start it again. That returns the server
@@ -227,7 +255,8 @@ Authentik's own vocabulary: a **Provider** speaks the protocol, an **Application
 users see and what access is granted on.
 
 1. **Directory → Groups → Create**: one group per level of access you want, for example
-   `media` and `jellyfin-admins`. Add your own user to one of them.
+   `media` and `jellyfin-admins`. Put the test user from the quick start into `media`; add
+   yourself later, once linking is done.
 2. **Applications → Providers → Create → OAuth2/OpenID Provider**:
    - *Name*: `Jellyfin`.
    - *Authorization flow*: `default-provider-authorization-implicit-consent` (the one
@@ -253,10 +282,16 @@ users see and what access is granted on.
 4. **Who may log in** is decided here, not in the plugin: bind a policy to the application
    if you do not want every Authentik user to end up with a Jellyfin account.
 
-Optional, and only if you intend to link existing Jellyfin accounts by hand: under the
-provider's *Advanced protocol settings* you can set **Subject mode** to *Based on the
-User's username*, which makes manual linking much easier. The trade-offs are in
-[Identity matching](#identity-matching--the-idp-subject).
+**Leave *Subject mode* alone.** Authentik's default gives every person an unreadable,
+permanent id, which is the right thing: it survives renames and cannot be inherited by a
+recycled username. Linking your existing accounts then costs one value copied out of the
+log, which [Manual linking](#manual-linking-existing-local-accounts) walks through
+step by step.
+
+The alternative, *Based on the User's username* under *Advanced protocol settings*, makes
+linking a matter of typing a name — at the price of breaking every link when someone is
+renamed, and handing an old account to anyone who gets a recycled username. Only take it
+if usernames in your directory are never reused. This README recommends the default.
 
 ### Keycloak
 
@@ -326,11 +361,16 @@ Dashboard → **Plugins → SSO Authentication**:
   with an administrator's token; `ConfidentialSecretRef` is the field on the provider, and
   `ClientType` has to be `1`:
 
+  The token is an API key from Dashboard → **API Keys → +**:
+
   ```bash
   curl -X POST "https://<your-jellyfin>/sso/admin/config" \
     -H 'Authorization: MediaBrowser Token="<admin token>"' \
     -H 'Content-Type: application/json' \
-    -d @config.json   # the object from GET /sso/admin/config, with the two fields changed
+    -d @config.json
+  # config.json is what GET /sso/admin/config returns, with two fields changed inside the
+  # provider's entry in the "Providers" array: "ClientType": 1 and
+  # "ConfidentialSecretRef": "env:JELLYFIN_SSO_SECRET".
   ```
 
   Most setups never need this: a public client with PKCE is the recommended shape and the
@@ -505,10 +545,11 @@ mode**, Authentik decides what `sub` contains:
 | Subject mode | `sub` value | Notes |
 |---|---|---|
 | Based on the User's hashed ID (default) | opaque SHA256 hash | Stable, but invisible in the UI — only learnable from a login. |
-| **Based on the User's username** | the username | Easy to link by hand, and the mode this README's examples assume. |
+| **Based on the User's username** | the username | Easy to link by hand, and brittle: see the trade-offs below. |
 | Based on the User's UUID | the user UUID | Stable; only readable via the API (`/api/v3/core/users/`). |
 
-Choosing the username mode trades safety for convenience:
+The username mode trades safety for convenience, which is why the setup guide recommends
+leaving Authentik's default in place:
 
 - **Renaming someone at the provider breaks their link**, because the `sub` changes with
   the name. They have to be linked again by hand.
@@ -583,7 +624,7 @@ Only the words this README cannot avoid.
 | **Identity provider (IdP)** | The service that holds the accounts and checks passwords: your Authentik, Authelia or Keycloak. |
 | **Claim** | A single fact the provider states about a person — their username, their email, their groups. |
 | **Scope** | A bundle of claims the application asks for. `profile` usually carries the name, `email` the address. |
-| **Issuer URL** | The provider's address for one application. Everything else is discovered from it; it has to answer at `<issuer>/.well-known/openid-configuration`, which you can simply open in a browser to check. |
+| **Issuer URL** | The provider's address for one application. Everything else is discovered from it; it has to answer at `<issuer>/.well-known/openid-configuration` **from inside the Jellyfin container**, not only in your browser. |
 | **Subject (`sub`)** | The provider's id for a person. Often an unreadable string; with some settings it is the username. The plugin links accounts by it, so an account survives a rename **as long as the subject is not the username** — see [Identity matching](#identity-matching--the-idp-subject). |
 | **Client ID** | The name the provider knows your Jellyfin by. Not a secret. |
 | **PKCE** | The mechanism that lets an application prove it started a login without holding a password. It is why no client secret is needed. |

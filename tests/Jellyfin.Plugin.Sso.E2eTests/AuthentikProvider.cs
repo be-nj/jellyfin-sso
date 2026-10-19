@@ -243,11 +243,7 @@ internal sealed class AuthentikProvider : IRealIdentityProvider
         var authorizationFlow = await FlowAsync(api, "default-provider-authorization-implicit-consent");
         var invalidationFlow = await FlowAsync(api, "default-provider-invalidation-flow");
 
-        var mappings = (await GetAsync(api, "propertymappings/provider/scope/?page_size=100"))["results"]!
-            .AsArray()
-            .Where(m => Scopes.Contains(m!["scope_name"]!.GetValue<string>()))
-            .Select(m => (JsonNode)m!["pk"]!.GetValue<string>())
-            .ToArray();
+        var mappings = await ScopeMappingsAsync(api);
 
         var providerPk = await PostAsync(api, "providers/oauth2/", new JsonObject
         {
@@ -314,6 +310,40 @@ internal sealed class AuthentikProvider : IRealIdentityProvider
         }
 
         throw new InvalidOperationException($"Authentik never became ready: {last?.Message}");
+    }
+
+    /// <summary>
+    /// The property mappings for the scopes this provider asks for. Like the flows, they
+    /// are imported in the background, and a provider built from a half-imported set asks
+    /// for fewer scopes than it needs — which surfaces much later as a refused userinfo
+    /// call rather than as a missing mapping.
+    /// </summary>
+    private async Task<JsonNode[]> ScopeMappingsAsync(HttpClient api)
+    {
+        var deadline = DateTimeOffset.UtcNow.AddMinutes(2);
+
+        while (true)
+        {
+            var all = (await GetAsync(api, "propertymappings/provider/scope/?page_size=100"))["results"]!
+                .AsArray();
+            var wanted = all
+                .Where(m => Scopes.Contains(m!["scope_name"]!.GetValue<string>()))
+                .Select(m => (JsonNode)m!["pk"]!.GetValue<string>())
+                .ToArray();
+
+            if (wanted.Length == Scopes.Length)
+            {
+                return wanted;
+            }
+
+            if (DateTimeOffset.UtcNow > deadline)
+            {
+                throw new InvalidOperationException(
+                    $"Authentik imported only {wanted.Length} of the {Scopes.Length} scope mappings.");
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(2));
+        }
     }
 
     /// <summary>
