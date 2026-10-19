@@ -80,14 +80,17 @@ Different routes it takes:
 Dashboard → **Plugins → Repositories → +**, name it `SSO Authentication`, URL:
 
 ```
-https://jf.be-nj.net/manifest.json
+https://raw.githubusercontent.com/be-nj/jellyfin-sso/main/manifest.json
 ```
 
 Then **Plugins → Catalog → Authentication → SSO Authentication → Install**, and restart.
 
 - Needs **Jellyfin 12.0 or newer** — an empty catalog means yours is older
   ([table](docs/requirements.md#jellyfin-version)).
-- Typing the URL by hand? `jf.be-nj.net/m.json` is the same file.
+- The same file is served from this repository itself, so you can read it before you
+  trust it, and the release ZIP it points to carries
+  [build provenance](https://github.com/be-nj/jellyfin-sso/attestations).
+- Shorter to type, same file: `jf.be-nj.net/m.json`.
 - Building it yourself: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 > ### Before you switch
