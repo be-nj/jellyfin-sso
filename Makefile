@@ -58,6 +58,7 @@ screenshots:
 
 e2e:
 	docker run --rm --network host \
+	  -e E2E_JELLYFIN_TAG="$(E2E_JELLYFIN_TAG)" \
 	  -v /var/run/docker.sock:/var/run/docker.sock \
 	  -v "$(CURDIR)":"$(CURDIR)" -w "$(CURDIR)" \
 	  -e HOME=/tmp -e NUGET_PACKAGES="$(CURDIR)/tests/runs/nuget" \

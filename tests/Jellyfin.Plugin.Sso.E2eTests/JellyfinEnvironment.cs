@@ -434,6 +434,13 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
     /// </summary>
     private static string ServerImageTag(string repoRoot)
     {
+        // The compatibility matrix runs the same build against several servers.
+        var pinned = Environment.GetEnvironmentVariable("E2E_JELLYFIN_TAG");
+        if (!string.IsNullOrWhiteSpace(pinned))
+        {
+            return pinned;
+        }
+
         var csproj = File.ReadAllText(
             Path.Combine(repoRoot, "Jellyfin.Plugin.Sso", "Jellyfin.Plugin.Sso.csproj"));
         var version = Regex.Match(csproj, @"""Jellyfin\.Controller"" Version=""(?<v>[0-9.]+)""").Groups["v"].Value;
