@@ -126,8 +126,9 @@ public sealed class HostileInputTests
             const string LabelOpen = "<span class=\"sso-login-label\">";
             var label = markup[(markup.IndexOf(LabelOpen, StringComparison.Ordinal) + LabelOpen.Length)..];
             Assert.DoesNotContain("<", label[..label.IndexOf("</span>", StringComparison.Ordinal)]);
-            Assert.Equal(1, Occurrences(markup, "</a>"));
-            Assert.Equal(1, Occurrences(markup, "<a "));
+            Assert.Equal(1, Occurrences(markup, "</form>"));
+            Assert.Equal(1, Occurrences(markup, "<form "));
+            Assert.Equal(1, Occurrences(markup, "</button>"));
         }
     }
 

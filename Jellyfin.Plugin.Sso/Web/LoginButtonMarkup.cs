@@ -47,13 +47,14 @@ public static class LoginButtonMarkup
               // 3.7px right of the column of buttons above it; the branding stylesheet
               // is loaded before the app's, so equal specificity is not enough.
               // LoginButtonLayoutTests measures that.
-              + ".loginDisclaimer a.sso-login-button{display:flex;align-items:center;"
+              + ".loginDisclaimer .sso-login-form{margin:0;padding:0;width:100%;}"
+              + ".loginDisclaimer .sso-login-button{display:flex;align-items:center;"
               + "justify-content:center;gap:.7em;width:100%;box-sizing:border-box;"
               + "margin:.4em 0 0 !important;"
               + "font-weight:600;letter-spacing:.01em;"
               + "border-left:3px solid var(--sso-mark, #00a4dc);"
               + "transition:background .15s ease;}"
-              + ".loginDisclaimer a.sso-login-button:hover{background:#4a4a4a;}"
+              + ".loginDisclaimer .sso-login-button:hover{background:#4a4a4a;}"
               + ".sso-login-mark{flex:0 0 auto;display:block;}"
               + ".sso-login-label{display:block;font-weight:600;}"
               + string.Concat(providers.Select(p =>
@@ -86,20 +87,27 @@ public static class LoginButtonMarkup
                 ? "Login with SSO"
                 : $"Login with {provider.Name}";
 
+            // A form, not a link. jellyfin-web walks every <a> in the disclaimer and
+            // forces target="_blank" and is="emby-linkbutton" on it, and that element's
+            // click handler hands a target-less href to its own router — which does not
+            // know /sso/oidc/start and quietly re-renders the login page. So a link here
+            // either does nothing or opens the login in a second tab. A submitted form is
+            // an ordinary navigation that no router sees.
+            //
             // Inline styles are stripped from the disclaimer before it is rendered, so the
             // look has to come from Jellyfin's own classes: "emby-button block" makes a
-            // full-width button, "raised" gives it the secondary surface, and the themes
-            // style an anchor's text only under a[data-role=button] — without it the label
-            // keeps the link colour and disappears on a coloured button.
+            // full-width button and "raised" gives it the secondary surface. The classes
+            // only carry the styling; the behaviour that breaks links is attached to
+            // anchors alone.
             markup
-                .Append("<a data-role=\"button\" class=\"raised block emby-button sso-login-button\" ")
-                .Append("data-provider=\"")
-                .Append(WebUtility.HtmlEncode(provider.Id))
-                .Append("\" href=\"")
+                .Append("<form class=\"sso-login-form\" method=\"get\" action=\"")
                 .Append(prefix)
                 .Append("/sso/oidc/start/")
                 .Append(WebUtility.UrlEncode(provider.Id))
-                .Append("\"><img src=\"")
+                .Append("\"><button type=\"submit\" data-provider=\"")
+                .Append(WebUtility.HtmlEncode(provider.Id))
+                .Append("\" class=\"raised block emby-button sso-login-button\">")
+                .Append("<img src=\"")
                 .Append(prefix)
                 .Append("/sso/icon/provider/")
                 .Append(WebUtility.UrlEncode(provider.Id))
@@ -107,7 +115,7 @@ public static class LoginButtonMarkup
                 .Append("<span class=\"sso-login-label\">")
                 .Append(WebUtility.HtmlEncode(label))
                 .Append("</span>")
-                .Append("</a>");
+                .Append("</button></form>");
         }
 
         return markup.Append(End).ToString();

@@ -47,7 +47,7 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
         var page = await context.NewPageAsync();
         await page.GotoAsync("/web/index.html#/login.html");
 
-        var ours = page.Locator("a.sso-login-button");
+        var ours = page.Locator("button.sso-login-button");
         await ours.First.WaitForAsync(new LocatorWaitForOptions
         {
             State = WaitForSelectorState.Visible,
@@ -63,7 +63,7 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
         var diagnostics = await page.EvaluateAsync<string>(
             """
             () => {
-              const button = document.querySelector('a.sso-login-button');
+              const button = document.querySelector('button.sso-login-button');
               const style = getComputedStyle(button);
               const sheets = [...document.querySelectorAll('style')]
                 .filter(s => (s.textContent || '').includes('sso-login-button')).length;

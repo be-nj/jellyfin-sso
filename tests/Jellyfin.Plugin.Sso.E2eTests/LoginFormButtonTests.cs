@@ -97,6 +97,47 @@ public sealed class LoginFormButtonTests : IAsyncLifetime
         Assert.True(await page.Locator("form a.sso-form-button").CountAsync() > 0);
     }
 
+    [Fact]
+    public async Task Clicking_the_button_in_the_form_signs_the_user_in()
+    {
+        await EnableAsync();
+        _env.Idp.NextUser = new FakeUser("sub-form-click", "formclickuser", ["media"]);
+
+        await using var context = await _browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            BaseURL = _env.BaseUrl,
+            IgnoreHTTPSErrors = true,
+        });
+        var page = await context.NewPageAsync();
+        await page.GotoAsync("/web/index.html#/login.html");
+
+        var button = page.Locator("a.sso-form-button").First;
+        await button.WaitForAsync(new LocatorWaitForOptions
+        {
+            State = WaitForSelectorState.Visible,
+            Timeout = 30_000,
+        });
+        await button.ClickAsync();
+
+        // jellyfin-web routes anchor clicks through its own router wherever it owns the
+        // element. This one is added to the form by the plugin's own script, so it has to
+        // navigate like any link — and the login has to end in a session.
+        try
+        {
+            await page.WaitForFunctionAsync(
+                "() => !!(window.ApiClient && window.ApiClient.accessToken() && window.ApiClient.getCurrentUserId())",
+                null,
+                new PageWaitForFunctionOptions { Timeout = 30_000 });
+        }
+        catch (TimeoutException)
+        {
+            await BrowserSupport.CaptureAsync(page, "form-button-click");
+            Assert.Fail($"The button in the form did not sign anybody in.\nurl: {page.Url}");
+        }
+
+        Assert.DoesNotContain("login.html", page.Url);
+    }
+
     private Task EnableAsync()
         => _env.PatchConfigAsync(config =>
         {
