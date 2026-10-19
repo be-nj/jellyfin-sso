@@ -57,19 +57,26 @@ surprise people.
   | 12.0.x, 11.x | none yet — this plugin started at 12.1 |
   | 10.11.x and older | none — upgrade Jellyfin first |
 
-  Upgrading Jellyfin itself is outside this plugin: change the image tag to
-  `jellyfin/jellyfin:12.2`, read [Jellyfin's own upgrade
-  notes](https://jellyfin.org/docs/general/administration/migrate-to-jellyfin-10/), take a
-  backup, and only then come back here. Older plugin builds stay in the repository, so a
+  Upgrading Jellyfin itself is outside this plugin, and worth its own evening: take the
+  backup from step 1 of the [quick start](#quick-start), change the image tag to
+  `jellyfin/jellyfin:12.2`, pull and start, check that your libraries and users are intact
+  — Jellyfin's [container documentation](https://jellyfin.org/docs/general/installation/container/)
+  covers the mechanics — and only then come back here. Do not upgrade the server and add
+  an authentication plugin on the same evening. Older plugin builds stay in the repository, so a
   server that has not been upgraded keeps seeing its own version. **If the catalog shows nothing after you add the repository, your
   Jellyfin is older than any build here** — that is the hiding at work, not a broken URL. The practical consequence: **pin your Jellyfin image tag** instead
   of running `latest`, upgrade deliberately, and check here for a matching plugin build
   first. If a Jellyfin release arrives before the plugin does, your local administrator is
   the way in until it catches up.
-- **HTTPS in front of Jellyfin.** The plugin works over plain `http://` on a LAN address,
-  but then access tokens travel the network in the clear, and browsers restrict APIs the
-  login page uses — one of which cost an earlier version its login. A reverse proxy with
-  a certificate (Caddy, Traefik, nginx) is the right answer for anything beyond a test.
+- **One address for Jellyfin, used everywhere.** Whatever your household types to watch
+  — `https://jellyfin.example.com` or `http://192.168.1.10:8096` — use that same address
+  when you open the dashboard to set this up, because the redirect URI is built from it.
+
+  **LAN-only is a supported shape.** If you never reach Jellyfin from outside, put the LAN
+  address in and carry on; everything in this README works. What you give up is privacy on
+  your own network: access tokens travel unencrypted, so anyone already inside can read
+  them. With HTTPS (a reverse proxy such as Caddy, Traefik or nginx) they cannot — worth
+  doing eventually, not a prerequisite for tonight.
 - **An identity provider you administer:** Authentik, Authelia or Keycloak. Anything that
   speaks OpenID Connect should work, those three are the ones that are tested.
 - **Jellyfin itself must be able to reach that provider.** Not your laptop — the Jellyfin
@@ -78,11 +85,15 @@ surprise people.
   Check it before you start:
 
   ```bash
-  docker exec jellyfin curl -sSf https://auth.example.com/.well-known/openid-configuration >/dev/null && echo reachable
+  # "jellyfin" is the service name in your compose file; docker ps shows yours
+  docker compose exec jellyfin curl -sSf \
+    https://auth.example.com/.well-known/openid-configuration >/dev/null && echo reachable
   ```
 
-  If that fails, fix the container's DNS or give it an address that resolves there; the
-  plugin cannot work around it.
+  A wall of JSON or the word `reachable` means yes. "Could not resolve host" means the
+  container's DNS cannot see your provider — fix that first, the plugin cannot work around
+  it. ("executable file not found" would mean the check itself is wrong for your image,
+  not that the provider is unreachable.)
 - **Admin access to both**, and the public URL your household uses to reach Jellyfin.
 
 ---
@@ -202,9 +213,30 @@ administrator is never demoted, by design. Log in as them, switch on *Never remo
 administrator rights on login* (plugin page, **Group Mappings** tab, under *Safety*), then
 fix the mapping.
 
-**I want my backup back.** Stop Jellyfin (`docker compose stop jellyfin`), move the
-folder you mounted at `/config` aside, put your copy in its place, start it again. That returns the server
-to the evening before, plugin and all — at the cost of anything watched since.
+**I want my backup back.** Whichever way you took in step 1 of the quick start, the
+restore is its mirror image.
+
+Bind mount — the folder you copied:
+
+```bash
+docker compose stop jellyfin
+mv /path/you/mounted/at/config /path/you/mounted/at/config.broken
+cp -a ./jellyfin-config-backup /path/you/mounted/at/config
+docker compose start jellyfin
+```
+
+Named volume — the tarball you made instead:
+
+```bash
+docker compose stop jellyfin
+docker run --rm -v jellyfin_config:/to -v "$PWD":/from alpine \
+  sh -c 'rm -rf /to/..?* /to/.[!.]* /to/* 2>/dev/null; tar xzf /from/jellyfin-config-backup.tar.gz -C /to'
+docker compose start jellyfin
+```
+
+That returns the server to the evening before, plugin and all — at the cost of anything
+watched since. `cp -a` and `tar` both keep ownership; if Jellyfin complains about
+permissions afterwards, that is what went wrong.
 
 **I want it gone again.** In Jellyfin: Dashboard → **Users** → each SSO-managed user →
 set *Authentication Provider* back to the default and give them a password. Then remove
@@ -544,8 +576,8 @@ mode**, Authentik decides what `sub` contains:
 
 | Subject mode | `sub` value | Notes |
 |---|---|---|
-| Based on the User's hashed ID (default) | opaque SHA256 hash | Stable, but invisible in the UI — only learnable from a login. |
-| **Based on the User's username** | the username | Easy to link by hand, and brittle: see the trade-offs below. |
+| **Based on the User's hashed ID (default)** | opaque SHA256 hash | **Recommended.** Stable and safe; the value is only learnable from a login, which [Manual linking](#manual-linking-existing-local-accounts) covers. |
+| Based on the User's username | the username | Easy to link by hand, and brittle: see the trade-offs below. |
 | Based on the User's UUID | the user UUID | Stable; only readable via the API (`/api/v3/core/users/`). |
 
 The username mode trades safety for convenience, which is why the setup guide recommends
