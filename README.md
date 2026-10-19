@@ -4,7 +4,7 @@
 &nbsp;&nbsp;
 <img src="https://cdn.simpleicons.org/authentik/FD4B2D" height="52" alt="Authentik">
 &nbsp;&nbsp;
-<img src="https://cdn.simpleicons.org/keycloak/4D4D4D" height="52" alt="Keycloak">
+<img src="https://cdn.simpleicons.org/keycloak/8A8A8A" height="52" alt="Keycloak">
 &nbsp;&nbsp;
 <img src="https://cdn.simpleicons.org/authelia/113155" height="52" alt="Authelia">
 
@@ -53,15 +53,13 @@ https://jf.be-nj.net/m.json
 ```
 
 Then **Plugins → Catalog → Authentication → SSO Authentication → Install**, and restart
-Jellyfin.
+Jellyfin. Servers that added `jf.be-nj.net/manifest.json` or the raw GitHub URL keep
+working — all three serve the same file.
 
 Needs **Jellyfin 12.2.x**. Each build targets one server version and Jellyfin hides the
 rest, so an empty catalog means no build matches yours
 ([table](docs/requirements.md#jellyfin-version)). Building by hand:
 [CONTRIBUTING.md](CONTRIBUTING.md).
-
-<sub>`jf.be-nj.net/manifest.json` and
-`raw.githubusercontent.com/be-nj/jellyfin-sso/main/manifest.json` serve the same file.</sub>
 
 > ### Before you switch
 >
