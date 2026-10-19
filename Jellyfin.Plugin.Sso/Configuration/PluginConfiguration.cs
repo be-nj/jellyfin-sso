@@ -29,6 +29,20 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool SignOutOfIdentityProvider { get; set; }
 
     /// <summary>
+    /// Whether the plugin writes a login button per enabled provider into Jellyfin's
+    /// login disclaimer. Off for anyone who places their own button with the JavaScript
+    /// Injector and does not want a second one underneath it.
+    /// </summary>
+    public bool AddLoginButtonToBranding { get; set; } = true;
+
+    /// <summary>
+    /// Whether the plugin adds a script tag to jellyfin-web's index.html so the login
+    /// button can sit inside the login form. Off by default: it rewrites a response that
+    /// belongs to Jellyfin, which is a bigger step than writing the branding field.
+    /// </summary>
+    public bool InjectLoginButtonIntoForm { get; set; }
+
+    /// <summary>
     /// Allow users to link their own Jellyfin account to an SSO identity from the
     /// self-service page, instead of an administrator doing it for them.
     /// </summary>

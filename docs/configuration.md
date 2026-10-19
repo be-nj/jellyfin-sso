@@ -42,6 +42,11 @@ A public client with PKCE is the default and covers most setups.
 
 ## Sessions
 
+- **Put a login button on the login page** — on by default; writes the button into
+  Jellyfin's branding, below the form.
+- **Put the button inside the login form** — off by default; adds a script tag to
+  Jellyfin's page as it is served so the button sits with *Sign In*
+  ([Login and logout](login-and-logout.md)).
 - **Sign out of the identity provider too** — [Login and logout](login-and-logout.md).
 - **Let users link their own account** — [Linking accounts](linking.md).
 

@@ -5,7 +5,9 @@
 ## Login button
 
 **Built in:** saving the configuration writes one button per enabled provider into
-Jellyfin's *Login Disclaimer*. The buttons sit between `<!-- sso-login-buttons:start -->`
+Jellyfin's *Login Disclaimer*, unless *Put a login button on the login page* is turned off
+on the **Sessions** tab — turn it off if you place your own button and do not want a
+second one. The buttons sit between `<!-- sso-login-buttons:start -->`
 and `:end`; only that part is ever rewritten, so your own text stays, and disabling every
 provider removes the block alone.
 
@@ -15,8 +17,16 @@ The button is an anchor in Jellyfin's own button classes, so themes style it lik
 others. Under a sub-path the links pick up Jellyfin's *Base URL*, so
 `/jellyfin/sso/oidc/start/<providerId>` works.
 
-**JavaScript Injector**, if you run that community plugin, puts the button inside the
-login form instead of below it:
+**Inside the login form (built in):** switch on *Put the button inside the login form* on
+the **Sessions** tab. The plugin then adds one `<script>` tag to Jellyfin's page as it is
+served — nothing is written to disk, nothing in the web folder changes, and turning the
+switch off removes it again. The button lands next to *Sign In*, with the provider's mark
+on it.
+
+Turn the branding button off at the same time unless you want one in both places.
+
+**JavaScript Injector**, if you already run that community plugin and prefer to keep your
+own snippet, works too:
 
 ```js
 // Puts an SSO button under Jellyfin's login form.
@@ -31,6 +41,11 @@ document.addEventListener('DOMContentLoaded', function () {
   form.appendChild(button);
 });
 ```
+
+The plugin also serves the provider marks it uses itself, so a hand-written button can
+show one without reaching out to a CDN: `/sso/icon/authentik`, `/sso/icon/keycloak`,
+`/sso/icon/authelia`, `/sso/icon/google`, `/sso/icon/okta`, `/sso/icon/auth0`, and
+`/sso/icon/generic` for anything else.
 
 ## Logout
 

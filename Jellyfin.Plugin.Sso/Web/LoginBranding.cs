@@ -24,7 +24,10 @@ public sealed class LoginBranding
 
     public void Apply()
     {
-        var enabled = Plugin.Instance?.Configuration.Providers.Where(p => p.Enabled).ToList() ?? [];
+        var config = Plugin.Instance?.Configuration;
+        var enabled = config is { AddLoginButtonToBranding: true }
+            ? config.Providers.Where(p => p.Enabled).ToList()
+            : [];
 
         var branding = (_configManager.GetConfiguration("branding") as BrandingOptions)
             ?? new BrandingOptions();

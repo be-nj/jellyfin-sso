@@ -75,4 +75,20 @@ public sealed class PendingStateStoreTests
 
         Assert.Equal(Expected, PendingStateStore.CodeChallenge(Verifier));
     }
+
+    [Fact]
+    public void The_store_stops_growing_at_its_cap()
+    {
+        var store = new PendingStateStore();
+
+        for (var i = 0; i < PendingStateStore.MaxPending + 50; i++)
+        {
+            store.Issue("provider-1", "https://jellyfin.example.com/sso/oidc/callback/p1");
+        }
+
+        var (state, _) = store.Issue("provider-1", "https://jellyfin.example.com/sso/oidc/callback/p1");
+
+        // The newest login still works — the cap drops the oldest, not the caller's own.
+        Assert.NotNull(store.Consume(state));
+    }
 }

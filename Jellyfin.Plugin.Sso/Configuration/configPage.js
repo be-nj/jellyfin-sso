@@ -17,7 +17,7 @@ export default function (view) {
     view.querySelector('#AddProvider').addEventListener('click', function () {
         var c = view.querySelector('#Providers');
         c.appendChild(buildProviderCard({ Id: newId(), Enabled: false }, c.children.length));
-        renumberProviders(view);
+        retitleProviders(view);
     });
 
     view.querySelector('#AddMapping').addEventListener('click', function () {
@@ -70,6 +70,8 @@ function load(view) {
         _config = r[0]; _libraries = r[1]; _seenGroups = r[2];
         renderProviders(view, _config.Providers || []);
         setChk(view, 'SignOutOfIdentityProvider', !!_config.SignOutOfIdentityProvider);
+        setChk(view, 'AddLoginButtonToBranding', _config.AddLoginButtonToBranding !== false);
+        setChk(view, 'InjectLoginButtonIntoForm', !!_config.InjectLoginButtonIntoForm);
         setChk(view, 'AllowSelfServiceLinking', !!_config.AllowSelfServiceLinking);
         setChk(view, 'PreserveAdminPermissions', !!_config.PreserveAdminPermissions);
         renderMappings(view, _config.GroupMappings || []);
@@ -133,6 +135,8 @@ function save(view) {
         SeenGroups: (_config && _config.SeenGroups) || [],
         PreserveAdminPermissions: getChk(view, 'PreserveAdminPermissions'),
         SignOutOfIdentityProvider: getChk(view, 'SignOutOfIdentityProvider'),
+        AddLoginButtonToBranding: getChk(view, 'AddLoginButtonToBranding'),
+        InjectLoginButtonIntoForm: getChk(view, 'InjectLoginButtonIntoForm'),
         AllowSelfServiceLinking: getChk(view, 'AllowSelfServiceLinking'),
         SyncExcludedUserIds: collectExcluded(view),
     };
@@ -151,7 +155,7 @@ function renderProviders(view, providers) {
     var c = view.querySelector('#Providers');
     c.innerHTML = '';
     providers.forEach(function (p, i) { c.appendChild(buildProviderCard(p, i)); });
-    renumberProviders(view);
+    retitleProviders(view);
 }
 
 function buildProviderCard(p, i) {
@@ -164,7 +168,8 @@ function buildProviderCard(p, i) {
     var scopes = (p.Scopes || []).join(' ');
 
     card.innerHTML =
-        '<h3 class="checkboxListLabel sso-provider-title">Provider ' + (i + 1) + '</h3>' +
+        '<h3 class="checkboxListLabel sso-provider-title">' +
+            escHtml(p.Name || ('Provider ' + (i + 1))) + '</h3>' +
         '<div class="sso-mapping-head">' +
             '<div class="inputContainer sso-group-field">' +
                 '<input type="text" is="emby-input" class="sso-provider-name" label="Display name" ' +
@@ -203,21 +208,42 @@ function buildProviderCard(p, i) {
                 'Keycloak rejects it. Leave empty unless your provider says otherwise.</div>' +
         '</div>' +
         '<div class="fieldDescription sso-provider-urls">' +
-            'Provider ID: <code>' + escHtml(card.dataset.providerId) + '</code><br/>' +
-            'Redirect URI for your provider: <code>' + escHtml(redirectUri) + '</code><br/>' +
-            'Login URL: <code>' + escHtml(loginUrl) + '</code>' +
+            copyRow('Redirect URI for your provider', redirectUri) +
+            copyRow('Login URL', window.location.origin + loginUrl) +
+            copyRow('Provider ID', card.dataset.providerId) +
         '</div>';
 
     card.querySelector('.sso-provider-remove').addEventListener('click', function () {
         card.remove();
     });
 
+    card.querySelector('.sso-provider-name').addEventListener('input', function () {
+        retitleProviders(card.closest('.sso-panel') || document);
+    });
+
+    card.querySelectorAll('.sso-copy').forEach(function (button) {
+        button.addEventListener('click', function () {
+            copyText(button.dataset.copy).then(function () {
+                var span = button.querySelector('span');
+                var previous = span.textContent;
+                span.textContent = 'Copied';
+                setTimeout(function () { span.textContent = previous; }, 1500);
+            });
+        });
+    });
+
     return card;
 }
 
-function renumberProviders(view) {
-    Array.from(view.querySelectorAll('.sso-provider .sso-provider-title')).forEach(function (t, idx) {
-        t.textContent = 'Provider ' + (idx + 1);
+/// Each card is titled by what the administrator typed, so several providers can be told
+/// apart at a glance; a card with no name yet falls back to its position.
+function retitleProviders(view) {
+    Array.from(view.querySelectorAll('.sso-provider')).forEach(function (card, idx) {
+        var title = card.querySelector('.sso-provider-title');
+        var name = card.querySelector('.sso-provider-name');
+        if (title) {
+            title.textContent = (name && name.value.trim()) || ('Provider ' + (idx + 1));
+        }
     });
 }
 
@@ -426,5 +452,33 @@ function setVal(view, id, v) { var e = view.querySelector('#' + id); if (e) e.va
 function getChk(view, id) { var e = view.querySelector('#' + id); return e ? e.checked : false; }
 function setChk(view, id, v) { var e = view.querySelector('#' + id); if (e) e.checked = v; }
 function newId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
+/// One printed value with a button that puts it on the clipboard.
+function copyRow(label, value) {
+    return '<div class="sso-copy-row">' +
+        '<span class="sso-copy-label">' + escHtml(label) + '</span>' +
+        '<code>' + escHtml(value) + '</code>' +
+        '<button type="button" is="emby-button" class="raised sso-copy" ' +
+            'data-copy="' + escAttr(value) + '"><span>Copy</span></button>' +
+        '</div>';
+}
+
+/// navigator.clipboard needs a secure context, which a LAN server over plain HTTP is
+/// not, so fall back to the old selection trick there.
+function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(text);
+    }
+
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    try { document.execCommand('copy'); } finally { document.body.removeChild(area); }
+    return Promise.resolve();
+}
+
 function escHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
-function escAttr(s) { return escHtml(s).replace(/"/g, '&quot;'); }
+function escAttr(s) { return escHtml(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }

@@ -62,6 +62,34 @@ public sealed class LoginBrandingTests : IAsyncLifetime
         Assert.Equal(House, await DisclaimerAsync());
     }
 
+    [Fact]
+    public async Task Turning_the_branding_button_off_removes_it()
+    {
+        await _env.PatchConfigAsync(config =>
+            config["Providers"]!.AsArray()[0]!["Name"] = "Authentik");
+        Assert.Contains("/sso/oidc/start/", await DisclaimerAsync());
+
+        await _env.PatchConfigAsync(config => config["AddLoginButtonToBranding"] = false);
+
+        Assert.DoesNotContain("/sso/oidc/start/", await DisclaimerAsync());
+    }
+
+    [Fact]
+    public async Task The_buttons_are_there_after_a_restart_without_anybody_saving()
+    {
+        await _env.PatchConfigAsync(config =>
+            config["Providers"]!.AsArray()[0]!["Name"] = "Authentik");
+
+        // Clear the branding behind the plugin's back, the way a server that was
+        // configured before this version would come up.
+        await SetDisclaimerAsync(string.Empty);
+        Assert.Empty(await DisclaimerAsync());
+
+        await _env.RestartServerAsync();
+
+        Assert.Contains("/sso/oidc/start/", await DisclaimerAsync());
+    }
+
     /// <summary>Jellyfin's branding as any visitor of the login page receives it.</summary>
     private async Task<string> DisclaimerAsync()
     {

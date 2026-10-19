@@ -10,7 +10,14 @@
        data-controller="__plugin/SSO Authentication.js">
   <style>
     /* ── Tabs (horizontal, Media-Bar style) ── */
-    .sso-title-rule { max-width: 800px; margin: 1em 0; }
+    .sso-title-rule { margin: 1em 0; }
+    .sso-copy-row {
+      display: flex; align-items: center; gap: .6em;
+      padding: .15em 0; flex-wrap: wrap;
+    }
+    .sso-copy-label { min-width: 14em; }
+    .sso-copy-row code { word-break: break-all; }
+    .sso-copy { padding: .2em .8em; font-size: .85em; margin: 0; }
     .sso-tabs { display: flex; flex-wrap: wrap; gap: .25em; margin-bottom: 1.5em; }
     .sso-tab {
       background: none; border: none; cursor: pointer;
@@ -111,6 +118,29 @@
                 On its own this changes nothing visible: it decides what
                 <code>/sso/oidc/logout</code> does. Jellyfin's own logout button can only be
                 wired to it with a snippet in the web client — see docs/login-and-logout.md.
+              </div>
+            </div>
+            <div class="checkboxContainer">
+              <label>
+                <input id="AddLoginButtonToBranding" type="checkbox" is="emby-checkbox" />
+                <span>Put a login button on the login page</span>
+              </label>
+              <div class="fieldDescription">
+                Writes one button per enabled provider into Jellyfin's login disclaimer.
+                Turn it off if you place your own button with the JavaScript Injector and
+                do not want a second one below the form.
+              </div>
+            </div>
+            <div class="checkboxContainer">
+              <label>
+                <input id="InjectLoginButtonIntoForm" type="checkbox" is="emby-checkbox" />
+                <span>Put the button inside the login form</span>
+              </label>
+              <div class="fieldDescription">
+                Adds a small script to Jellyfin's web page as it is served, so the button
+                sits with <em>Sign In</em> instead of below the form. Nothing is written to
+                disk, and turning it off removes it again. Leave the setting above on as
+                well only if you want a button in both places.
               </div>
             </div>
             <div class="checkboxContainer">

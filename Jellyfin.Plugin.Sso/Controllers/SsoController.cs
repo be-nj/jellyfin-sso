@@ -60,6 +60,96 @@ public sealed class SsoController : ControllerBase
     /// it asks which one. The URL never changes, so the login button can be static.
     /// </summary>
     /// <summary>
+    /// The script that places the login button inside Jellyfin's login form. Served only
+    /// when the administrator asked for it; otherwise it is an empty file, so a cached
+    /// index.html cannot keep a button alive after the switch is turned off.
+    /// </summary>
+    [HttpGet("login-button.js")]
+    [AllowAnonymous]
+    public IActionResult LoginButtonScript()
+    {
+        var config = Plugin.Instance?.Configuration;
+        var providers = config is { InjectLoginButtonIntoForm: true } ? EnabledProviders() : [];
+
+        Response.Headers.CacheControl = "no-cache";
+
+        if (providers.Count == 0)
+        {
+            return Content("/* SSO: the in-form login button is off. */", "application/javascript");
+        }
+
+        var basePath = BasePath();
+        var buttons = providers.Select(p => new
+        {
+            name = string.IsNullOrWhiteSpace(p.Name) ? "SSO" : p.Name,
+            href = $"{basePath}/sso/oidc/start/{Uri.EscapeDataString(p.Id)}",
+            icon = $"{basePath}/sso/icon/{ProviderIcons.SlugFor(p.Name, p.Authority)}",
+        });
+
+        var json = System.Text.Json.JsonSerializer.Serialize(buttons);
+
+        // Written as plain ES5 so it runs in whatever a television calls a browser.
+        var script = $$"""
+            (function () {
+              var buttons = {{json}};
+
+              function form() {
+                return document.querySelector('.loginForm')
+                  || document.querySelector('form.login')
+                  || document.querySelector('#loginPage form')
+                  || document.querySelector('form');
+              }
+
+              function onLoginPage() {
+                var hash = (location.hash || '').toLowerCase();
+                return hash.indexOf('login') !== -1
+                  || document.querySelector('input[type="password"]') !== null;
+              }
+
+              function place() {
+                if (!onLoginPage() || document.querySelector('.sso-form-button')) return;
+                var target = form();
+                if (!target) return;
+
+                buttons.forEach(function (button) {
+                  var link = document.createElement('a');
+                  link.className = 'raised block emby-button sso-form-button';
+                  link.setAttribute('data-role', 'button');
+                  link.href = button.href;
+                  link.style.display = 'flex';
+                  link.style.alignItems = 'center';
+                  link.style.justifyContent = 'center';
+                  link.style.gap = '.6em';
+
+                  var mark = document.createElement('img');
+                  mark.src = button.icon;
+                  mark.alt = '';
+                  mark.width = 20;
+                  mark.height = 20;
+
+                  var label = document.createElement('span');
+                  label.textContent = 'Login with ' + button.name;
+
+                  link.appendChild(mark);
+                  link.appendChild(label);
+                  target.appendChild(link);
+                });
+              }
+
+              // jellyfin-web is a single page: the form arrives, and comes back, long
+              // after this script runs.
+              document.addEventListener('DOMContentLoaded', place);
+              window.addEventListener('hashchange', function () { setTimeout(place, 200); });
+              new MutationObserver(function () { place(); })
+                .observe(document.documentElement, { childList: true, subtree: true });
+              place();
+            })();
+            """;
+
+        return Content(script, "application/javascript");
+    }
+
+    /// <summary>
     /// The mark on a provider's login button. Served from here rather than from a CDN so
     /// that a login page on a LAN without internet still renders it, and so that nobody
     /// outside learns who visits the login page.

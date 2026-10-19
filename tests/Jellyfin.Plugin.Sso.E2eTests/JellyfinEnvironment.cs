@@ -113,6 +113,37 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
     /// Deletes everything an earlier test created and writes a known plugin configuration:
     /// group "media" sees Movies, "kids" sees Kids, "jellyfin-admins" is admin.
     /// </summary>
+    /// <summary>
+    /// Restarts the server container and waits until it answers again. Used by the tests
+    /// that care about what the plugin does at startup rather than on a save.
+    /// </summary>
+    public async Task RestartServerAsync()
+    {
+        await _jellyfin.StopAsync();
+        await _jellyfin.StartAsync();
+
+        using var probe = TrustingClient();
+        for (var attempt = 0; attempt < 120; attempt++)
+        {
+            try
+            {
+                var response = await probe.GetAsync($"{BaseUrl}/Startup/User");
+                if (response.IsSuccessStatusCode)
+                {
+                    return;
+                }
+            }
+            catch (HttpRequestException)
+            {
+                // The container is still coming up.
+            }
+
+            await Task.Delay(500);
+        }
+
+        throw new InvalidOperationException("Jellyfin did not come back after a restart.");
+    }
+
     public async Task ResetAsync()
     {
         foreach (var user in await ListUsersAsync())

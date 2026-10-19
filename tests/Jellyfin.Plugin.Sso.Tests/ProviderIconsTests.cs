@@ -42,6 +42,14 @@ public sealed class ProviderIconsTests
         Assert.EndsWith("</svg>", svg);
         Assert.Contains("viewBox=\"0 0 24 24\"", svg);
         Assert.DoesNotContain("<script", svg, StringComparison.OrdinalIgnoreCase);
+
+        // A mark with no colour or no path data renders as nothing, or as a stray dot —
+        // which is exactly what shipped once, because the wrapper was all that was
+        // checked here.
+        Assert.Matches("(fill|stroke)=\"#[0-9A-Fa-f]{6}\"", svg);
+        Assert.Matches("(d|cx)=\"[A-Za-z0-9][^\"]{3,}\"", svg);
+        Assert.DoesNotContain("=\"0\"", svg);
+        Assert.DoesNotContain("=\"1\"", svg);
     }
 
     [Fact]

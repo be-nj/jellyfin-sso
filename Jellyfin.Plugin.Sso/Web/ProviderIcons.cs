@@ -53,24 +53,22 @@ public static class ProviderIcons
     /// <summary>The icon as an SVG document, ready to serve.</summary>
     public static string Svg(string slug)
     {
-        if (!Known.TryGetValue(slug, out var icon))
+        if (Known.TryGetValue(slug, out var icon))
         {
-            return string.Format(
-                CultureInfo.InvariantCulture,
-                "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" width=\"24\" height=\"24\">"
-                + "<g fill=\"none\" stroke=\"0\" stroke-width=\"2\" stroke-linecap=\"round\">"
-                + "<path d=\"1\"/></g>"
-                + "<circle cx=\"15.8\" cy=\"12\" r=\"4.2\" fill=\"none\" stroke=\"0\" stroke-width=\"2\"/>"
-                + "<circle cx=\"15.8\" cy=\"12\" r=\"1.3\" fill=\"0\"/></svg>",
-                Fallback.Colour,
-                Fallback.Path);
+            return Document($"<path fill=\"{icon.Colour}\" d=\"{icon.Path}\"/>");
         }
 
-        return string.Format(
-            CultureInfo.InvariantCulture,
-            "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" width=\"24\" height=\"24\">"
-            + "<path fill=\"0\" d=\"1\"/></svg>",
-            icon.Colour,
-            icon.Path);
+        // The plugin's own mark: three strands meeting at a keyhole, the same shape as
+        // the icon Jellyfin shows for the plugin itself.
+        var c = Fallback.Colour;
+        return Document(
+            $"<g fill=\"none\" stroke=\"{c}\" stroke-width=\"2\" stroke-linecap=\"round\">"
+            + $"<path d=\"{Fallback.Path}\"/></g>"
+            + $"<circle cx=\"15.8\" cy=\"12\" r=\"4.4\" fill=\"none\" stroke=\"{c}\" stroke-width=\"2\"/>"
+            + $"<circle cx=\"15.8\" cy=\"12\" r=\"1.4\" fill=\"{c}\"/>");
     }
+
+    private static string Document(string body)
+        => "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" "
+            + "width=\"24\" height=\"24\" role=\"img\">" + body + "</svg>";
 }

@@ -12,6 +12,13 @@ public sealed class PendingStateStore
 {
     private static readonly TimeSpan DefaultTtl = TimeSpan.FromMinutes(10);
 
+    /// <summary>
+    /// How many logins may be in flight. Anyone can start one without signing in, and
+    /// each entry lives for ten minutes, so the store needs an end as well as a clock.
+    /// Ten thousand is far beyond a household and still only a few megabytes.
+    /// </summary>
+    internal const int MaxPending = 10_000;
+
     private readonly TimeSpan _ttl;
 
     public PendingStateStore()
@@ -58,6 +65,16 @@ public sealed class PendingStateStore
             DateTimeOffset.UtcNow.Add(_ttl),
             quickConnectCode,
             linkUserId);
+
+        if (_store.Count >= MaxPending)
+        {
+            // Drop the oldest rather than refuse the newest: a burst of abandoned logins
+            // must not keep the household from signing in.
+            foreach (var oldest in _store.OrderBy(e => e.Value.Expiry).Take(_store.Count - MaxPending + 1))
+            {
+                _store.TryRemove(oldest.Key, out _);
+            }
+        }
 
         _store[state] = pending;
         return (state, pending);

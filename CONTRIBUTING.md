@@ -141,6 +141,15 @@ That pass has found defects in the code as often as in the text — most recentl
 URI built without the server's sub-path, which broke SSO for anyone running Jellyfin under
 a *Base URL*.
 
+### Issues
+
+Everything found gets an issue, while it is fresh: a defect noticed in passing, an idea
+put off, a gap a test exposed. A fixed one is closed with the commit, what the cause
+turned out to be, and the test that now covers it; deliberately deferred items live in one
+open issue so the decision stays visible. The record is public on purpose — a plugin that
+sits in front of a household's accounts should be judged on what its author found and
+fixed, not on the absence of a list.
+
 ### Review policy
 
 Anything touching the login, the token handling or account linking gets reviewed before it

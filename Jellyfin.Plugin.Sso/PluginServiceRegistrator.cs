@@ -22,5 +22,15 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<PermissionSync>();
         serviceCollection.AddSingleton<LoginBranding>();
         serviceCollection.AddScoped<IAuthenticationProvider, SsoAuthenticationProvider>();
+
+        // The login buttons are written into Jellyfin's branding. Without this they would
+        // only appear after an administrator saves the configuration, which a plugin
+        // update does not do.
+        serviceCollection.AddHostedService<LoginBrandingStartup>();
+
+        // Optional: puts the login button inside Jellyfin's login form by adding a
+        // script tag to index.html as it is served.
+        serviceCollection.AddSingleton<Microsoft.AspNetCore.Hosting.IStartupFilter,
+            LoginFormScriptInjection>();
     }
 }
