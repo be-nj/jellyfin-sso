@@ -143,7 +143,9 @@ a *Base URL*.
 
 ### Checking a release against its source
 
-Every release ZIP is built deterministically, so anyone can rebuild it and compare:
+Every release ZIP is built with the build date taken from the commit, source paths mapped
+to `/src` and the SDK pinned in `global.json`. On one machine that is enough for two clean
+builds to produce identical bytes:
 
 ```bash
 git checkout v1.12.7
@@ -151,10 +153,11 @@ SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) scripts/package.sh 1.12.7.0
 md5sum dist/jellyfin-sso_1.12.7.0.zip        # must match the checksum in manifest.json
 ```
 
-Three things would otherwise differ between two machines and are pinned for this reason:
-the build date (taken from the commit), the absolute path of the sources (mapped to
-`/src`), and the SDK patch level (`global.json`). A different SDK still produces different
-bytes — that is what the pin is for.
+**A rebuild on a different machine does not match the published artifact yet.** Measured
+on v1.12.6 and v1.12.7: the eight dependency DLLs come out identical, the plugin assembly
+does not, even with the SDK CI used. The investigation and what has been ruled out are in
+[issue #14](https://github.com/be-nj/jellyfin-sso/issues/14). Until that is closed, the
+attestation below is the stronger check of the two.
 
 The release also carries a provenance attestation, which answers the other half of the
 question — that the published file came out of this repository's workflow:
@@ -178,6 +181,11 @@ Anything touching the login, the token handling or account linking gets reviewed
 is merged — by a second person where there is one, and otherwise by a deliberate second
 pass with a different lens than the one that wrote it. Current practice, and what the last
 round of it found, is in [docs/reviews/](docs/reviews/).
+
+`main` takes no direct pushes, from anybody, including the maintainer and the release
+workflow: every change arrives as a pull request that the test matrix has to pass, and
+auto-merge lands it when it does. That is also why the release publishes its manifest
+through a pull request rather than pushing it.
 
 The project is open to co-maintainers, and the rule above is the part of it that does not
 wait for one: no change to the authentication path goes in on the strength of a green test
