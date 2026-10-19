@@ -1,18 +1,12 @@
 name: Tests
 
-# Prose, screenshots and the published manifest do not change what the plugin does, and
-# GitHub itself commits to CNAME whenever the Pages domain is touched — none of that is
-# worth a full test matrix.
+# No path filter on purpose. main requires these checks, and a check that does not run
+# on a documentation-only pull request never reports, so auto-merge waits for ever. The
+# matrix is cheap enough to run on everything.
 on:
   push:
     branches: [main]
-    paths-ignore: &prose
-      - '**/*.md'
-      - 'docs/**'
-      - 'CNAME'
-      - 'LICENSE'
   pull_request:
-    paths-ignore: *prose
 
 permissions:
   contents: read
