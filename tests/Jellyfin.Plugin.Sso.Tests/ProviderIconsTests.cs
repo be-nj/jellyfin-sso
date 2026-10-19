@@ -60,7 +60,7 @@ public sealed class ProviderIconsTests
             basePath: string.Empty);
 
         Assert.Contains("<img src=\"/sso/icon/keycloak\"", block);
-        Assert.Contains("width=\"20\" height=\"20\"", block);
+        Assert.Contains("width=\"22\" height=\"22\"", block);
     }
 
     [Fact]

@@ -74,6 +74,22 @@ public sealed class LoginBrandingTests : IAsyncLifetime
         Assert.DoesNotContain("/sso/oidc/start/", await DisclaimerAsync());
     }
 
+    [Fact]
+    public async Task The_button_is_styled_through_jellyfins_own_custom_css()
+    {
+        await _env.PatchConfigAsync(config =>
+            config["Providers"]!.AsArray()[0]!["Name"] = "Authentik");
+
+        using var client = JellyfinEnvironment.TrustingClient();
+        var branding = JsonNode.Parse(
+            await client.GetStringAsync($"{_env.BaseUrl}/Branding/Configuration"));
+        var css = branding?["CustomCss"]?.GetValue<string>() ?? string.Empty;
+
+        // Without this the button is a small pill under the full-width buttons above it.
+        Assert.Contains(".sso-login-button", css);
+        Assert.Contains("width:100%", css);
+    }
+
     /// <summary>Jellyfin's branding as any visitor of the login page receives it.</summary>
     private async Task<string> DisclaimerAsync()
     {
