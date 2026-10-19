@@ -19,7 +19,7 @@ Reviewed at `f66801c`; fixes landed in `0decb9e`, `1c6c6f5`, `279d2a3` and `f44d
 | 6 | Two admin link endpoints; the hardening went to the unused one | medium | [#7](https://github.com/be-nj/jellyfin-sso/issues/7) |
 | 7 | The configuration page's stylesheet never reached the browser | low | [#4](https://github.com/be-nj/jellyfin-sso/issues/4) |
 | 8 | No HTTP timeout, unsynchronised configuration writes, an uncapped group list, a 500 on a missing ID token, caller input echoed in errors | low | fixed in the commits above |
-| 9 | Pending-state cap, an apostrophe in `escAttr`, an 800-line controller, revocation latency | low | [#8](https://github.com/be-nj/jellyfin-sso/issues/8), open |
+| 9 | Pending-state cap, an apostrophe in `escAttr`, an 800-line controller, revocation latency | low | [#8](https://github.com/be-nj/jellyfin-sso/issues/8), closed |
 
 ## Every finding, and where it went
 
@@ -42,10 +42,10 @@ a chat log: each is either fixed with a test, or filed.
 | 12 | `SeenGroups` grew without a bound | 4 | fixed, `1c6c6f5` | `The_remembered_group_names_stop_at_the_cap` |
 | 13 | Dead wiring: the login button was never written | 5 | fixed, `0decb9e` · [#2](https://github.com/be-nj/jellyfin-sso/issues/2) | `Saving_the_configuration_puts_a_button_per_provider_into_the_branding` |
 | 14 | The configuration page's stylesheet never loaded | 5 | fixed, `f66801c` · [#4](https://github.com/be-nj/jellyfin-sso/issues/4) | `The_pages_own_stylesheet_reaches_the_dashboard` |
-| 15 | The test suite was weaker than its count | 5 | measured, improved 44 → 57 % · [#17](https://github.com/be-nj/jellyfin-sso/issues/17) | — |
+| 15 | The test suite was weaker than its count | 5 | measured, 44 → 72 % · [#17](https://github.com/be-nj/jellyfin-sso/issues/17) | — |
 | 16 | Stale comments | 5 | fixed, `1c6c6f5` | — |
-| 17 | `SsoController` is 800 lines | 5 | deferred · [#8](https://github.com/be-nj/jellyfin-sso/issues/8) | — |
-| 18 | Revocation waits for the next login | 5 | deferred, by design · [#8](https://github.com/be-nj/jellyfin-sso/issues/8) | — |
+| 17 | `SsoController` is 800 lines | 5 | fixed, `0ce0a13` · [#8](https://github.com/be-nj/jellyfin-sso/issues/8) | `SsoPagesTests` |
+| 18 | Revocation waits for the next login | 5 | fixed, `0ce0a13` · [#8](https://github.com/be-nj/jellyfin-sso/issues/8) | `A_logout_the_provider_announces_ends_the_session_it_names` |
 
 Found afterwards, while checking the claims this review had made:
 

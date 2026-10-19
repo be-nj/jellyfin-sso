@@ -77,10 +77,27 @@ internal sealed class KeycloakProvider : IRealIdentityProvider
     }
 
     /// <summary>Keycloak's login form.</summary>
+    public string LoginFormSelector => "#username";
+
     public async Task SignInAsync(IPage page, RealIdentityUser user)
     {
         await page.FillAsync("#username", user.Username);
         await page.FillAsync("#password", Password);
+        await page.ClickAsync("#kc-login");
+    }
+
+    /// <summary>One form with both fields, typed rather than filled.</summary>
+    public async Task SignInForTheRecordingAsync(IPage page, RealIdentityUser user)
+    {
+        await page.WaitForTimeoutAsync(1_200);
+        await page.Locator("#username").PressSequentiallyAsync(
+            user.Username, new LocatorPressSequentiallyOptions { Delay = 90 });
+        await page.WaitForTimeoutAsync(400);
+
+        // The password belongs to a container that is thrown away with the test run.
+        await page.Locator("#password").PressSequentiallyAsync(
+            Password, new LocatorPressSequentiallyOptions { Delay = 70 });
+        await page.WaitForTimeoutAsync(500);
         await page.ClickAsync("#kc-login");
     }
 

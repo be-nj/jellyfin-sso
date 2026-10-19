@@ -64,11 +64,12 @@ jobs:
         run: dotnet test tests/Jellyfin.Plugin.Sso.Tests -c Release
 
       # The container-backed providers run on every push; a release must not hinge on
-      # three upstream images being healthy at that minute.
+      # three upstream images being healthy at that minute. The demo recordings are
+      # documentation artifacts and start the same heavy providers, so they stay out too.
       - name: Run the e2e suite
         run: >
           dotnet test tests/Jellyfin.Plugin.Sso.E2eTests -c Release
-          --filter "Category!=RealIdp&Category!=Screenshots"
+          --filter "Category!=RealIdp&Category!=Screenshots&Category!=Demo"
 
       - name: Build the plugin package
         run: scripts/package.sh "${{ steps.version.outputs.version }}"

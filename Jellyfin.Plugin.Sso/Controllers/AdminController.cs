@@ -1,3 +1,4 @@
+using Jellyfin.Plugin.Sso.Auth;
 using Jellyfin.Plugin.Sso.Configuration;
 using Jellyfin.Plugin.Sso.Web;
 using MediaBrowser.Controller.Library;
@@ -17,13 +18,18 @@ public sealed class AdminController : ControllerBase
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
     private readonly LoginBranding _branding;
+    private readonly LoginRateLimiter _limiter;
 
     public AdminController(
-        ILibraryManager libraryManager, IUserManager userManager, LoginBranding branding)
+        ILibraryManager libraryManager,
+        IUserManager userManager,
+        LoginBranding branding,
+        LoginRateLimiter limiter)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _branding = branding;
+        _limiter = limiter;
     }
 
     // ─── Config ──────────────────────────────────────────────────────────────
@@ -41,6 +47,10 @@ public sealed class AdminController : ControllerBase
         // The login buttons live in Jellyfin's branding, so they are rewritten here —
         // this is the only place a provider is ever enabled, renamed or disabled.
         _branding.Apply();
+
+        // An administrator who raises the request limit is usually doing it because
+        // somebody is being turned away right now, so the counts start again here.
+        _limiter.Reset();
         return Ok();
     }
 

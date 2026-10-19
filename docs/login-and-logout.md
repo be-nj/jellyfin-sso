@@ -72,12 +72,17 @@ document.addEventListener('DOMContentLoaded', function () {
 ```
 
 **The mark on the button** comes from the provider itself where possible: with *Use the
-provider's own logo on the button* on (the default), the server fetches the logo your
-provider shows on its own login page — Authentik's brand logo, otherwise the icon the
-login page declares — caches it for twelve hours and serves it from
+provider's own logo on the button* on (the default), the server fetches the image your
+provider shows on its own login page, caches it for twelve hours and serves it from
 `/sso/icon/provider/<providerId>`. A household that rebranded its Authentik sees its own
 mark in Jellyfin. The fetch happens on the server, so nobody's browser contacts the
 provider before they choose to sign in, and anything that is not a small image is ignored.
+
+Authentik publishes two brand images, and the favicon is taken before the logo: the logo
+is the wide lockup from the top of its login page — the stock one is an icon with the
+wordmark beside it — and a wide image in a mark-sized box is a smudge rather than a mark.
+A provider that offers only a wide image still gets it: the mark is 22 pixels tall and as
+wide as the picture needs, up to a limit, rather than squeezed into a square.
 
 Without a reachable logo, or with the setting off, the plugin's own marks are served:
 `/sso/icon/authentik`, `/sso/icon/keycloak`, `/sso/icon/authelia`, `/sso/icon/google`,

@@ -39,8 +39,23 @@ internal interface IRealIdentityProvider : IAsyncDisposable
     /// </summary>
     string? ServerBaseUrl { get; }
 
+    /// <summary>
+    /// What is on screen once this provider's own login form has arrived. The three look
+    /// nothing alike, and the demo recording has to know when the page it is waiting for
+    /// is there.
+    /// </summary>
+    string LoginFormSelector { get; }
+
     /// <summary>Fills in this provider's own login form.</summary>
     Task SignInAsync(IPage page, RealIdentityUser user);
+
+    /// <summary>
+    /// The same login, typed at a pace a viewer can follow, for the recorded demo. The
+    /// default is the ordinary fill — instant, which is right for a test and wrong for a
+    /// clip — so a provider only overrides it to be watchable.
+    /// </summary>
+    Task SignInForTheRecordingAsync(IPage page, RealIdentityUser user)
+        => SignInAsync(page, user);
 
     /// <summary>Whatever the provider can say about a failed login; shown when a test fails.</summary>
     Task<string> DiagnosticsAsync() => Task.FromResult(string.Empty);

@@ -64,7 +64,34 @@ public sealed class ProviderIconsTests
             basePath: string.Empty);
 
         Assert.Contains("<img src=\"/sso/icon/provider/p1\"", block);
-        Assert.Contains("width=\"22\" height=\"22\"", block);
+        Assert.Contains("height=\"22\"", block);
+    }
+
+    [Fact]
+    public void The_mark_is_not_given_a_width_it_has_to_fit()
+    {
+        var block = LoginButtonMarkup.Build(
+            [new ProviderConfig { Id = "p1", Name = "Authentik", Enabled = true }],
+            basePath: string.Empty);
+
+        // The picture behind that URL is whatever the provider serves — Authentik's own
+        // default brand image is a wordmark four times as wide as it is tall. Forced into
+        // a square it collapsed into a coloured dash, so the width is left to the image.
+        Assert.DoesNotContain("width=\"22\"", block);
+    }
+
+    [Fact]
+    public void A_mark_that_is_not_square_keeps_its_shape()
+    {
+        var css = LoginButtonMarkup.Css(anyProvider: true);
+
+        Assert.Contains(".sso-login-mark{", css, StringComparison.Ordinal);
+        Assert.Contains("height:22px", css, StringComparison.Ordinal);
+        Assert.Contains("width:auto", css, StringComparison.Ordinal);
+        Assert.Contains("object-fit:contain", css, StringComparison.Ordinal);
+        // A square mark still occupies its place before the picture arrives, so the
+        // label does not jump sideways when it does.
+        Assert.Contains("min-width:22px", css, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -10,6 +10,13 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public const int MaxSeenGroups = 500;
 
+    /// <summary>
+    /// The default for <see cref="LoginRequestsPerMinute"/>. A login spends two of those
+    /// requests — the start and the provider's callback — or three with Quick Connect, so
+    /// sixty is twenty logins a minute from one address.
+    /// </summary>
+    public const int DefaultLoginRequestsPerMinute = 60;
+
     public List<ProviderConfig> Providers { get; set; } = [];
     public List<GroupMappingConfig> GroupMappings { get; set; } = [];
     public List<LinkConfig> Links { get; set; } = [];
@@ -60,6 +67,14 @@ public class PluginConfiguration : BasePluginConfiguration
     /// SSO, but their policy is left exactly as an administrator set it.
     /// </summary>
     public List<Guid> SyncExcludedUserIds { get; set; } = [];
+
+    /// <summary>
+    /// How many requests one network address may make per minute to the parts of the login
+    /// that need no Jellyfin token: starting a login, the provider's callback, a Quick
+    /// Connect approval and a back-channel logout. Everyone behind the same NAT counts as
+    /// one address. Zero turns the limit off.
+    /// </summary>
+    public int LoginRequestsPerMinute { get; set; } = DefaultLoginRequestsPerMinute;
 }
 
 public class ProviderConfig

@@ -149,6 +149,10 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
             },
             ["Links"] = new JsonArray(),
             ["SeenGroups"] = new JsonArray(),
+            // Every test in this suite reaches the server from the same address, and a
+            // suite signs in far more often per minute than a household does. The limit
+            // is switched off here and turned on by the test that is about it.
+            ["LoginRequestsPerMinute"] = 0,
         };
 
         var save = await _admin.PostAsJsonAsync("/sso/admin/config", config);
