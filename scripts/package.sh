@@ -36,13 +36,16 @@ EXTRA_DLLS=(
 )
 
 # Deterministic build: the same source has to produce the same bytes, so anyone can
-# rebuild a release and compare the checksum with the one in the manifest. The compiler
-# writes the source paths into the PDB and the assembly, so they are normalised too.
+# rebuild a release and compare the checksum with the one in the manifest. Three things
+# otherwise differ between two machines — the build date, the absolute path the sources
+# sit at, and the SDK patch level — so the date comes from the commit, the path is mapped
+# to /src, and global.json pins the SDK.
 export SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(git -C "$REPO_ROOT" log -1 --format=%ct 2>/dev/null || echo 1700000000)}"
 
 dotnet publish "$PLUGIN_SRC" -c Release -o "$PUBLISH_DIR" \
     -p:Version="$VERSION" -p:AssemblyVersion="$VERSION" -p:FileVersion="$VERSION" \
-    -p:Deterministic=true -p:ContinuousIntegrationBuild=true -p:DebugType=none
+    -p:Deterministic=true -p:ContinuousIntegrationBuild=true -p:DebugType=none \
+    -p:PathMap="$REPO_ROOT=/src"
 
 mkdir -p "$DIST_DIR"
 rm -f "$ZIP"

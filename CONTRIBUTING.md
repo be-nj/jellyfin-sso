@@ -141,6 +141,28 @@ That pass has found defects in the code as often as in the text — most recentl
 URI built without the server's sub-path, which broke SSO for anyone running Jellyfin under
 a *Base URL*.
 
+### Checking a release against its source
+
+Every release ZIP is built deterministically, so anyone can rebuild it and compare:
+
+```bash
+git checkout v1.12.7
+SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) scripts/package.sh 1.12.7.0
+md5sum dist/jellyfin-sso_1.12.7.0.zip        # must match the checksum in manifest.json
+```
+
+Three things would otherwise differ between two machines and are pinned for this reason:
+the build date (taken from the commit), the absolute path of the sources (mapped to
+`/src`), and the SDK patch level (`global.json`). A different SDK still produces different
+bytes — that is what the pin is for.
+
+The release also carries a provenance attestation, which answers the other half of the
+question — that the published file came out of this repository's workflow:
+
+```bash
+gh attestation verify jellyfin-sso_1.12.7.0.zip --owner be-nj
+```
+
 ### Issues
 
 Everything found gets an issue, while it is fresh: a defect noticed in passing, an idea
