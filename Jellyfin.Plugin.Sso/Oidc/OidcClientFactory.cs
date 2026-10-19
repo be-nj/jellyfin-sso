@@ -11,13 +11,24 @@ namespace Jellyfin.Plugin.Sso.Oidc;
 /// </summary>
 public sealed class OidcClientFactory : IDisposable
 {
+    /// <summary>
+    /// How long a discovery document — and with it the provider's signing keys — is
+    /// reused. A provider that rotates its keys would otherwise fail every login until
+    /// Jellyfin restarts.
+    /// </summary>
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(30);
+
+    private sealed record CacheEntry(DiscoveryDocumentResponse Document, DateTimeOffset Expiry);
+
     private readonly HttpClient _http;
     private readonly ILogger<OidcClientFactory> _logger;
-    private readonly ConcurrentDictionary<string, DiscoveryDocumentResponse> _cache = new();
+    private readonly ConcurrentDictionary<string, CacheEntry> _cache = new();
 
     public OidcClientFactory(ILogger<OidcClientFactory> logger)
     {
-        _http = new HttpClient();
+        // A provider that accepts the connection and then says nothing must not hold a
+        // login page open for the default hundred seconds.
+        _http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
         _http.DefaultRequestHeaders.UserAgent.Add(
             new ProductInfoHeaderValue("Jellyfin.Plugin.Sso", "1.0"));
         _logger = logger;
@@ -30,8 +41,12 @@ public sealed class OidcClientFactory : IDisposable
         // would otherwise keep talking to the old provider until Jellyfin restarts.
         var cacheKey = $"{provider.Id}|{provider.Authority}";
 
-        if (_cache.TryGetValue(cacheKey, out var cached) && !cached.IsError)
-            return cached;
+        if (_cache.TryGetValue(cacheKey, out var cached)
+            && !cached.Document.IsError
+            && cached.Expiry > DateTimeOffset.UtcNow)
+        {
+            return cached.Document;
+        }
 
         _logger.LogInformation("Fetching OIDC discovery for provider {Name} ({Authority})",
             provider.Name, provider.Authority);
@@ -55,7 +70,7 @@ public sealed class OidcClientFactory : IDisposable
             throw new InvalidOperationException(
                 $"OIDC discovery failed for {provider.Authority}: {doc.Error}");
 
-        _cache[cacheKey] = doc;
+        _cache[cacheKey] = new CacheEntry(doc, DateTimeOffset.UtcNow.Add(CacheTtl));
         return doc;
     }
 

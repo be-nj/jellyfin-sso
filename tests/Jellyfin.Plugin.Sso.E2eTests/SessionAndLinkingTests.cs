@@ -54,6 +54,76 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
         Assert.Contains($"/sso/oidc/start/{JellyfinEnvironment.SecondProviderId}", body);
     }
 
+    // ─── Administrator linking ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task An_administrator_links_an_account_by_subject()
+    {
+        var (userId, _) = await _env.CreateLocalUserWithTokenAsync("ben-linked");
+
+        var response = await PostLinkAsync(JellyfinEnvironment.ProviderId, "sub-42", userId);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var link = Assert.Single((await _env.PluginConfigAsync())["Links"]!.AsArray());
+        Assert.Equal("sub-42", link!["Sub"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task A_link_to_a_user_Jellyfin_does_not_have_is_refused()
+    {
+        var response = await PostLinkAsync(JellyfinEnvironment.ProviderId, "sub-42", Guid.NewGuid());
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Empty((await _env.PluginConfigAsync())["Links"]!.AsArray());
+    }
+
+    [Fact]
+    public async Task A_link_to_a_provider_that_does_not_exist_is_refused()
+    {
+        var (userId, _) = await _env.CreateLocalUserWithTokenAsync("ben-unknown-provider");
+
+        var response = await PostLinkAsync("no-such-provider", "sub-42", userId);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Empty((await _env.PluginConfigAsync())["Links"]!.AsArray());
+    }
+
+    [Fact]
+    public async Task One_account_cannot_hold_two_identities_of_the_same_provider()
+    {
+        var (userId, _) = await _env.CreateLocalUserWithTokenAsync("ben-twice");
+        await PostLinkAsync(JellyfinEnvironment.ProviderId, "sub-42", userId);
+
+        var response = await PostLinkAsync(JellyfinEnvironment.ProviderId, "sub-43", userId);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Single((await _env.PluginConfigAsync())["Links"]!.AsArray());
+    }
+
+    [Fact]
+    public async Task The_same_identity_cannot_be_linked_twice()
+    {
+        var (first, _) = await _env.CreateLocalUserWithTokenAsync("ben-first");
+        var (second, _) = await _env.CreateLocalUserWithTokenAsync("ben-second");
+        await PostLinkAsync(JellyfinEnvironment.ProviderId, "sub-42", first);
+
+        var response = await PostLinkAsync(JellyfinEnvironment.ProviderId, "sub-42", second);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Single((await _env.PluginConfigAsync())["Links"]!.AsArray());
+    }
+
+    private async Task<HttpResponseMessage> PostLinkAsync(
+        string providerId, string sub, Guid jellyfinUserId)
+    {
+        using var client = JellyfinEnvironment.TrustingClient();
+        client.DefaultRequestHeaders.Authorization = JellyfinEnvironment.TokenHeader(_env.AdminToken);
+
+        return await client.PostAsJsonAsync(
+            $"{_env.BaseUrl}/sso/admin/links",
+            new { ProviderId = providerId, Sub = sub, JellyfinUserId = jellyfinUserId });
+    }
+
     [Fact]
     public async Task The_quick_connect_picker_keeps_the_code()
     {

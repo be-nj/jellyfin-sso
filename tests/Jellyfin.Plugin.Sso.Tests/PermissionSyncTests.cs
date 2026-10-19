@@ -7,7 +7,7 @@ using Jellyfin.Plugin.Sso.Oidc;
 using Jellyfin.Plugin.Sso.Provisioning;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Users;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 
 namespace Jellyfin.Plugin.Sso.Tests;
@@ -24,12 +24,13 @@ public sealed class PermissionSyncTests : IDisposable
 
     private readonly PluginHarness _harness = new();
     private readonly IUserManager _userManager = Substitute.For<IUserManager>();
+    private readonly RecordingLogger<PermissionSync> _log = new();
     private readonly PermissionSync _sync;
     private readonly Guid _userId = Guid.NewGuid();
 
     public PermissionSyncTests()
     {
-        _sync = new PermissionSync(_userManager, NullLogger<PermissionSync>.Instance);
+        _sync = new PermissionSync(_userManager, _log);
     }
 
     private void Map(string group, bool admin, params Guid[] libraries)
@@ -57,6 +58,40 @@ public sealed class PermissionSyncTests : IDisposable
     }
 
     private void OtherUsers(params User[] users) => _userManager.GetUsers().Returns(users);
+
+    [Fact]
+    public async Task Settings_this_plugin_does_not_own_survive_a_sync()
+    {
+        // An administrator set these in Jellyfin's own user screen. The plugin manages
+        // libraries and group permissions, not the rest of the policy.
+        var user = ExistingUser(admin: false);
+        _userManager.GetUserDto(user).Returns(new MediaBrowser.Model.Dto.UserDto
+        {
+            Policy = new UserPolicy
+            {
+                BlockedTags = ["horror"],
+                EnableRemoteAccess = false,
+                MaxActiveSessions = 2,
+                EnableUserPreferenceAccess = false,
+                EnableContentDeletion = true,
+            },
+        });
+
+        Map("media", admin: false, MoviesId);
+
+        await _sync.SyncAsync(_userId, Identity("media"));
+
+        var policy = CapturedPolicy();
+        Assert.Equal(["horror"], policy.BlockedTags);
+        Assert.False(policy.EnableRemoteAccess);
+        Assert.Equal(2, policy.MaxActiveSessions);
+        Assert.False(policy.EnableUserPreferenceAccess);
+        Assert.True(policy.EnableContentDeletion);
+
+        // …while the fields the plugin does own are still written.
+        Assert.Equal([MoviesId], policy.EnabledFolders);
+        Assert.False(policy.EnableAllFolders);
+    }
 
     [Fact]
     public async Task Live_tv_and_downloads_come_from_the_groups()
@@ -240,6 +275,49 @@ public sealed class PermissionSyncTests : IDisposable
         await _sync.SyncAsync(_userId, Identity("media"));
 
         Assert.Empty(CapturedPolicy().EnabledFolders);
+    }
+
+    [Fact]
+    public async Task A_mapping_that_differs_only_in_case_says_so_in_the_log()
+    {
+        Map("Media", false, MoviesId);
+
+        await _sync.SyncAsync(_userId, Identity("media"));
+
+        Assert.Contains(
+            _log.Warnings,
+            line => line.Contains("'Media'", StringComparison.Ordinal)
+                && line.Contains("'media'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_mapping_nobody_sent_is_not_worth_a_warning()
+    {
+        Map("downloaders", false, MoviesId);
+
+        await _sync.SyncAsync(_userId, Identity("media"));
+
+        Assert.Empty(_log.Warnings);
+    }
+
+    [Fact]
+    public async Task The_remembered_group_names_stop_at_the_cap()
+    {
+        _harness.Configuration.SeenGroups.AddRange(
+            Enumerable.Range(0, PluginConfiguration.MaxSeenGroups).Select(i => $"group-{i}"));
+
+        await _sync.SyncAsync(_userId, Identity("something-new"));
+
+        Assert.Equal(PluginConfiguration.MaxSeenGroups, _harness.Configuration.SeenGroups.Count);
+        Assert.DoesNotContain("something-new", _harness.Configuration.SeenGroups);
+    }
+
+    [Fact]
+    public async Task Group_names_the_provider_sent_are_remembered_for_the_autocomplete()
+    {
+        await _sync.SyncAsync(_userId, Identity("media", "media", "downloaders"));
+
+        Assert.Equal(["media", "downloaders"], _harness.Configuration.SeenGroups);
     }
 
     [Fact]

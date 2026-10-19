@@ -23,6 +23,7 @@ public sealed class SsoController : ControllerBase
     private readonly PermissionSync _permissions;
     private readonly EphemeralSecretStore _secrets;
     private readonly IQuickConnect _quickConnect;
+    private readonly MediaBrowser.Controller.Library.IUserManager _userManager;
     private readonly ILogger<SsoController> _logger;
 
     public SsoController(
@@ -33,6 +34,7 @@ public sealed class SsoController : ControllerBase
         PermissionSync permissions,
         EphemeralSecretStore secrets,
         IQuickConnect quickConnect,
+        MediaBrowser.Controller.Library.IUserManager userManager,
         ILogger<SsoController> logger)
     {
         _states = states;
@@ -42,6 +44,7 @@ public sealed class SsoController : ControllerBase
         _permissions = permissions;
         _secrets = secrets;
         _quickConnect = quickConnect;
+        _userManager = userManager;
         _logger = logger;
     }
 
@@ -132,7 +135,7 @@ public sealed class SsoController : ControllerBase
         string providerId, [FromQuery] string code, CancellationToken ct)
     {
         if (!_quickConnect.IsEnabled)
-            return BadRequest("Quick Connect is disabled on this server.");
+            return BadRequestText("Quick Connect is disabled on this server.");
 
         var provider = GetEnabledProvider(providerId);
         if (provider is null)
@@ -172,7 +175,7 @@ public sealed class SsoController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Logout(string? providerId, CancellationToken ct)
     {
-        var home = "/web/index.html";
+        var home = $"{BasePath()}/web/index.html";
         var config = Plugin.Instance?.Configuration;
         if (config is null || !config.SignOutOfIdentityProvider)
             return Redirect(home);
@@ -347,7 +350,8 @@ public sealed class SsoController : ControllerBase
                 msg.textContent = '';
                 try {
                   const providerId = document.getElementById('provider').value;
-                  const res = await fetch('/sso/link/start?providerId=' + encodeURIComponent(providerId), {
+                  const res = await fetch('{{BasePath()}}/sso/link/start?providerId='
+                    + encodeURIComponent(providerId), {
                     method: 'POST',
                     headers: { 'Authorization': 'MediaBrowser Token="' + accessToken + '"' },
                   });
@@ -422,55 +426,18 @@ public sealed class SsoController : ControllerBase
         if (CurrentUserId() is not { } userId)
             return Unauthorized("No Jellyfin user in this request.");
 
-        var removed = config.Links.RemoveAll(l =>
-            l.JellyfinUserId == userId
-            && (providerId is null || l.ProviderId == providerId));
-
-        if (removed == 0)
-            return NotFound("No link found for this account.");
-
-        Plugin.Instance.SaveConfiguration();
-        return Ok();
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Manual account linking (admin-only)
-    // ──────────────────────────────────────────────────────────────────────────
-
-    [HttpPost("admin/link")]
-    [Authorize(Policy = "RequiresElevation")]
-    public IActionResult LinkAccount(
-        [FromBody] LinkRequest req)
-    {
-        var config = Plugin.Instance!.Configuration;
-
-        if (config.Links.Any(l =>
-                l.ProviderId == req.ProviderId &&
-                string.Equals(l.Sub, req.Sub, StringComparison.Ordinal)))
+        lock (Plugin.ConfigurationLock)
         {
-            return Conflict("A link for this provider+sub already exists.");
+            var removed = config.Links.RemoveAll(l =>
+                l.JellyfinUserId == userId
+                && (providerId is null || l.ProviderId == providerId));
+
+            if (removed == 0)
+                return NotFound("No link found for this account.");
+
+            Plugin.Instance.SaveConfiguration();
         }
 
-        config.Links.Add(new LinkConfig
-        {
-            ProviderId = req.ProviderId,
-            Sub = req.Sub,
-            JellyfinUserId = req.JellyfinUserId,
-        });
-        Plugin.Instance.SaveConfiguration();
-
-        return Ok();
-    }
-
-    [HttpDelete("admin/link/{jellyfinUserId}")]
-    [Authorize(Policy = "RequiresElevation")]
-    public IActionResult UnlinkAccount(Guid jellyfinUserId)
-    {
-        var config = Plugin.Instance!.Configuration;
-        var removed = config.Links.RemoveAll(l => l.JellyfinUserId == jellyfinUserId);
-        if (removed == 0)
-            return NotFound("No link found for this user.");
-        Plugin.Instance.SaveConfiguration();
         return Ok();
     }
 
@@ -520,7 +487,7 @@ public sealed class SsoController : ControllerBase
                 // Authenticate as the web client with its device id. Jellyfin keys sessions
                 // by client + device id, so the token belongs to the same session the web
                 // app later plays on, instead of a second session that shares the device id.
-                const info = await fetch('/System/Info/Public').then(function(r){ return r.json(); });
+                const info = await fetch('{{BasePath()}}/System/Info/Public').then(function(r){ return r.json(); });
                 // Rough match of the names jellyfin-web reports, so the device list stays readable.
                 const ua = navigator.userAgent;
                 const device = /Edg\//.test(ua) ? 'Edge Chromium'
@@ -531,7 +498,7 @@ public sealed class SsoController : ControllerBase
                 const authHeader = 'MediaBrowser Client="Jellyfin Web", Device="' + device + '", DeviceId="'
                   + deviceId + '", Version="' + info.Version + '"';
 
-                const res = await fetch('/Users/AuthenticateByName', {
+                const res = await fetch('{{BasePath()}}/Users/AuthenticateByName', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
                   body: JSON.stringify({ Username: {{JsonEscape(username)}}, Pw: {{JsonEscape(secret)}} })
@@ -564,7 +531,7 @@ public sealed class SsoController : ControllerBase
                 localStorage.setItem(credsKey, JSON.stringify(creds));
 
                 msg.textContent = 'Login successful — redirecting…';
-                window.location.href = '/web/index.html';
+                window.location.href = '{{BasePath()}}/web/index.html';
               } catch(e) {
                 msg.textContent = 'SSO login failed: ' + e.message;
               }
@@ -583,15 +550,20 @@ public sealed class SsoController : ControllerBase
             .ConfigureAwait(false);
 
         if (!authorized)
-            return BadRequest("Quick Connect authorization failed. The code may have expired.");
+            return BadRequestText("Quick Connect authorization failed. The code may have expired.");
 
         var html = """
-            <!DOCTYPE html><html><body>
-            <script>
-            document.body.innerText = 'Login approved! You can close this tab and return to your app.';
-            </script>
-            <p>Login approved. You can close this tab and return to your app.</p>
-            </body></html>
+            <!DOCTYPE html>
+            <html><head><meta charset="utf-8"/><title>Login approved</title>
+            <style>
+              body{font-family:system-ui,sans-serif;background:#1c1c1c;color:#ddd;display:flex;
+                   align-items:center;justify-content:center;height:100vh;margin:0}
+              .card{max-width:24em;padding:2em;text-align:center;line-height:1.5}
+            </style>
+            </head><body><div class="card">
+            <h1>Login approved</h1>
+            <p>You can close this tab and go back to the app.</p>
+            </div></body></html>
             """;
 
         return Content(html, "text/html");
@@ -626,13 +598,16 @@ public sealed class SsoController : ControllerBase
         if (config.Links.Any(l => l.ProviderId == provider.Id && l.JellyfinUserId == linkUserId))
             return LinkResultPage("This account is already linked for that provider.", success: true);
 
-        config.Links.Add(new LinkConfig
+        lock (Plugin.ConfigurationLock)
         {
-            ProviderId = provider.Id,
-            Sub = identity.Sub,
-            JellyfinUserId = linkUserId,
-        });
-        Plugin.Instance.SaveConfiguration();
+            config.Links.Add(new LinkConfig
+            {
+                ProviderId = provider.Id,
+                Sub = identity.Sub,
+                JellyfinUserId = linkUserId,
+            });
+            Plugin.Instance.SaveConfiguration();
+        }
 
         _logger.LogInformation(
             "Self-service link created for user {UserId} on provider {Id}",
@@ -657,7 +632,7 @@ public sealed class SsoController : ControllerBase
             </head><body><div class="card">
             <h1>{{(success ? "Account linked" : "Linking failed")}}</h1>
             <p>{{Html(message)}}</p>
-            <p><a href="/web/index.html">Back to Jellyfin</a></p>
+            <p><a href="{{BasePath()}}/web/index.html">Back to Jellyfin</a></p>
             </div></body></html>
             """;
 
@@ -668,7 +643,7 @@ public sealed class SsoController : ControllerBase
     private IActionResult ProviderPicker(IReadOnlyList<ProviderConfig> providers, string queryString)
     {
         var buttons = string.Join("\n", providers.Select(p =>
-            $"<a class=\"choice\" href=\"/sso/oidc/start/{Uri.EscapeDataString(p.Id)}{queryString}\">"
+            $"<a class=\"choice\" href=\"{BasePath()}/sso/oidc/start/{Uri.EscapeDataString(p.Id)}{queryString}\">"
             + $"{Html(p.Name)}</a>"));
 
         var html = $$"""
@@ -714,6 +689,15 @@ public sealed class SsoController : ControllerBase
         return null;
     }
 
+    /// <summary>
+    /// The sub-path this server is published under, "" when it is at the root. Every link
+    /// and fetch in the pages below is absolute, so each one has to carry it.
+    /// </summary>
+    private string BasePath()
+        => ForwardedPaths.Prefix(
+            HttpContext.Request.Headers["X-Forwarded-Prefix"].FirstOrDefault(),
+            HttpContext.Request.PathBase.Value);
+
     /// <summary>The server's externally visible base address, honouring proxy headers.</summary>
     private string ExternalBaseUri()
     {
@@ -726,11 +710,7 @@ public sealed class SsoController : ControllerBase
         // A server published under a sub-path ("BaseUrl" in Jellyfin's network settings,
         // or a proxy that keeps the prefix) must keep that prefix in its redirect URI,
         // or the provider sends the browser to a path this server does not serve.
-        var prefix = req.Headers["X-Forwarded-Prefix"].FirstOrDefault()
-            ?? req.PathBase.Value
-            ?? string.Empty;
-
-        return $"{scheme}://{host}{prefix.TrimEnd('/')}";
+        return ForwardedPaths.BaseUri(scheme, host, BasePath());
     }
 
     /// <summary>
@@ -788,11 +768,4 @@ public sealed class SsoController : ControllerBase
 
     private static string JsonEscape(string s)
         => System.Text.Json.JsonSerializer.Serialize(s);
-}
-
-public sealed class LinkRequest
-{
-    public required string ProviderId { get; set; }
-    public required string Sub { get; set; }
-    public required Guid JellyfinUserId { get; set; }
 }

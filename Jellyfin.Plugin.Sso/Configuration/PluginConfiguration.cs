@@ -4,6 +4,12 @@ namespace Jellyfin.Plugin.Sso.Configuration;
 
 public class PluginConfiguration : BasePluginConfiguration
 {
+    /// <summary>
+    /// How many group names the autocomplete remembers. The names come from the provider,
+    /// so the list needs an end.
+    /// </summary>
+    public const int MaxSeenGroups = 500;
+
     public List<ProviderConfig> Providers { get; set; } = [];
     public List<GroupMappingConfig> GroupMappings { get; set; } = [];
     public List<LinkConfig> Links { get; set; } = [];

@@ -10,6 +10,13 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
     public static Plugin? Instance { get; private set; }
 
+    /// <summary>
+    /// Held while the configuration's lists are changed. Logins, linking and the admin
+    /// page all write the same object from different requests, and List&lt;T&gt; does not
+    /// survive that on its own.
+    /// </summary>
+    public static object ConfigurationLock { get; } = new();
+
     public Plugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer)
         : base(applicationPaths, xmlSerializer)
     {

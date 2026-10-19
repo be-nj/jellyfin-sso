@@ -47,6 +47,8 @@ public sealed class PermissionSync
             .Where(m => identity.Groups.Contains(m.Group, StringComparer.Ordinal))
             .ToList();
 
+        WarnAboutCaseOnlyMisses(config, identity, matched);
+
         var isAdmin = ResolveAdmin(matched, userId, config);
 
         var libraryIds = matched
@@ -61,24 +63,56 @@ public sealed class PermissionSync
             "SSO sync for user {Id}: admin={Admin}, libraries={Count}, groups={Groups}",
             userId, isAdmin, libraryIds.Length, string.Join(", ", identity.Groups));
 
-        await _userManager.UpdatePolicyAsync(userId, new UserPolicy
+        // Only the fields this plugin claims are touched. A policy built from scratch here
+        // would quietly reset everything an administrator set elsewhere — blocked tags,
+        // remote access, session limits, SyncPlay — on every single login.
+        var policy = CurrentPolicy(userId);
+
+        policy.IsAdministrator = isAdmin;
+        policy.EnableAllFolders = enableAll;
+        policy.EnabledFolders = enableAll ? [] : libraryIds;
+        policy.AuthenticationProviderId = typeof(Auth.SsoAuthenticationProvider).FullName!;
+        policy.PasswordResetProviderId =
+            "Emby.Server.Implementations.Library.DefaultPasswordResetProvider";
+
+        // Playback — always allowed for SSO users.
+        policy.EnableMediaPlayback = true;
+        policy.EnableAudioPlaybackTranscoding = true;
+        policy.EnableVideoPlaybackTranscoding = true;
+        policy.EnablePlaybackRemuxing = true;
+
+        // Group-derived, most permissive match wins.
+        policy.EnableLiveTvAccess = isAdmin || matched.Any(m => m.EnableLiveTvAccess);
+        policy.EnableLiveTvManagement = isAdmin || matched.Any(m => m.EnableLiveTvManagement);
+        policy.EnableContentDownloading = isAdmin || matched.Any(m => m.EnableContentDownloading);
+        policy.MaxParentalRating = isAdmin ? null : ResolveParentalRating(matched);
+
+        await _userManager.UpdatePolicyAsync(userId, policy).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The user's policy as it stands, so a sync edits it rather than replacing it. A user
+    /// Jellyfin no longer knows, or a server that cannot produce the DTO, falls back to a
+    /// fresh policy — the login still has to end with a usable account.
+    /// </summary>
+    private UserPolicy CurrentPolicy(Guid userId)
+    {
+        var user = _userManager.GetUserById(userId);
+        if (user is null)
         {
-            IsAdministrator = isAdmin,
-            EnableAllFolders = enableAll,
-            EnabledFolders = enableAll ? [] : libraryIds,
-            AuthenticationProviderId = typeof(Auth.SsoAuthenticationProvider).FullName,
-            PasswordResetProviderId = "Emby.Server.Implementations.Library.DefaultPasswordResetProvider",
-            // Playback — always allowed for SSO users.
-            EnableMediaPlayback = true,
-            EnableAudioPlaybackTranscoding = true,
-            EnableVideoPlaybackTranscoding = true,
-            EnablePlaybackRemuxing = true,
-            // Group-derived, most permissive match wins.
-            EnableLiveTvAccess = isAdmin || matched.Any(m => m.EnableLiveTvAccess),
-            EnableLiveTvManagement = isAdmin || matched.Any(m => m.EnableLiveTvManagement),
-            EnableContentDownloading = isAdmin || matched.Any(m => m.EnableContentDownloading),
-            MaxParentalRating = isAdmin ? null : ResolveParentalRating(matched),
-        }).ConfigureAwait(false);
+            return new UserPolicy();
+        }
+
+        try
+        {
+            return _userManager.GetUserDto(user).Policy ?? new UserPolicy();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex, "Could not read the current policy for user {Id}; writing a fresh one.", userId);
+            return new UserPolicy();
+        }
     }
 
     /// <summary>
@@ -117,6 +151,32 @@ public sealed class PermissionSync
         return true;
     }
 
+    /// <summary>
+    /// Matching is exact, because "Media" and "media" can be two different groups at the
+    /// provider and a mapping that silently covered both would hand out access nobody
+    /// granted. A mapping that differs from an arriving group only in case is almost
+    /// always a typo, though, and the symptom — the user sees nothing — says nothing about
+    /// the cause. So it is said here, once per login.
+    /// </summary>
+    private void WarnAboutCaseOnlyMisses(
+        PluginConfiguration config, OidcIdentity identity, List<GroupMappingConfig> matched)
+    {
+        foreach (var mapping in config.GroupMappings.Except(matched))
+        {
+            var nearMiss = identity.Groups.FirstOrDefault(
+                group => string.Equals(group, mapping.Group, StringComparison.OrdinalIgnoreCase));
+
+            if (nearMiss is not null)
+            {
+                _logger.LogWarning(
+                    "SSO group mapping '{Mapping}' does not match the group '{Arrived}' the "
+                    + "provider sent: the names differ only in case, and matching is exact.",
+                    mapping.Group,
+                    nearMiss);
+            }
+        }
+    }
+
     /// <summary>Null means no limit; a group without a limit lifts it for the whole user.</summary>
     private static int? ResolveParentalRating(List<GroupMappingConfig> matched)
     {
@@ -135,12 +195,25 @@ public sealed class PermissionSync
     private static bool IsAdministrator(User? user)
         => user is not null && user.HasPermission(PermissionKind.IsAdministrator);
 
-    /// <summary>Remembers group names for the admin UI's autocomplete.</summary>
+    /// <summary>
+    /// Remembers group names for the admin UI's autocomplete. Capped, because the list
+    /// comes from whatever the provider sends and is written to the configuration file.
+    /// </summary>
     private static void RecordSeenGroups(PluginConfiguration config, OidcIdentity identity)
     {
-        var newGroups = identity.Groups.Except(config.SeenGroups, StringComparer.Ordinal).ToList();
-        if (newGroups.Count > 0)
+        lock (Plugin.ConfigurationLock)
         {
+            var newGroups = identity.Groups
+                .Except(config.SeenGroups, StringComparer.Ordinal)
+                .Distinct(StringComparer.Ordinal)
+                .Take(Math.Max(0, PluginConfiguration.MaxSeenGroups - config.SeenGroups.Count))
+                .ToList();
+
+            if (newGroups.Count == 0)
+            {
+                return;
+            }
+
             config.SeenGroups.AddRange(newGroups);
             Plugin.Instance!.SaveConfiguration();
         }

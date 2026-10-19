@@ -42,8 +42,11 @@ public sealed class UserProvisioner
                 _logger.LogWarning(
                     "Link exists for sub={Sub} but Jellyfin user {Id} not found — removing stale link.",
                     identity.Sub, existing.JellyfinUserId);
-                config.Links.Remove(existing);
-                Plugin.Instance.SaveConfiguration();
+                lock (Plugin.ConfigurationLock)
+                {
+                    config.Links.Remove(existing);
+                    Plugin.Instance.SaveConfiguration();
+                }
             }
             else
             {
@@ -79,22 +82,24 @@ public sealed class UserProvisioner
             IsAdministrator = false,
         }).ConfigureAwait(false);
 
-        // Store the link.
-        config.Links.Add(new LinkConfig
+        lock (Plugin.ConfigurationLock)
         {
-            ProviderId = provider.Id,
-            Sub = identity.Sub,
-            JellyfinUserId = newUser.Id,
-        });
+            config.Links.Add(new LinkConfig
+            {
+                ProviderId = provider.Id,
+                Sub = identity.Sub,
+                JellyfinUserId = newUser.Id,
+            });
 
-        // Record any new groups for autocomplete.
-        var newGroups = identity.Groups.Except(config.SeenGroups, StringComparer.Ordinal).ToList();
-        if (newGroups.Count > 0)
-        {
+            var newGroups = identity.Groups
+                .Except(config.SeenGroups, StringComparer.Ordinal)
+                .Distinct(StringComparer.Ordinal)
+                .Take(Math.Max(0, PluginConfiguration.MaxSeenGroups - config.SeenGroups.Count))
+                .ToList();
+
             config.SeenGroups.AddRange(newGroups);
+            Plugin.Instance.SaveConfiguration();
         }
-
-        Plugin.Instance.SaveConfiguration();
 
         return (newUser.Id, newUser.Username);
     }
