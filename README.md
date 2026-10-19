@@ -1,146 +1,118 @@
-# Jellyfin SSO Authentication Plugin
+<div align="center">
 
-Log in to Jellyfin with the account you already have at your identity provider — Authentik,
-Authelia or Keycloak — and let the groups there decide who sees which libraries. Replaces
-the deprecated [9p4/jellyfin-plugin-sso](https://github.com/9p4/jellyfin-plugin-sso).
+<img src="https://cdn.simpleicons.org/jellyfin/00A4DC" height="52" alt="Jellyfin">
+&nbsp;&nbsp;
+<img src="https://cdn.simpleicons.org/authentik/FD4B2D" height="52" alt="Authentik">
+&nbsp;&nbsp;
+<img src="https://cdn.simpleicons.org/keycloak/4D4D4D" height="52" alt="Keycloak">
+&nbsp;&nbsp;
+<img src="https://cdn.simpleicons.org/authelia/113155" height="52" alt="Authelia">
 
-- **Works with:** Jellyfin **12.2.x**. Each plugin build matches one server version.
-- **Tested against:** Authentik, Keycloak and Authelia — every release is checked by
-  signing in through all three for real, in a browser.
-- **Install:** add one URL to Jellyfin's plugin repositories, no file copying.
-- **Status:** in active development, running in the author's household.
+# Jellyfin SSO Authentication
 
-**Tonight's path:** [What this changes](#what-this-changes-on-your-server) →
-[Before you start](#before-you-start) → the eight steps of the [quick start](#quick-start).
-Everything else — provider details, every configuration field, recovery, security — is in
-[docs/](docs/README.md), including a [glossary](docs/glossary.md) in plain language for
-*claim*, *scope*, *issuer* and *subject*.
+**Log in to Jellyfin with the account you already have — and let your identity provider's
+groups decide who sees which libraries.**
 
----
+[![Tests](https://github.com/be-nj/jellyfin-sso/actions/workflows/test.yml/badge.svg)](https://github.com/be-nj/jellyfin-sso/actions/workflows/test.yml)
+[![Release](https://img.shields.io/github/v/release/be-nj/jellyfin-sso?logo=github&color=success)](https://github.com/be-nj/jellyfin-sso/releases)
+[![Jellyfin](https://img.shields.io/badge/Jellyfin-12.2.x-00A4DC?logo=jellyfin&logoColor=white)](https://jellyfin.org)
+[![License](https://img.shields.io/github/license/be-nj/jellyfin-sso?color=blue)](LICENSE)
 
-## What this changes on your server
+[Install](#install) · [Set it up](#set-it-up) · [Documentation](docs/README.md) ·
+[Troubleshooting](docs/troubleshooting.md)
 
-All of this can be undone — the [uninstall path](docs/recovery.md#uninstalling) leaves
-your accounts and history intact. Read this list anyway, because two of these surprise
-people.
-
-- **Your existing accounts stay.** Nothing is deleted or renamed. Watch history,
-  favourites and resume positions belong to the Jellyfin account and are untouched.
-- **A user managed by SSO can no longer sign in with a Jellyfin password.** The first time
-  someone logs in through the provider, the plugin switches that account to its own
-  authentication method. Their old Jellyfin password stops working — on purpose, because
-  the provider is now in charge.
-- **Accounts that never log in through SSO are untouched** — your partner who only ever
-  types a Jellyfin password keeps doing exactly that.
-- **Keep one local administrator.** An account that never logs in through SSO keeps its
-  password. That account is your way back in when the provider is down, when a Jellyfin
-  upgrade outruns the plugin, or when a group mapping goes wrong. Do not skip this.
-- **Library permissions become the provider's business.** Whatever your group mapping says
-  is written to the user on *every* login. Changes you make by hand in Jellyfin's user
-  screen are overwritten the next time that person signs in. (Individual users can be
-  excluded, see [Safety](docs/configuration.md#safety).)
-- **Anyone your provider lets through gets a Jellyfin account.** The first SSO login
-  creates the account automatically. The gate is on the provider's side: only people who
-  may use the Jellyfin *application* there can get in. Without a matching group they get
-  an account that sees no libraries.
+</div>
 
 ---
 
-## Before you start
+OpenID Connect single sign-on for Jellyfin, for households that already run
+[Authentik](docs/authentik.md), [Keycloak](docs/keycloak.md) or
+[Authelia](docs/authelia.md). One account, one password policy, and library access that
+follows the groups you already maintain. Replaces the deprecated
+[9p4/jellyfin-plugin-sso](https://github.com/9p4/jellyfin-plugin-sso).
 
-- **Jellyfin 12.2.x** — Dashboard → **About** tells you yours. Older servers need an older
-  plugin build, and some have none; the table is in
-  [Requirements](docs/requirements.md#jellyfin-version).
-- **An identity provider you administer**: Authentik, Authelia or Keycloak. Anything that
-  speaks OpenID Connect should work; those three are tested.
-- **Admin access to both**, and the address your household uses to reach Jellyfin —
-  public or LAN, whichever it is. Use that same address while setting this up, because the
-  redirect URI is built from it. [Why, and what LAN-only
-  costs](docs/requirements.md#one-address-for-jellyfin-used-everywhere).
-- **Jellyfin itself must reach your provider** — the container, not your laptop. One
-  command checks it, and a split-DNS household often fails here:
-  [reachability check](docs/requirements.md#jellyfin-itself-must-reach-that-provider).
+## What it does
 
----
+- **Sign in through your provider** — PKCE public client, no secret stored anywhere.
+- **Groups decide libraries** — map a provider group to libraries, Live TV, downloads, a
+  parental rating or admin rights; applied on every login.
+- **Accounts created on first login**, and existing Jellyfin accounts
+  [linked deliberately](docs/linking.md) — never by matching names, which is what made the
+  old plugin's admin takeover possible.
+- **Works on phones and TVs** through Jellyfin's [Quick Connect](docs/clients.md).
+- **Several providers at once**, each with its own login button in Jellyfin's branding.
+- **Single logout**, optionally ending the provider's session too.
+- **Lockout guards built in** — the last administrator is never demoted, and users can be
+  excluded from sync.
 
-## Quick start
+Tested the way you will use it: every release signs in through real Authentik, Keycloak
+and Authelia containers in a browser, on top of 72 unit tests, in CI.
 
-Worked example with **Authentik**. Keycloak and Authelia differ in steps 4 and 5 — see
-[Keycloak](docs/keycloak.md) and [Authelia](docs/authelia.md). Budget half an hour the
-first time.
+## Install
 
-1. **Back up Jellyfin's configuration — with the server stopped.** Copying its live
-   databases while it runs gives you a backup that restores into a broken server. The two
-   commands, for a bind mount and for a named volume, are under
-   [Backup and restore](docs/recovery.md#backup-and-restore).
+Dashboard → **Plugins → Repositories → +**, name it `SSO Authentication`, URL:
 
-2. **Install the plugin.** Dashboard → **Plugins → Repositories → +**, name it
-   `SSO Authentication`, URL:
+```
+https://jf.be-nj.net/manifest.json
+```
 
-   ```
-   https://raw.githubusercontent.com/be-nj/jellyfin-sso/main/manifest.json
-   ```
+Then **Plugins → Catalog → Authentication → SSO Authentication → Install** and restart
+Jellyfin. Updates arrive in the catalog like any other plugin.
 
-   Then **Plugins → Catalog → Authentication → SSO Authentication → Install**, and restart
-   Jellyfin (`docker compose restart jellyfin`, or the Restart button in the dashboard). An
-   empty catalog means your Jellyfin version has no matching build, not a broken URL — see
-   [Requirements](docs/requirements.md#jellyfin-version).
+Needs **Jellyfin 12.2.x** — each build matches one server version, and the catalog hides
+the ones that do not fit, so an empty catalog means your server is older than any build
+here ([version table](docs/requirements.md#jellyfin-version)). Building and installing by
+hand: [CONTRIBUTING.md](CONTRIBUTING.md).
 
-3. **Create a half-filled provider in the plugin** so it hands you an id. Dashboard →
-   **Plugins → SSO Authentication → Providers → + Add Provider**. Give it a display name
-   (`Authentik`), leave everything else alone, **Save** — a provider with nothing but a
-   name saves on purpose, and it is created **disabled** so nobody sees a login button
-   that goes nowhere yet.
+> ### Before you switch
+>
+> - **Existing accounts, history and favourites stay.** Nothing is deleted or renamed.
+> - **An SSO user can no longer sign in with a Jellyfin password** — the provider is in
+>   charge of that account from its first SSO login.
+> - **Keep one local administrator** with a password. That is your way back in when the
+>   provider is down or a mapping goes wrong.
+> - **Library permissions become the provider's business**: the mapping is rewritten onto
+>   the user on *every* login, over anything you set by hand
+>   ([except excluded users](docs/configuration.md#safety)).
+> - **Anyone your provider lets through gets an account** — gate it there, not here.
+>
+> All of it is reversible: [uninstall path](docs/recovery.md#uninstalling).
+
+## Set it up
+
+Worked example with Authentik; [Keycloak](docs/keycloak.md) and
+[Authelia](docs/authelia.md) differ in steps 4 and 5. Half an hour the first time.
+
+1. **Back up Jellyfin's config with the server stopped** —
+   [two commands](docs/recovery.md#backup-and-restore). A copy taken while it runs
+   restores into a broken server.
+2. **Install the plugin** ([above](#install)) and restart.
+3. **Add a provider in the plugin** with nothing but a display name, and **Save**.
+   Dashboard → **Plugins → SSO Authentication → Providers → + Add Provider**. It is
+   created disabled, and the card now prints the **Redirect URI** you need next.
 
    ![The provider card in the plugin's configuration page](docs/img/provider-card.png)
 
-   The card prints three values at the bottom: the **Provider ID**, the **Redirect URI**
-   and the **Login URL**. Copy the redirect URI — that is the one your provider needs,
-   complete, with no guessing about which part of the URL is the id. It is built from the
-   address you are looking at the dashboard with, so open the dashboard on **the address
-   your household actually uses** (`https://jellyfin.example.com`), not on
-   `http://<server>:8096` — otherwise you register the wrong address and logins fail from
-   everywhere else. If LAN is the only address you have, that is the right one here.
+   Open the dashboard on **the address your household actually uses** — the redirect URI
+   is built from it ([why](docs/requirements.md#one-address-for-jellyfin-used-everywhere)).
+4. **Create the application at your provider** with that redirect URI, as a public client.
+   Click-by-click: [Authentik](docs/authentik.md) (do not forget the *Signing Key*),
+   [Keycloak](docs/keycloak.md), [Authelia](docs/authelia.md). Note the **Client ID** and
+   the **issuer URL**.
+5. **Finish the provider card**: issuer URL, client id, tick **Enabled**, **Save**. No
+   restart. Field by field: [configuration reference](docs/configuration.md#providers).
+6. **Map a group**: **Group Mappings → + Add Mapping**, the group name exactly as the
+   provider spells it, tick the libraries, **Save**. Without a mapping people can sign in
+   but see nothing ([what the permissions mean](docs/configuration.md#group-mappings)).
+7. **Test with a throwaway account**, not your own: open
+   `https://<your-jellyfin>/sso/oidc/start` in a private window and sign in as a spare
+   user from that group. That account is created for them on the spot.
+8. **Then link the accounts you already have** — the first SSO login for an existing name
+   is refused on purpose, until an administrator links it
+   ([how](docs/linking.md#manual-linking)). Leave one administrator unlinked.
 
-4. **Create the application at your provider** with that redirect URI. Click-by-click for
-   [Authentik](docs/authentik.md) (public client, and **do not forget the Signing Key**),
-   [Keycloak](docs/keycloak.md) or [Authelia](docs/authelia.md). Note the **Client ID** and
-   the application's **issuer URL**, and leave Authentik's *Subject mode* at its default —
-   the reasoning is in [Linking accounts](docs/linking.md#authentik-choose-a-subject-mode).
-
-5. **Back in the plugin, finish the provider:** paste the issuer URL and client id into
-   the same card, leave *Groups claim name* at `groups`, *Scopes* empty and *Fetch groups
-   from userinfo endpoint* off, tick **Enabled**, **Save**. Saving is enough; no restart.
-   ([Authelia](docs/authelia.md) is the exception on the last two.)
-
-6. **Create a group at the provider** (for example `media`), put the test user from the
-   next step in it, and map it **in the plugin** under **Group Mappings**: **+ Add
-   Mapping**, group name `media`, tick the libraries that group may watch, **Save**.
-   Without a mapping people can sign in but see nothing. Spell the group exactly as the
-   provider does — [what the permissions
-   mean](docs/configuration.md#group-mappings).
-
-7. **Test with a throwaway account first, not your own.** Create a spare user at the
-   provider, put it in the `media` group, and leave your own administrator account out of
-   this for now. Open `https://<your-jellyfin>/sso/oidc/start` in a private window and sign
-   in as the spare user. A person without a Jellyfin account gets one created here; that
-   is the path you want to see working before you touch anything that matters.
-
-8. **Only then link the accounts you already have.** An existing Jellyfin account is never
-   handed to an identity just because the names match: the first SSO login for `ben` is
-   refused with *"Username 'ben' already exists"* until an administrator links it —
-   [how to link](docs/linking.md#manual-linking). Keep one administrator unlinked, with a
-   password, as your way back in.
-
-> **The warning worth repeating:** from now on, that user's library access is rewritten
-> from their groups on every single login. Editing it in Jellyfin's user screen will not
-> stick.
-
-If it does not work, [Troubleshooting](docs/troubleshooting.md) lists the errors this
-plugin actually produces and what each one means. Locked out?
-[If something goes wrong](docs/recovery.md).
-
----
+Stuck? [Troubleshooting](docs/troubleshooting.md) lists the errors this plugin actually
+produces. Locked out? [If something goes wrong](docs/recovery.md).
 
 ## Documentation
 
@@ -150,36 +122,22 @@ plugin actually produces and what each one means. Locked out?
 | [Authentik](docs/authentik.md) · [Keycloak](docs/keycloak.md) · [Authelia](docs/authelia.md) | The work on the provider's side |
 | [Configuration reference](docs/configuration.md) | Every field on the plugin page |
 | [Linking accounts](docs/linking.md) | The IdP subject, manual and self-service linking |
-| [Login button and logout](docs/login-and-logout.md) | The branding button, signing out of the provider too |
+| [Login button and logout](docs/login-and-logout.md) | Branding button, signing out of the provider too |
 | [Phones, tablets and TVs](docs/clients.md) | Quick Connect, and why there is no QR code yet |
-| [Troubleshooting](docs/troubleshooting.md) | Errors and what they mean |
-| [If something goes wrong](docs/recovery.md) | Lockout, backup and restore, uninstalling |
-| [Security notes](docs/security.md) | What is stored, what is validated, what revocation does not do |
-| [Glossary](docs/glossary.md) | *Claim*, *scope*, *issuer*, *subject* |
+| [Troubleshooting](docs/troubleshooting.md) · [If something goes wrong](docs/recovery.md) | Errors, lockout, backup and restore, uninstalling |
+| [Security notes](docs/security.md) · [Glossary](docs/glossary.md) | What is validated and stored; the vocabulary in plain words |
 
-Installing by hand, the test suites and how releases are cut are in
-[CONTRIBUTING.md](CONTRIBUTING.md). Design decisions are in [docs/adr/](docs/adr/), the
-domain vocabulary in [CONTEXT.md](CONTEXT.md).
+## Contributing
 
----
+Issues and patches welcome: <https://github.com/be-nj/jellyfin-sso/issues>. A log excerpt
+around the failed login, your provider and the plugin version answer most questions at
+once. Building, the three test tiers and how releases are cut are in
+[CONTRIBUTING.md](CONTRIBUTING.md); design decisions in [docs/adr/](docs/adr/).
 
-## Problems, questions, patches
-
-Open an issue at <https://github.com/be-nj/jellyfin-sso/issues>. A Jellyfin log excerpt
-around the failed login, your provider's name and the plugin version answer most questions
-immediately.
-
----
-
-## Roadmap
-
-- Active revocation: group changes currently take effect at the next login, not at once.
-- QR code login for TVs — needs a change in the Jellyfin client apps, see
-  [Phones, tablets and TVs](docs/clients.md).
-- Device-code grant (the standard way TVs log in), once Jellyfin's clients support it.
-
----
+**Roadmap:** active revocation (group changes currently apply at the next login), QR-code
+login for TVs (needs a change in the Jellyfin apps), device-code grant once the clients
+support it.
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+[MIT](LICENSE).

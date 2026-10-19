@@ -1,7 +1,7 @@
 # Documentation
 
-The [README](../README.md) is the install path: what changes on your server, the
-requirements in brief, and the eight steps of the quick start. Everything else lives here.
+The [README](../README.md) is the install path: what the plugin does, what changes on your
+server, and the eight steps that get it running. Everything else lives here.
 
 ## Setting it up
 

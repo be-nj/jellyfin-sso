@@ -20,7 +20,7 @@ Jellyfin refuses the others, so the catalog shows you only what fits:
 any build here** — that is the version gate at work, not a broken URL.
 
 Upgrading Jellyfin itself is outside this plugin, and worth its own evening: take the
-backup from step 1 of the [quick start](../README.md#quick-start), change the image tag to
+backup from step 1 of the [setup walkthrough](../README.md#set-it-up), change the image tag to
 `jellyfin/jellyfin:12.2`, pull and start, check that your libraries and users are intact
 — Jellyfin's [container documentation](https://jellyfin.org/docs/general/installation/container/)
 covers the mechanics — and only then come back here. Do not upgrade the server and add an

@@ -6,7 +6,7 @@ Written against Authentik 2026.8. Authentik's own vocabulary: a **Provider** spe
 protocol, an **Application** is what users see and what access is granted on.
 
 1. **Directory → Groups → Create**: one group per level of access you want, for example
-   `media` and `jellyfin-admins`. Put the test user from the quick start into `media`; add
+   `media` and `jellyfin-admins`. Put the test user from the setup walkthrough into `media`; add
    yourself later, once linking is done.
 2. **Applications → Providers → Create → OAuth2/OpenID Provider**:
    - *Name*: `Jellyfin`.
@@ -14,7 +14,7 @@ protocol, an **Application** is what users see and what access is granted on.
      without a consent screen; with consent works too, users just get an extra click).
    - *Client type*: **Public**. No client secret — the plugin uses PKCE instead.
    - *Client ID*: keep what Authentik generates, you will paste it into the plugin.
-   - *Redirect URIs*: the URL from step 3 of the quick start, as **Strict**:
+   - *Redirect URIs*: the URL the plugin's provider card printed, as **Strict**:
      `https://<your-jellyfin>/sso/oidc/callback/<providerId>`
    - *Signing Key*: pick the self-signed certificate Authentik ships with. **Without a
      signing key Authentik does not sign the token in a way the plugin accepts** and the

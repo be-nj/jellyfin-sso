@@ -21,7 +21,7 @@ login — this is a one-time dance per device, not a weekly ritual.
 Yes, that URL is a mouthful, and it has to be done once per device and household member.
 Showing the code as a **QR code** on the TV would fix it, and that has to happen in the
 Jellyfin client apps themselves — a server plugin cannot draw on their screens. It is on
-the [roadmap](../README.md#roadmap) as work to be done upstream, not something this plugin
+the [roadmap](../README.md#contributing) as work to be done upstream, not something this plugin
 can solve alone.
 
 The reasoning behind using Quick Connect at all is in
