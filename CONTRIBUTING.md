@@ -143,21 +143,25 @@ a *Base URL*.
 
 ### Checking a release against its source
 
-Every release ZIP is built with the build date taken from the commit, source paths mapped
-to `/src` and the SDK pinned in `global.json`. On one machine that is enough for two clean
-builds to produce identical bytes:
+A release ZIP is byte-reproducible: rebuild it from its tag and the checksum matches the
+one in `manifest.json`. Verified for v1.12.7 — `de194730f1522e7fd239bb8f3f148105` both
+from the workflow and from a rebuild here.
 
 ```bash
-git checkout v1.12.7
+git clone --branch v1.12.7 https://github.com/be-nj/jellyfin-sso.git
+cd jellyfin-sso
 SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) scripts/package.sh 1.12.7.0
-md5sum dist/jellyfin-sso_1.12.7.0.zip        # must match the checksum in manifest.json
+md5sum dist/jellyfin-sso_1.12.7.0.zip
 ```
 
-**A rebuild on a different machine does not match the published artifact yet.** Measured
-on v1.12.6 and v1.12.7: the eight dependency DLLs come out identical, the plugin assembly
-does not, even with the SDK CI used. The investigation and what has been ruled out are in
-[issue #14](https://github.com/be-nj/jellyfin-sso/issues/14). Until that is closed, the
-attestation below is the stronger check of the two.
+Two things will make that fail, and both cost an afternoon to find:
+
+- **Build from a clone, not a `git worktree`.** In a worktree `.git` is a file, the SDK's
+  source-path normalisation resolves differently, and the assembly comes out with
+  different metadata — same source, different bytes.
+- **Use the SDK from `global.json`** (10.0.402, `rollForward: disable`). A different patch
+  level is a different compiler. The container used here is
+  `mcr.microsoft.com/dotnet/sdk:10.0.402`.
 
 The release also carries a provenance attestation, which answers the other half of the
 question — that the published file came out of this repository's workflow:
