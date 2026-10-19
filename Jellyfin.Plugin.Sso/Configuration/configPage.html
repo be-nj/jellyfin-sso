@@ -215,6 +215,19 @@
                 An identity already linked to another account is refused.
               </div>
             </div>
+            <div class="inputContainer">
+              <label class="inputLabel" for="LoginRequestsPerMinute">
+                Login requests per minute, per address
+              </label>
+              <input id="LoginRequestsPerMinute" type="number" min="0" step="1"
+                     is="emby-input" />
+              <div class="fieldDescription">
+                Applies to the parts of a login that need no Jellyfin account: starting a
+                login, the provider's callback, a Quick Connect approval and a back-channel
+                logout. A login spends two or three of them. Everyone behind the same
+                router counts as one address. <code>0</code> turns the limit off.
+              </div>
+            </div>
           </div>
         </div>
 

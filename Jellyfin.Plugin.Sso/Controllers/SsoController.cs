@@ -62,7 +62,7 @@ public sealed class SsoController : ControllerBase
     // ──────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The script that places    /// The script that places the login button inside Jellyfin's login form. Served only
+    /// The script that places the login button inside Jellyfin's login form. Served only
     /// when the administrator asked for it; otherwise it is an empty file, so a cached
     /// index.html cannot keep a button alive after the switch is turned off.
     /// </summary>
@@ -134,6 +134,7 @@ public sealed class SsoController : ControllerBase
     /// </summary>
     [HttpGet("oidc/start")]
     [AllowAnonymous]
+    [ServiceFilter<RateLimitFilter>]
     public async Task<IActionResult> StartDefault(CancellationToken ct)
     {
         var enabled = EnabledProviders();
@@ -148,6 +149,7 @@ public sealed class SsoController : ControllerBase
     /// <summary>Same but for Quick Connect — stable entry point for native apps.</summary>
     [HttpGet("oidc/start/qc")]
     [AllowAnonymous]
+    [ServiceFilter<RateLimitFilter>]
     public async Task<IActionResult> StartDefaultQuickConnect(
         [FromQuery] string code, CancellationToken ct)
     {
@@ -162,6 +164,7 @@ public sealed class SsoController : ControllerBase
 
     [HttpGet("oidc/start/{providerId}")]
     [AllowAnonymous]
+    [ServiceFilter<RateLimitFilter>]
     public async Task<IActionResult> Start(string providerId, CancellationToken ct)
     {
         var provider = GetEnabledProvider(providerId);
@@ -177,6 +180,7 @@ public sealed class SsoController : ControllerBase
 
     [HttpGet("oidc/start/{providerId}/qc")]
     [AllowAnonymous]
+    [ServiceFilter<RateLimitFilter>]
     public async Task<IActionResult> StartWithQuickConnect(
         string providerId, [FromQuery] string code, CancellationToken ct)
     {
@@ -256,6 +260,7 @@ public sealed class SsoController : ControllerBase
     /// </summary>
     [HttpPost("oidc/backchannel-logout/{providerId}")]
     [AllowAnonymous]
+    [ServiceFilter<RateLimitFilter>]
     [Consumes("application/x-www-form-urlencoded")]
     public async Task<IActionResult> BackChannelLogout(
         string providerId,
@@ -324,6 +329,7 @@ public sealed class SsoController : ControllerBase
 
     [HttpGet("oidc/callback/{providerId}")]
     [AllowAnonymous]
+    [ServiceFilter<RateLimitFilter>]
     public async Task<IActionResult> Callback(
         string providerId,
         // Nullable on purpose: a provider that reports an error sends no code, and model
@@ -537,6 +543,7 @@ public sealed class SsoController : ControllerBase
     /// <summary>Approves the code the page just showed, once.</summary>
     [HttpPost("oidc/qc/approve")]
     [AllowAnonymous]
+    [ServiceFilter<RateLimitFilter>]
     public async Task<IActionResult> ApproveQuickConnect([FromForm] string? token)
     {
         var pending = _approvals.Consume(token);

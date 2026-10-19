@@ -162,6 +162,43 @@ internal sealed class AuthentikProvider : IRealIdentityProvider
     /// Each stage has to be submitted with its button; pressing Enter leaves the flow
     /// sitting on the stage.
     /// </summary>
+    public string LoginFormSelector => "input[name='uidField']";
+
+    /// <summary>
+    /// Authentik asks for the name and the password in two stages, so the recording waits
+    /// for the second form the same way the test does — it just types instead of filling.
+    /// </summary>
+    public async Task SignInForTheRecordingAsync(IPage page, RealIdentityUser user)
+    {
+        var username = page.Locator("input[name='uidField']");
+        await page.WaitForTimeoutAsync(1_200);
+        await username.PressSequentiallyAsync(
+            user.Username, new LocatorPressSequentiallyOptions { Delay = 90 });
+        await page.WaitForTimeoutAsync(500);
+        await page.ClickAsync("button[type='submit']");
+
+        await username.WaitForAsync(new LocatorWaitForOptions
+        {
+            State = WaitForSelectorState.Detached,
+            Timeout = 60_000,
+        });
+
+        var password = page.Locator("input[name='password']");
+        await password.WaitForAsync(new LocatorWaitForOptions
+        {
+            State = WaitForSelectorState.Visible,
+            Timeout = 60_000,
+        });
+        await page.WaitForTimeoutAsync(700);
+
+        // The field masks it, and it belongs to a container that is thrown away with the
+        // test run — so the recording can show it being typed like any other password.
+        await password.PressSequentiallyAsync(
+            Password, new LocatorPressSequentiallyOptions { Delay = 70 });
+        await page.WaitForTimeoutAsync(400);
+        await page.ClickAsync("button[type='submit']");
+    }
+
     public async Task SignInAsync(IPage page, RealIdentityUser user)
     {
         var username = page.Locator("input[name='uidField']");

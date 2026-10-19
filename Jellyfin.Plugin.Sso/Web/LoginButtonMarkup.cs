@@ -66,7 +66,13 @@ public static class LoginButtonMarkup
               + "border-left:3px solid var(--sso-mark, #00a4dc);"
               + "transition:background .15s ease;}"
               + ".loginDisclaimer .sso-login-button:hover{background:#4a4a4a;}"
-              + ".sso-login-mark{flex:0 0 auto;display:block;}"
+              // The mark may be a logo fetched from the provider, and that image is
+              // whatever shape the household gave it. A fixed square box squeezed a wide
+              // lockup into a couple of coloured pixels, so the height is fixed and the
+              // width follows the picture: square marks stay square, a wordmark reads as
+              // a wordmark, and min-width keeps the label from jumping while it loads.
+              + ".sso-login-mark{flex:0 0 auto;display:block;height:22px;width:auto;"
+              + "min-width:22px;max-width:96px;object-fit:contain;}"
               + ".sso-login-label{display:block;font-weight:600;}"
               + string.Concat(providers.Select(p => PerProvider(p, providerLogos)))
               + CssEnd
@@ -159,7 +165,9 @@ public static class LoginButtonMarkup
                 .Append(prefix)
                 .Append("/sso/icon/provider/")
                 .Append(WebUtility.UrlEncode(provider.Id))
-                .Append("\" alt=\"\" width=\"22\" height=\"22\" class=\"sso-login-mark\"/>")
+                // Height only: the width comes from the picture, so a logo that is not
+                // square is not squashed into one. See the .sso-login-mark rule.
+                .Append("\" alt=\"\" height=\"22\" class=\"sso-login-mark\"/>")
                 .Append("<span class=\"sso-login-label\">")
                 .Append(WebUtility.HtmlEncode(label))
                 .Append("</span>")

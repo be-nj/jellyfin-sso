@@ -55,6 +55,20 @@ A public client with PKCE is the default and covers most setups.
   the provider end a Jellyfin session when the session ends on its side
   ([Login and logout](login-and-logout.md#back-channel-logout)).
 - **Let users link their own account** — [Linking accounts](linking.md).
+- **Login requests per minute, per address** — 60 by default. The parts of a login that
+  need no Jellyfin account — starting a login, the provider's callback, a Quick Connect
+  approval, a back-channel logout — are counted per network address, and a caller past the
+  count is answered `429 Too Many Requests` with a `Retry-After`. A login spends two of
+  them, three with Quick Connect, so 60 is twenty logins a minute from one address.
+  Everyone behind the same router is one address, and so is the provider's own back end
+  when it sends back-channel logouts — raise it if a large household or a busy provider
+  runs into it. Behind a reverse proxy, the address is whatever Jellyfin itself resolved
+  it to: without the proxy listed under Dashboard → Networking → *Known proxies*, every
+  request looks like it came from the proxy and the whole household shares one count.
+  `0` turns the limit off, and saving this page clears the counts, so a limit you just
+  raised applies to whoever is being turned away right now. Jellyfin's login page, the
+  button and its mark are never counted: they have to keep working for everybody else
+  while one caller is being refused.
 
 ## Group Mappings
 

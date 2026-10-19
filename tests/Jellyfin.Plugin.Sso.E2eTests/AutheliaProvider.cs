@@ -81,10 +81,27 @@ internal sealed class AutheliaProvider : IRealIdentityProvider
     }
 
     /// <summary>Authelia's sign-in portal.</summary>
+    public string LoginFormSelector => "#username-textfield";
+
     public async Task SignInAsync(IPage page, RealIdentityUser user)
     {
         await page.FillAsync("#username-textfield", user.Username);
         await page.FillAsync("#password-textfield", Password);
+        await page.ClickAsync("#sign-in-button");
+    }
+
+    /// <summary>One form with both fields, typed rather than filled.</summary>
+    public async Task SignInForTheRecordingAsync(IPage page, RealIdentityUser user)
+    {
+        await page.WaitForTimeoutAsync(1_200);
+        await page.Locator("#username-textfield").PressSequentiallyAsync(
+            user.Username, new LocatorPressSequentiallyOptions { Delay = 90 });
+        await page.WaitForTimeoutAsync(400);
+
+        // The password belongs to a container that is thrown away with the test run.
+        await page.Locator("#password-textfield").PressSequentiallyAsync(
+            Password, new LocatorPressSequentiallyOptions { Delay = 70 });
+        await page.WaitForTimeoutAsync(500);
         await page.ClickAsync("#sign-in-button");
     }
 

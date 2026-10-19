@@ -55,11 +55,10 @@ mutants:
 	  -v "$(CURDIR)":"$(CURDIR)" -w "$(CURDIR)" \
 	  -e HOME=/tmp -e NUGET_PACKAGES="$(CURDIR)/tests/runs/nuget" \
 	  mcr.microsoft.com/dotnet/sdk:10.0.402 \
-	  bash -c 'rm -rf Jellyfin.Plugin.Sso/StrykerOutput \
+	  bash -c 'rm -rf tests/runs/stryker \
 	    && dotnet tool install -g dotnet-stryker >/dev/null \
 	    && export PATH="$$PATH:/tmp/.dotnet/tools" \
-	    && cd Jellyfin.Plugin.Sso \
-	    && dotnet-stryker --config-file ../stryker-config.json'
+	    && scripts/mutants.sh'
 
 # The e2e suite starts a throwaway Jellyfin container, a fake identity provider and a
 # headless browser. E2E_FILTER passes a vstest filter through, e.g.

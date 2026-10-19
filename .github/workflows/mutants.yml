@@ -28,13 +28,12 @@ jobs:
       - name: Run Stryker
         run: |
           dotnet tool install -g dotnet-stryker
-          cd Jellyfin.Plugin.Sso
-          dotnet-stryker --config-file ../stryker-config.json
+          scripts/mutants.sh
 
       - name: Upload the report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: mutation-report
-          path: Jellyfin.Plugin.Sso/StrykerOutput/**/reports/
+          path: tests/runs/stryker/**/reports/
           if-no-files-found: ignore

@@ -16,6 +16,10 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<EphemeralSecretStore>();
         serviceCollection.AddSingleton<QuickConnectApprovalStore>();
         serviceCollection.AddSingleton<PendingStateStore>();
+        serviceCollection.AddSingleton<LoginRateLimiter>();
+
+        // Resolved per request by [ServiceFilter] on the anonymous login endpoints.
+        serviceCollection.AddSingleton<RateLimitFilter>();
         serviceCollection.AddSingleton<OidcClientFactory>();
         serviceCollection.AddSingleton<ClaimsExtractor>();
         serviceCollection.AddSingleton<UserProvisioner>();

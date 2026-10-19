@@ -76,6 +76,16 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
     internal static byte[] OnePixelPng() => Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
 
+    /// <summary>The same in GIF, so a test can tell the two brand images apart.</summary>
+    internal static byte[] OnePixelGif() => Convert.FromBase64String(
+        "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7");
+
+    /// <summary>
+    /// Whether the favicon is published. Turning it off is how a test watches the plugin
+    /// fall back to the wide brand logo, which is all some providers offer.
+    /// </summary>
+    public bool ServeFavicon { get; set; } = true;
+
     /// <summary>
     /// When set, the next authorize call reports this OAuth error instead of issuing a
     /// code — what a provider does when the user cancels or the client is misconfigured.
@@ -117,14 +127,20 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
         }));
 
         // A branded provider: the plugin should put this on the login button rather than
-        // its own stock mark.
+        // its own stock mark. Both brand images are published, as Authentik publishes
+        // both, and they carry different content types so a test can say which was taken.
         app.MapGet("/api/v3/core/brands/current/", () => Results.Json(new Dictionary<string, object>
         {
             ["branding_title"] = "Fake IdP",
-            ["branding_logo"] = "/static/brand-logo.png",
+            ["branding_favicon"] = "/static/brand-favicon.png",
+            ["branding_logo"] = "/static/brand-logo.gif",
         }));
 
-        app.MapGet("/static/brand-logo.png", () => Results.File(OnePixelPng(), "image/png"));
+        app.MapGet("/static/brand-favicon.png", () => ServeFavicon
+            ? Results.File(OnePixelPng(), "image/png")
+            : Results.NotFound());
+
+        app.MapGet("/static/brand-logo.gif", () => Results.File(OnePixelGif(), "image/gif"));
 
         app.MapGet("/jwks", () =>
         {

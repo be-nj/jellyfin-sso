@@ -5,13 +5,17 @@ using Microsoft.Playwright;
 namespace Jellyfin.Plugin.Sso.E2eTests;
 
 /// <summary>
-/// Records the login the README shows, against a real Authentik rather than a mock-up:
-/// Jellyfin's login page, the plugin's button, Authentik's own form, and the web client
-/// coming up signed in. The flow is the one <see cref="RealIdentityProviderTests"/>
-/// asserts; this run exists to be watched, so it is paced for a reader and it fails if
-/// any step does not happen, which keeps the recording honest.
+/// Records the login the documentation shows, against real providers rather than a
+/// mock-up: Jellyfin's login page, the plugin's button, the provider's own form, and the
+/// web client coming up signed in. The flow is the one <see cref="RealIdentityProviderTests"/>
+/// asserts; this run exists to be watched, so it is paced for a reader and it fails if any
+/// step does not happen, which keeps the recording honest.
 ///
-/// Not part of any automated run — the clip is a documentation artifact, regenerated with
+/// One clip per provider: Authentik is the one the README shows, Keycloak and Authelia are
+/// linked from it, because the three login pages look nothing alike and the question
+/// "what does this look like with mine" deserves an answer.
+///
+/// Not part of any automated run — the clips are documentation artifacts, regenerated with
 /// `make demo` when the login looks different.
 /// </summary>
 [Collection(JellyfinCollection.Name)]
@@ -39,20 +43,35 @@ public sealed class DemoRecordingTests : IAsyncLifetime
         await _env.ResetAsync();
 
         _directory = Path.Combine(BrowserSupport.RunsDirectory(), "demo");
-        _profile = Path.Combine(_directory, "profile");
+        _playwright = await BrowserSupport.InstallAsync();
+    }
+
+    public async Task DisposeAsync()
+    {
+        _playwright.Dispose();
+        if (_idp is not null)
+        {
+            await _idp.DisposeAsync();
+        }
+    }
+
+    [Theory]
+    [InlineData("authentik")]
+    [InlineData("keycloak")]
+    [InlineData("authelia")]
+    public async Task Record_a_login_through_the_button(string provider)
+    {
+        _idp = await StartAsync(provider);
+
+        // A browser profile per provider, so one recording never starts signed in from
+        // the last one.
+        _profile = Path.Combine(_directory, "profile", provider);
         if (Directory.Exists(_profile))
         {
             Directory.Delete(_profile, recursive: true);
         }
 
         Directory.CreateDirectory(_profile);
-
-        _idp = await AuthentikProvider.StartAsync(
-            _env.Certificate,
-            _env.WorkDirectory,
-            $"{_env.BaseUrl}/sso/oidc/callback/{ProviderId}");
-
-        _playwright = await BrowserSupport.InstallAsync();
 
         await _env.PatchConfigAsync(config => config["Providers"] = new JsonArray
         {
@@ -68,57 +87,16 @@ public sealed class DemoRecordingTests : IAsyncLifetime
                 ["GroupsFromUserInfo"] = _idp.GroupsFromUserInfo,
             },
         });
-    }
 
-    public async Task DisposeAsync()
-    {
-        _playwright.Dispose();
-        await _idp.DisposeAsync();
-    }
-
-    [Fact]
-    public async Task Record_a_login_through_the_button()
-    {
         var run = await WalkToTheProviderAsync();
         var page = run.Page;
 
-        // Authentik's own form, filled at a readable speed rather than pasted.
-        var username = page.Locator("input[name='uidField']");
-        await Beat(page, 1_200);
-        await username.PressSequentiallyAsync(_idp.MemberUser.Username, new LocatorPressSequentiallyOptions
-        {
-            Delay = 90,
-        });
-        await Beat(page, 500);
-        await page.ClickAsync("button[type='submit']");
-
-        // The stages swap the whole form out, so the password field has to be waited for.
-        await username.WaitForAsync(new LocatorWaitForOptions
-        {
-            State = WaitForSelectorState.Detached,
-            Timeout = 60_000,
-        });
-        var password = page.Locator("input[name='password']");
-        await password.WaitForAsync(new LocatorWaitForOptions
-        {
-            State = WaitForSelectorState.Visible,
-            Timeout = 60_000,
-        });
-        await Beat(page, 700);
-
-        // The field masks it, and it belongs to a container that is thrown away with the
-        // test run — so the recording can show it being typed like any other password.
-        await password.PressSequentiallyAsync(AuthentikProvider.Password, new LocatorPressSequentiallyOptions
-        {
-            Delay = 70,
-        });
-        await Beat(page, 400);
-        await page.ClickAsync("button[type='submit']");
+        await _idp.SignInForTheRecordingAsync(page, _idp.MemberUser);
 
         // Back in the web client, signed in: the libraries of the user's group are there.
         await page.WaitForURLAsync(
-            url => !url.Contains("login.html", StringComparison.Ordinal)
-                && !url.Contains("/if/flow/", StringComparison.Ordinal),
+            url => url.StartsWith(ServerBaseUrl(), StringComparison.Ordinal)
+                && !url.Contains("login.html", StringComparison.Ordinal),
             new PageWaitForURLOptions { Timeout = 60_000 });
         await page.WaitForSelectorAsync(
             ".homeSectionsContainer, .itemsContainer, .sectionTitle",
@@ -132,7 +110,7 @@ public sealed class DemoRecordingTests : IAsyncLifetime
         // The recording is written when the context closes, and a persistent context takes
         // the browser down with it — so ask for the file's name first and copy it after,
         // rather than asking the closed browser to save it.
-        var clip = Path.Combine(_directory, "login-flow.webm");
+        var clip = Path.Combine(_directory, $"login-flow-{provider}.webm");
         var recorded = await page.Video!.PathAsync();
         await run.Context.CloseAsync();
         File.Copy(recorded, clip, overwrite: true);
@@ -146,12 +124,31 @@ public sealed class DemoRecordingTests : IAsyncLifetime
             + "which is too slow to watch.");
     }
 
+    private Task<IRealIdentityProvider> StartAsync(string provider) => provider switch
+    {
+        "authentik" => Upcast(AuthentikProvider.StartAsync(
+            _env.Certificate,
+            _env.WorkDirectory,
+            $"{_env.BaseUrl}/sso/oidc/callback/{ProviderId}")),
+        "keycloak" => Upcast(KeycloakProvider.StartAsync(_env.Certificate, _env.WorkDirectory)),
+        "authelia" => Upcast(AutheliaProvider.StartAsync(
+            _env.Certificate, _env.WorkDirectory, _env.LocalhostBaseUrl, ProviderId)),
+        _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, "No such provider."),
+    };
+
+    private static async Task<IRealIdentityProvider> Upcast<T>(Task<T> starting)
+        where T : IRealIdentityProvider
+        => await starting;
+
+    /// <summary>Jellyfin's address as this recording's browser has to reach it.</summary>
+    private string ServerBaseUrl() => _idp.ServerBaseUrl ?? _env.BaseUrl;
+
     /// <summary>One walk from Jellyfin's login page to the provider's own form.</summary>
     private async Task<Walk> WalkToTheProviderAsync()
     {
         var options = new BrowserTypeLaunchPersistentContextOptions
         {
-            BaseURL = _env.BaseUrl,
+            BaseURL = ServerBaseUrl(),
             IgnoreHTTPSErrors = true,
             ViewportSize = Frame,
             RecordVideoDir = Path.Combine(_directory, "raw"),
@@ -165,8 +162,25 @@ public sealed class DemoRecordingTests : IAsyncLifetime
 
         var page = context.Pages.Count > 0 ? context.Pages[0] : await context.NewPageAsync();
 
-        // Authentik's login page is the slow part of this recording, and when it does not
-        // come up the interesting question is what it was waiting for.
+        // Playwright drives the mouse but a recording shows no cursor, so a viewer sees
+        // the page change without seeing what was clicked. This draws the pointer it is
+        // moving, and a ring where it clicks, into the recording itself.
+        //
+        // The same option also writes the name of each action into a corner —
+        // `Hover Locator("button.sso-login-button")`, which is the right thing in a
+        // failure trace and the wrong thing in a clip somebody is meant to watch. It
+        // cannot be switched off on its own and `HideOverlaysAsync` does not cover it,
+        // so the font is set small enough to disappear.
+        await page.Screencast.ShowActionsAsync(new ScreencastShowActionsOptions
+        {
+            Cursor = ScreencastCursor.Pointer,
+            Duration = 900,
+            Position = AnnotatePosition.BottomRight,
+            FontSize = 1,
+        });
+
+        // The provider's login page is the slow part of this recording, and when it does
+        // not come up the interesting question is what it was waiting for.
         var failed = new List<string>();
         page.RequestFailed += (_, request) => failed.Add($"{request.Method} {request.Url} {request.Failure}");
         var slow = new List<string>();
@@ -186,6 +200,14 @@ public sealed class DemoRecordingTests : IAsyncLifetime
             Timeout = 30_000,
         });
 
+        // The mark on the button is fetched from the provider; a clip that starts before
+        // it arrives shows the button changing shape under the viewer.
+        await page.WaitForFunctionAsync(
+            "() => { const m = document.querySelector('.sso-login-mark');"
+            + " return m && m.complete && m.naturalWidth > 0; }",
+            null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
         await Beat(page, 2_000);
 
         // Hovering first: the clip should show this is a button, not a line of text.
@@ -196,7 +218,7 @@ public sealed class DemoRecordingTests : IAsyncLifetime
         await button.ClickAsync();
         try
         {
-            await page.Locator("input[name='uidField']").WaitForAsync(new LocatorWaitForOptions
+            await page.Locator(_idp.LoginFormSelector).WaitForAsync(new LocatorWaitForOptions
             {
                 State = WaitForSelectorState.Visible,
                 Timeout = 180_000,

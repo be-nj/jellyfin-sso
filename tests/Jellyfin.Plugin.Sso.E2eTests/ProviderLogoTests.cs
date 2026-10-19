@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json.Nodes;
 
 namespace Jellyfin.Plugin.Sso.E2eTests;
 
@@ -46,6 +47,52 @@ public sealed class ProviderLogoTests : IAsyncLifetime
 
         Assert.Equal("image/svg+xml", response.Content.Headers.ContentType?.MediaType);
         Assert.Contains("<svg", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task The_square_brand_image_is_preferred_over_the_wide_one()
+    {
+        // A provider publishes two brand images: a favicon, which is meant to be a square
+        // mark, and a logo, which is the wide lockup from the top of its login page.
+        // Authentik's own default logo is four times as wide as it is tall, and in a
+        // mark-sized box that was a coloured dash rather than a mark.
+        using var client = JellyfinEnvironment.TrustingClient();
+
+        var response = await client.GetAsync(
+            $"{_env.BaseUrl}/sso/icon/provider/{JellyfinEnvironment.ProviderId}");
+
+        // The fake publishes the favicon as PNG and the logo as GIF.
+        Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task A_provider_with_only_a_wide_logo_still_gets_its_own_mark()
+    {
+        const string ProviderId = "logo-only-provider";
+
+        _env.Idp.ServeFavicon = false;
+        try
+        {
+            // A fresh provider id, because a logo already fetched is cached under the old one.
+            await _env.PatchConfigAsync(config => config["Providers"]!.AsArray().Add(new JsonObject
+            {
+                ["Id"] = ProviderId,
+                ["Name"] = "Logo Only",
+                ["Enabled"] = true,
+                ["Authority"] = _env.Idp.ContainerAuthority,
+                ["ClientId"] = JellyfinEnvironment.ClientId,
+            }));
+
+            using var client = JellyfinEnvironment.TrustingClient();
+            var response = await client.GetAsync($"{_env.BaseUrl}/sso/icon/provider/{ProviderId}");
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal("image/gif", response.Content.Headers.ContentType?.MediaType);
+        }
+        finally
+        {
+            _env.Idp.ServeFavicon = true;
+        }
     }
 
     [Fact]

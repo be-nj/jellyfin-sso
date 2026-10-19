@@ -77,6 +77,15 @@ public sealed partial class ProviderLogos : IDisposable
         return logo;
     }
 
+    /// <summary>
+    /// The brand fields Authentik publishes, in the order they suit a button. Both are the
+    /// household's own branding, but only the favicon is meant to be a square mark:
+    /// `branding_logo` is the wide lockup from the top of the login page — Authentik's own
+    /// default is an icon with the wordmark beside it — and in a mark-sized box that
+    /// becomes a smudge.
+    /// </summary>
+    private static readonly string[] BrandFields = ["branding_favicon", "branding_logo"];
+
     /// <summary>Three places a provider keeps its logo, in order of how specific they are.</summary>
     private async Task<Logo?> FindAsync(Uri authority, CancellationToken ct)
     {
@@ -88,15 +97,23 @@ public sealed partial class ProviderLogos : IDisposable
         if (brand is not null)
         {
             using var document = JsonDocument.Parse(brand);
-            if (document.RootElement.TryGetProperty("branding_logo", out var value)
-                && value.ValueKind == JsonValueKind.String
-                && value.GetString() is { Length: > 0 } path
-                && Uri.TryCreate(origin, path, out var logoUri))
+
+            // Anything but an object has no properties to ask for, and asking anyway throws.
+            if (document.RootElement.ValueKind == JsonValueKind.Object)
             {
-                var branded = await ImageAsync(logoUri, ct).ConfigureAwait(false);
-                if (branded is not null)
+                foreach (var field in BrandFields)
                 {
-                    return branded;
+                    if (document.RootElement.TryGetProperty(field, out var value)
+                        && value.ValueKind == JsonValueKind.String
+                        && value.GetString() is { Length: > 0 } path
+                        && Uri.TryCreate(origin, path, out var logoUri))
+                    {
+                        var branded = await ImageAsync(logoUri, ct).ConfigureAwait(false);
+                        if (branded is not null)
+                        {
+                            return branded;
+                        }
+                    }
                 }
             }
         }

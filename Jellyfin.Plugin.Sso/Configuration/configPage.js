@@ -3,6 +3,8 @@
  * Must be an ES module; default export receives the view element. */
 
 var API = '/sso/admin';
+// Mirrors PluginConfiguration.DefaultLoginRequestsPerMinute.
+var DEFAULT_LOGIN_REQUESTS_PER_MINUTE = 60;
 var _libraries = [], _seenGroups = [], _users = [], _config = null;
 
 export default function (view) {
@@ -74,6 +76,12 @@ function load(view) {
         setChk(view, 'UseProviderLogos', _config.UseProviderLogos !== false);
         setChk(view, 'InjectLoginButtonIntoForm', !!_config.InjectLoginButtonIntoForm);
         setChk(view, 'AllowSelfServiceLinking', !!_config.AllowSelfServiceLinking);
+        // A saved 0 means off and has to survive the round trip, so only a missing
+        // value falls back to the default.
+        setVal(view, 'LoginRequestsPerMinute',
+            _config.LoginRequestsPerMinute == null
+                ? DEFAULT_LOGIN_REQUESTS_PER_MINUTE
+                : _config.LoginRequestsPerMinute);
         setChk(view, 'PreserveAdminPermissions', !!_config.PreserveAdminPermissions);
         renderMappings(view, _config.GroupMappings || []);
         renderLinks(view);
@@ -140,6 +148,7 @@ function save(view) {
         UseProviderLogos: getChk(view, 'UseProviderLogos'),
         InjectLoginButtonIntoForm: getChk(view, 'InjectLoginButtonIntoForm'),
         AllowSelfServiceLinking: getChk(view, 'AllowSelfServiceLinking'),
+        LoginRequestsPerMinute: rateLimit(view),
         SyncExcludedUserIds: collectExcluded(view),
     };
     apiPost(API + '/config', cfg).then(function () {
@@ -514,6 +523,14 @@ function apiDelete(url) {
 function checkOk(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r; }
 
 // ─── DOM helpers ──────────────────────────────────────────────────────────────
+
+// The limit on anonymous login requests. Anything that is not a number at all keeps
+// the default rather than turning the limit off by accident.
+function rateLimit(view) {
+    var raw = parseInt(getVal(view, 'LoginRequestsPerMinute'), 10);
+    if (isNaN(raw) || raw < 0) { return DEFAULT_LOGIN_REQUESTS_PER_MINUTE; }
+    return raw;
+}
 
 function getVal(view, id) { var e = view.querySelector('#' + id); return e ? e.value : ''; }
 function setVal(view, id, v) { var e = view.querySelector('#' + id); if (e) e.value = v; }

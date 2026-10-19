@@ -46,6 +46,8 @@ its signature is checked, and the group names that arrive with it.
 | An ID token replayed as a logout token | A logout token must carry the logout event and must not carry a `nonce` | `An_id_token_cannot_be_replayed_as_a_logout_token`, `A_token_without_the_logout_event_is_rejected` |
 | A captured logout token replayed later | `iat` is required and may be at most five minutes old | `A_token_captured_earlier_cannot_be_replayed_later` |
 | A logout for one account signing out another | The subject is matched by `(provider, sub)`, as a login is | `Another_users_logout_leaves_this_session_alone`, `SessionRevokerTests` |
+| Flooding the anonymous login endpoints | 60 requests per minute per address, answered with 429 and a Retry-After; the count has an end of its own | `A_caller_past_the_limit_is_turned_away_and_told_when_to_come_back`, `LoginRateLimiterTests` |
+| Filling the server's memory with abandoned logins | Pending states expire after ten minutes and are capped at 10 000 | `PendingStateStoreTests` |
 
 ## Known gaps
 
@@ -61,9 +63,11 @@ its signature is checked, and the group names that arrive with it.
   names the account and shows the code, and approval is a separate click
   ([#1](https://github.com/be-nj/jellyfin-sso/issues/1)). A household member who is sent
   such a link therefore sees whose code they are about to let in.
-- **No rate limit on login starts.** Each `/sso/oidc/start` allocates a pending state for
-  ten minutes. Bounded in time, not in count
-  ([#8](https://github.com/be-nj/jellyfin-sso/issues/8)).
+- **The limit counts addresses, not people.** Everyone behind one router is one caller,
+  and a caller with an IPv6 prefix to walk is many. Sixty requests a minute is roomy
+  enough that the first case does not bite and tight enough that the second gains little;
+  it is a ration on work, not an authentication decision. See
+  [Configuration](configuration.md).
 - **The plugin cannot restrict who a provider admits.** That gate belongs at the provider
   (Authentik policies, Keycloak client scopes, Authelia access rules). Providers without
   per-application assignment — Google among them — therefore admit anyone with an
@@ -71,7 +75,7 @@ its signature is checked, and the group names that arrive with it.
 
 ## How the claims are kept honest
 
-- 282 unit tests and 73 browser-driven end-to-end tests run on every push, against
+- 300 unit tests and 79 browser-driven end-to-end tests run on every push, against
   Jellyfin 12.0, 12.1 and 12.2.
 - Every release signs in through real Authentik, Keycloak and Authelia containers.
 - CodeQL runs on every push, and Scorecard rates the repository from outside. Alerts that
