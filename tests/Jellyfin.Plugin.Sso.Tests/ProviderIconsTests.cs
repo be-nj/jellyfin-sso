@@ -53,13 +53,13 @@ public sealed class ProviderIconsTests
     }
 
     [Fact]
-    public void The_button_carries_the_mark_of_its_provider()
+    public void The_button_asks_the_server_for_its_provider_s_mark()
     {
         var block = LoginButtonMarkup.Build(
             [new ProviderConfig { Id = "p1", Name = "Keycloak", Enabled = true }],
             basePath: string.Empty);
 
-        Assert.Contains("<img src=\"/sso/icon/keycloak\"", block);
+        Assert.Contains("<img src=\"/sso/icon/provider/p1\"", block);
         Assert.Contains("width=\"22\" height=\"22\"", block);
     }
 
@@ -70,6 +70,6 @@ public sealed class ProviderIconsTests
             [new ProviderConfig { Id = "p1", Name = "Authentik", Enabled = true }],
             basePath: "/jellyfin");
 
-        Assert.Contains("<img src=\"/jellyfin/sso/icon/authentik\"", block);
+        Assert.Contains("<img src=\"/jellyfin/sso/icon/provider/p1\"", block);
     }
 }

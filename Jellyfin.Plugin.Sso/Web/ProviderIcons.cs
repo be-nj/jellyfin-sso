@@ -50,6 +50,10 @@ public static class ProviderIcons
         return "generic";
     }
 
+    /// <summary>The colour of a provider's mark, for styling the button beside it.</summary>
+    public static string ColourFor(string? name, string? authority)
+        => Known.TryGetValue(SlugFor(name, authority), out var icon) ? icon.Colour : Fallback.Colour;
+
     /// <summary>The icon as an SVG document, ready to serve.</summary>
     public static string Svg(string slug)
     {

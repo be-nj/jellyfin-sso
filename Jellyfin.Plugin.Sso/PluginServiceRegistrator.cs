@@ -21,6 +21,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<UserProvisioner>();
         serviceCollection.AddSingleton<PermissionSync>();
         serviceCollection.AddSingleton<LoginBranding>();
+        serviceCollection.AddSingleton<ProviderLogos>();
         serviceCollection.AddScoped<IAuthenticationProvider, SsoAuthenticationProvider>();
 
         // The login buttons are written into Jellyfin's branding. Without this they would

@@ -42,10 +42,17 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 ```
 
-The plugin also serves the provider marks it uses itself, so a hand-written button can
-show one without reaching out to a CDN: `/sso/icon/authentik`, `/sso/icon/keycloak`,
-`/sso/icon/authelia`, `/sso/icon/google`, `/sso/icon/okta`, `/sso/icon/auth0`, and
-`/sso/icon/generic` for anything else.
+**The mark on the button** comes from the provider itself where possible: with *Use the
+provider's own logo on the button* on (the default), the server fetches the logo your
+provider shows on its own login page — Authentik's brand logo, otherwise the icon the
+login page declares — caches it for twelve hours and serves it from
+`/sso/icon/provider/<providerId>`. A household that rebranded its Authentik sees its own
+mark in Jellyfin. The fetch happens on the server, so nobody's browser contacts the
+provider before they choose to sign in, and anything that is not a small image is ignored.
+
+Without a reachable logo, or with the setting off, the plugin's own marks are served:
+`/sso/icon/authentik`, `/sso/icon/keycloak`, `/sso/icon/authelia`, `/sso/icon/google`,
+`/sso/icon/okta`, `/sso/icon/auth0`, and `/sso/icon/generic` for anything else.
 
 ## Logout
 

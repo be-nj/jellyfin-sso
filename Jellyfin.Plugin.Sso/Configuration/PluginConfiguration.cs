@@ -36,6 +36,13 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool AddLoginButtonToBranding { get; set; } = true;
 
     /// <summary>
+    /// Whether the login button carries the logo the identity provider shows on its own
+    /// login page, rather than a stock mark. The server fetches it once and caches it, so
+    /// a visitor's browser never reaches the provider before they choose to sign in.
+    /// </summary>
+    public bool UseProviderLogos { get; set; } = true;
+
+    /// <summary>
     /// Whether the plugin adds a script tag to jellyfin-web's index.html so the login
     /// button can sit inside the login form. Off by default: it rewrites a response that
     /// belongs to Jellyfin, which is a bigger step than writing the branding field.

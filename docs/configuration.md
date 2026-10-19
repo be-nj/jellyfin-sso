@@ -44,6 +44,8 @@ A public client with PKCE is the default and covers most setups.
 
 - **Put a login button on the login page** — on by default; writes the button into
   Jellyfin's branding, below the form.
+- **Use the provider's own logo on the button** — on by default; the server fetches and
+  caches the provider's logo ([Login and logout](login-and-logout.md)).
 - **Put the button inside the login form** — off by default; adds a script tag to
   Jellyfin's page as it is served so the button sits with *Sign In*
   ([Login and logout](login-and-logout.md)).
