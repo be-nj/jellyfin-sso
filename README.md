@@ -45,17 +45,20 @@ surprise people.
 
 ## Requirements
 
-- **Jellyfin 12.2.x.** Each plugin build is compiled against one server version and
+- **Jellyfin 12.2.x.** Check yours under Dashboard → **About**, or open
+  `http://<your-jellyfin>/System/Info/Public` in a browser — the `Version` field is the
+  number that matters. Each plugin build is compiled against one server version and
   Jellyfin refuses the others, so the catalog shows you only what fits:
 
   | Jellyfin | Plugin |
   |---|---|
   | 12.2.x | 1.12.2 and newer |
   | 12.1.x | 1.12.0 – 1.12.1 |
-  | 10.11.x and older | not supported |
+  | 10.11.x and older | none — upgrade Jellyfin first |
 
   Older builds stay in the repository, so a server that has not been upgraded keeps
-  seeing its version. The practical consequence: **pin your Jellyfin image tag** instead
+  seeing its version. **If the catalog shows nothing after you add the repository, your
+  Jellyfin is older than any build here** — that is the hiding at work, not a broken URL. The practical consequence: **pin your Jellyfin image tag** instead
   of running `latest`, upgrade deliberately, and check here for a matching plugin build
   first. If a Jellyfin release arrives before the plugin does, your local administrator is
   the way in until it catches up.
@@ -76,8 +79,9 @@ provider in step 4, and Authelia also needs an extra scope in step 5 and Keycloa
 setting that changes what you type in step 6 — all three are written out under
 [Identity provider setup](#identity-provider-setup). Budget half an hour the first time.
 
-1. **Back up Jellyfin's config folder.** The one with `data/`, `plugins/` and `config/` in
-   it. Everything below is undoable, but a copy costs nothing.
+1. **Back up Jellyfin's configuration.** In Docker that is whatever you mounted at
+   `/config` — the folder containing `data/`, `plugins/` and `config/`. Everything below is
+   undoable, but a copy costs nothing.
 
 2. **Install the plugin.** Dashboard → **Plugins → Repositories → +**, name it
    `SSO Authentication`, URL:
@@ -87,7 +91,8 @@ setting that changes what you type in step 6 — all three are written out under
    ```
 
    Then **Plugins → Catalog → Authentication → SSO Authentication → Install**, and restart
-   Jellyfin.
+   Jellyfin. An empty catalog means your Jellyfin version has no matching build — see the
+   table in [Requirements](#requirements).
 
 3. **Create a half-filled provider in the plugin** so it hands you an id. Dashboard →
    **Plugins → SSO Authentication → Providers → + Add Provider**. Give it a display name
@@ -95,26 +100,41 @@ setting that changes what you type in step 6 — all three are written out under
    name saves on purpose, and it is created **disabled** so nobody sees a login button
    that goes nowhere yet.
 
-   The card now prints three values. Copy the **Redirect URI**; that is what your provider
-   needs, complete, with no guessing about which part of the URL is the id.
+   The card now prints three values: the **Provider ID**, the **Redirect URI** and the
+   **Login URL**. Copy the Redirect URI — that is the one your provider needs, complete,
+   with no guessing about which part of the URL is the id. The login URL is what you open
+   to test later; the provider id only matters if you build links yourself.
 
 4. **Create the application at Authentik** with that redirect URI — the click-by-click is
-   under [Authentik](#authentik). Note the **Client ID** and the application's **issuer
-   URL**. If you already have Jellyfin accounts, also set *Subject mode* to **Based on the
-   User's username** while you are there; step 8 explains why.
+   under [Authentik](#authentik), written against Authentik 2026.8. Note the **Client ID**
+   and the application's **issuer URL**.
 
-5. **Finish the provider in the plugin:** paste the issuer URL and client id into the same
-   card, leave *Groups claim name* at `groups` and *Scopes* empty, tick **Enabled**,
-   **Save**. (Authelia is the exception: it needs `openid profile email groups` in
-   *Scopes*.)
+   Leave *Subject mode* at Authentik's default. It produces an unreadable id, which is the
+   safe choice: it survives renames and cannot be inherited by a recycled username. The
+   cost is that linking an existing Jellyfin account needs one value copied out of the log,
+   which step 8 walks through. (The alternative, *Based on the User's username*, makes
+   linking trivial and is what the [identity matching](#identity-matching--the-idp-subject)
+   section discusses — take it only if usernames in your directory are never reused.)
 
-6. **Create a group in Authentik** (for example `media`), put yourself in it, then map it:
-   **Group Mappings → + Add Mapping**, group name `media`, tick the libraries that group
-   may watch, **Save**. Without a mapping people can sign in but see nothing.
+5. **Back in the plugin, finish the provider:** paste the issuer URL and client id into
+   the same card, leave *Groups claim name* at `groups`, *Scopes* empty and *Fetch groups
+   from userinfo endpoint* off, tick **Enabled**, **Save**. Saving is enough; the server
+   does not need another restart. (Authelia is the exception on two of those: see
+   [Authelia](#authelia).)
+
+6. **Create a group in Authentik** (for example `media`) and put the test user from the
+   next step in it. Then map it **in the plugin**, under its **Group Mappings** tab:
+   **+ Add Mapping**, group name `media`, tick the libraries that group may watch,
+   **Save**. Without a mapping people can sign in but see nothing.
+
+   Type the group name exactly as the provider spells it. The field autocompletes, but
+   only from groups the plugin has already seen at a login, so the first one is typed
+   blind. After the test login in step 7, Jellyfin's log shows what actually arrived:
+   `SSO sync for user …: admin=False, libraries=1, groups=media`.
 
 7. **Test with a throwaway account first, not your own.** Create a spare user at
-   Authentik, put it in the `media` group, and leave your Jellyfin administrator out of
-   all of this for now. Open `https://<your-jellyfin>/sso/oidc/start` in a private window
+   Authentik, put it in the `media` group from step 6, and leave your own Jellyfin
+   administrator account out of all of this for now. Open `https://<your-jellyfin>/sso/oidc/start` in a private window
    and sign in as the spare user. A person without a Jellyfin account gets one created
    here; that is the path you want to see working before you touch anything that matters.
 
@@ -155,7 +175,7 @@ administrator is never demoted, by design. Log in as them, switch on *Never remo
 administrator rights on login*, then fix the mapping.
 
 **I want my backup back.** Stop Jellyfin (`docker compose stop jellyfin`), move the
-config folder aside, put your copy in its place, start it again. That returns the server
+folder you mounted at `/config` aside, put your copy in its place, start it again. That returns the server
 to the evening before, plugin and all — at the cost of anything watched since.
 
 **I want it gone again.** In Jellyfin: Dashboard → **Users** → each SSO-managed user →
@@ -165,8 +185,10 @@ in. Accounts, history and libraries survive all of it.
 
 **Jellyfin updated itself and the plugin stopped working.** A plugin build matches one
 server version. After a server upgrade, install the plugin build for the new version from
-the catalog. Until you do, SSO logins may fail — which is, once more, why the local
-administrator exists.
+the catalog. If there is none yet, you have two ways out: sign in as the local
+administrator and wait, or put the Jellyfin image tag back to the version that worked
+(`image: jellyfin/jellyfin:12.2` rather than `latest`) and pull again. Pinning that tag in
+the first place is what keeps this from happening at an inconvenient hour.
 
 **I am coming from the old 9p4 plugin.** This is a different plugin, not an update: it
 has its own id, its own configuration and its own account links. Nothing is migrated.
@@ -243,9 +265,10 @@ User's username*, which makes manual linking much easier. The trade-offs are in
 2. Add a **Group Membership** mapper to the client, claim name `groups`, and switch
    **Full group path off** — otherwise the claim reads `/media` instead of `media` and your
    group mapping has to spell it that way.
-3. Leave the plugin's scopes at the default `openid profile email`. Keycloak has **no**
-   `groups` scope unless someone creates one, and requesting a scope it does not know fails
-   the whole authorization with `invalid_scope`.
+3. Leave the plugin's *Scopes* field **empty**, which asks for `openid profile email`.
+   Keycloak has **no** `groups` scope unless someone creates one, and requesting a scope it
+   does not know fails the whole authorization with `invalid_scope` — so do not copy
+   Authelia's scope line here.
 4. The issuer URL is `https://<your-keycloak>/realms/<realm>`.
 
 ### Authelia
@@ -267,9 +290,16 @@ In Authelia's `configuration.yml`, under `identity_providers.oidc.clients`:
   token_endpoint_auth_method: 'none'
 ```
 
-Groups come from the `groups` list in Authelia's user file. Authelia keeps those claims
-out of the login token, so in the plugin switch on **Fetch groups from userinfo endpoint**
-for this provider. The issuer URL is Authelia's own base URL.
+Then, in the plugin's provider card:
+
+- *Issuer URL*: Authelia's own base URL, for example `https://auth.example.com`.
+- *Scopes*: `openid profile email groups` — Authelia only reports groups when the
+  `groups` scope is asked for, which is why this is the one provider where the field is
+  not left empty.
+- *Fetch groups from userinfo endpoint*: **on**. Authelia keeps the groups out of the
+  login token and answers with them at its userinfo endpoint instead.
+
+Groups themselves come from the `groups` list in Authelia's user file.
 
 All three setups above are what the test suite configures when it starts these providers
 in containers, so they are verified rather than remembered.
@@ -287,10 +317,24 @@ Dashboard → **Plugins → SSO Authentication**:
   `/sso/oidc/start` asks which one to use; with one it goes straight there.
 
   *Scopes* is usually left empty, which asks for `openid profile email`. Authelia needs
-  `groups` added; Keycloak rejects it. A confidential client's secret is the one setting
-  with no field: it is referenced as `env:VAR` or `file:/path` and can currently only be
-  set through the admin API, deliberately, so the secret never lands in the plugin's
-  configuration file.
+  `groups` added; Keycloak rejects it.
+
+  A confidential client's secret is the one setting with no field, so that it never lands
+  in the plugin's configuration file. The plugin stores a *reference* and reads the value
+  at login time — `env:JELLYFIN_SSO_SECRET` for an environment variable you set on the
+  Jellyfin container, or `file:/run/secrets/sso` for a file. Setting it means one API call
+  with an administrator's token; `ConfidentialSecretRef` is the field on the provider, and
+  `ClientType` has to be `1`:
+
+  ```bash
+  curl -X POST "https://<your-jellyfin>/sso/admin/config" \
+    -H 'Authorization: MediaBrowser Token="<admin token>"' \
+    -H 'Content-Type: application/json' \
+    -d @config.json   # the object from GET /sso/admin/config, with the two fields changed
+  ```
+
+  Most setups never need this: a public client with PKCE is the recommended shape and the
+  default.
 - **Sessions**:
   - **Sign out of the identity provider too** — see [Logout](#logout).
   - **Let users link their own account** — see
@@ -304,11 +348,15 @@ Dashboard → **Plugins → SSO Authentication**:
 - **Account Links** (its own tab) — the manual links between an identity and a Jellyfin
   account, plus the form to add one. See
   [Manual linking](#manual-linking-existing-local-accounts).
-- **Safety**:
-  - **Never remove administrator rights on login** — keeps existing admins even when no
-    admin group matches. Library access stays declarative.
-  - **Excluded from sync** — users whose permissions you manage by hand. They can still
-    log in via SSO; their policy is never touched.
+### Safety
+
+On the same tab as the group mappings:
+
+- **Never remove administrator rights on login** — keeps existing administrators even when
+  no admin group matches. Library access is still taken from the groups.
+- **Excluded from sync** — a checkbox for every Jellyfin user. Tick the ones whose
+  permissions you set by hand, starting with your local administrator. They can still log
+  in via SSO; their policy is never touched.
 
 > Mappings are applied **declaratively on every login**. Changing a user's library access
 > in Jellyfin's own user UI will be overwritten on their next login.
@@ -328,16 +376,17 @@ the web client stored, starts the OIDC flow for that user, and attaches the iden
 their account. An identity that is already linked to a different Jellyfin account is
 refused — only an administrator can move a link.
 
-Unlinking is not a button yet: an administrator removes the link under **Account Links**,
-and the endpoint a user's own browser could call is `DELETE /sso/link/self`, which today
-means a tool like curl rather than a page.
+Unlinking has no button for users yet. **An administrator removes any link under the
+Account Links tab**, which is the practical route. There is an endpoint for a user's own
+link, `DELETE /sso/link/self` with their Jellyfin token, but nothing in the web client
+calls it — treat it as something you do for your household, not something they do.
 
 Linking grants nothing by itself. Library access and the admin flag are applied on the
 next SSO login, from the groups, as always.
 
 ### Manual linking (existing local accounts)
 
-New users are linked automatically. Use **Manual Account Links** only to connect an
+New users are linked automatically. Use the **Account Links** tab only to connect an
 account that existed before SSO:
 
 - **Provider** + **Jellyfin user** are dropdowns.
@@ -364,9 +413,11 @@ the next login goes through without asking for credentials. With **Sign out of t
 identity provider too** enabled, sending the browser to **`/sso/oidc/logout`** after
 Jellyfin's logout ends the provider session as well and comes back to the web client.
 
-A server plugin cannot change what Jellyfin's own logout button does, so this last step
-needs a snippet in the browser. If you have the **JavaScript Injector** plugin (a separate
-community plugin that injects a script into Jellyfin's web client), add:
+**On its own, the switch changes nothing you can see.** It only decides what
+`/sso/oidc/logout` does when something sends the browser there. A server plugin cannot
+change Jellyfin's own logout button, so the last step needs a snippet in the browser,
+which means the **JavaScript Injector** plugin — a separate community plugin, installed
+from its own repository the same way this one was. With it:
 
 ```js
 // Sends the browser on to the provider's logout once Jellyfin has signed the user out.
@@ -426,7 +477,8 @@ With this plugin the browser does not even have to be signed in:
 2. In the app, choose *Quick Connect* and note the code.
 3. On a phone or laptop, open
    `https://<your-jellyfin>/sso/oidc/start/qc?code=<the-code>`. You sign in at your
-   provider, and the app logs in by itself.
+   provider, and the app logs in by itself. With several providers enabled this asks which
+   one first, carrying the code along.
 
 Once approved, the app holds a normal Jellyfin session and stays signed in like any other
 login — this is a one-time dance per device, not a weekly ritual.
@@ -487,9 +539,11 @@ In plain language first, for the two things that affect how you run this:
 
 The details, for readers who want them:
 
-- **PKCE public client** by default — no `client_secret` stored. For a confidential client,
-  supply the secret via `env:VAR` or `file:/path`, never written into the plugin's own
-  configuration file.
+- **PKCE public client** by default — no `client_secret` stored anywhere. A confidential
+  client is supported but has no field on the configuration page: its secret is set
+  through the admin API as `env:VAR` or `file:/path`, so the plugin reads it from the
+  environment or a file at login time and it never lands in the plugin's configuration
+  file. If you do not know you need this, you do not need it.
 - Full ID-token validation: JWKS signature, `iss`, `aud`, `exp`/`iat`, `nonce`; `state`
   for CSRF. Every one of those rejections has its own test.
 - The one-time secret that completes a login is random, single-use, expires in 90 seconds
@@ -504,7 +558,7 @@ The details, for readers who want them:
 | What you see | What it means |
 |---|---|
 | Plugin shows **NotSupported** in the dashboard | The plugin was built for a different Jellyfin version. Install the build whose `targetAbi` matches your server. |
-| `invalid_scope` from Keycloak | Keycloak has no `groups` scope unless you create one. Leave the plugin's scopes at the default `openid profile email`. |
+| `invalid_scope` from Keycloak | Keycloak has no `groups` scope unless you create one. Empty the provider's *Scopes* field, which asks for `openid profile email`. |
 | Login works, but the user sees **no libraries** | No group mapping matched. Check the group name in the mapping against what the provider sends; the names the plugin has seen are offered as autocomplete. |
 | New accounts are named like `01HQ3M…` | The provider sends no `preferred_username`. The plugin falls back to the userinfo endpoint; if that is empty too, add the claim at the provider. |
 | `SSO login failed: crypto.randomUUID is not a function` | A plugin build older than 1.12.1 on a server reached over plain HTTP. Update the plugin; current builds work over HTTP, which is a privacy question, not a functional one. |

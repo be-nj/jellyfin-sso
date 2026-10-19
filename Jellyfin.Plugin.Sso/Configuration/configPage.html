@@ -108,8 +108,9 @@
                 <span>Sign out of the identity provider too</span>
               </label>
               <div class="fieldDescription">
-                Send clients to <code>/sso/oidc/logout</code> after signing out of Jellyfin to
-                end the provider session as well, so the next login asks for credentials.
+                On its own this changes nothing visible: it decides what
+                <code>/sso/oidc/logout</code> does. Jellyfin's own logout button can only be
+                wired to it with a snippet in the web client — see the README.
               </div>
             </div>
             <div class="checkboxContainer">
