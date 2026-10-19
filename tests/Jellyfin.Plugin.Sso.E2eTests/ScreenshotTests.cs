@@ -116,7 +116,7 @@ public sealed class ScreenshotTests : IAsyncLifetime
 
         try
         {
-            await page.WaitForSelectorAsync("a[href*='/sso/oidc/start/']", new PageWaitForSelectorOptions
+            await page.WaitForSelectorAsync("button.sso-login-button", new PageWaitForSelectorOptions
             {
                 State = WaitForSelectorState.Visible,
                 Timeout = 20_000,
@@ -138,7 +138,7 @@ public sealed class ScreenshotTests : IAsyncLifetime
         var framed = await page.EvaluateAsync<bool>(
             """
             () => {
-              const link = document.querySelector("a[href*='/sso/oidc/start/']");
+              const link = document.querySelector("button.sso-login-button");
               const form = document.querySelector('form');
               if (!link || !form) return false;
               let node = form;

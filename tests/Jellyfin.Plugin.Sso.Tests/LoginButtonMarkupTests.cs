@@ -18,8 +18,8 @@ public sealed class LoginButtonMarkupTests
         var block = LoginButtonMarkup.Build(
             [Provider("p1", "Authentik"), Provider("p2", "Keycloak")], basePath: string.Empty);
 
-        Assert.Contains("href=\"/sso/oidc/start/p1\"", block);
-        Assert.Contains("href=\"/sso/oidc/start/p2\"", block);
+        Assert.Contains("action=\"/sso/oidc/start/p1\"", block);
+        Assert.Contains("action=\"/sso/oidc/start/p2\"", block);
         Assert.Contains("Login with Authentik", block);
         Assert.Contains("Login with Keycloak", block);
     }
@@ -29,7 +29,7 @@ public sealed class LoginButtonMarkupTests
     {
         var block = LoginButtonMarkup.Build([Provider("p1", "Authentik")], basePath: "/jellyfin");
 
-        Assert.Contains("href=\"/jellyfin/sso/oidc/start/p1\"", block);
+        Assert.Contains("action=\"/jellyfin/sso/oidc/start/p1\"", block);
     }
 
     [Theory]
@@ -38,7 +38,7 @@ public sealed class LoginButtonMarkupTests
     public void The_sub_path_is_normalised(string basePath)
     {
         Assert.Contains(
-            "href=\"/jellyfin/sso/oidc/start/p1\"",
+            "action=\"/jellyfin/sso/oidc/start/p1\"",
             LoginButtonMarkup.Build([Provider("p1", "Authentik")], basePath));
     }
 
@@ -49,7 +49,7 @@ public sealed class LoginButtonMarkupTests
             [new ProviderConfig { Id = "p1", Name = "   ", Enabled = true }], basePath: string.Empty);
 
         Assert.Contains("Login with SSO", block);
-        Assert.Contains("href=\"/sso/oidc/start/p1\"", block);
+        Assert.Contains("action=\"/sso/oidc/start/p1\"", block);
     }
 
     [Fact]

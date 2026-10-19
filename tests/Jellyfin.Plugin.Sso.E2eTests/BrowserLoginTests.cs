@@ -77,6 +77,52 @@ public sealed class BrowserLoginTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Clicking_the_button_on_the_login_page_signs_the_user_in()
+    {
+        _env.Idp.NextUser = new FakeUser("sub-click", "clickuser", ["media"]);
+        await _env.PatchConfigAsync(config =>
+            config["Providers"]!.AsArray()[0]!["Name"] = "Fake IdP");
+
+        await using var context = await _browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            BaseURL = _env.BaseUrl,
+            IgnoreHTTPSErrors = true,
+        });
+        var page = await context.NewPageAsync();
+
+        var consoleErrors = new List<string>();
+        page.Console += (_, message) =>
+        {
+            if (message.Type == "error")
+            {
+                consoleErrors.Add(message.Text);
+            }
+        };
+
+        // The path a household actually takes: the login page, then the button, rather
+        // than the start endpoint typed into the address bar.
+        await page.GotoAsync("/web/index.html#/login.html");
+        var button = page.Locator("button.sso-login-button");
+        await button.WaitForAsync(new LocatorWaitForOptions
+        {
+            State = WaitForSelectorState.Visible,
+            Timeout = 30_000,
+        });
+        var markup = await button.EvaluateAsync<string>("el => el.outerHTML");
+        await button.ClickAsync();
+        await page.WaitForTimeoutAsync(2_000);
+
+        if (page.Url.Contains("login", StringComparison.OrdinalIgnoreCase))
+        {
+            Assert.Fail($"still on the login page.\nurl: {page.Url}\nanchor: {markup}\n"
+                + $"console: {string.Join(" | ", consoleErrors)}");
+        }
+
+        await WaitForSignedInAsync(page, "login-page-button", consoleErrors);
+        Assert.DoesNotContain("login.html", page.Url);
+    }
+
+    [Fact]
     public async Task The_session_survives_a_reload()
     {
         _env.Idp.NextUser = new FakeUser("sub-reload", "reloaduser", ["media"]);
