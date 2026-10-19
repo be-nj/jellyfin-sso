@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -56,7 +57,19 @@ public sealed class LoginFormScriptInjection : IStartupFilter
                     await continuePipeline().ConfigureAwait(false);
 
                     buffer.Position = 0;
-                    var rewritten = await RewriteAsync(context, buffer).ConfigureAwait(false);
+                    string? rewritten = null;
+
+                    try
+                    {
+                        rewritten = await RewriteAsync(context, buffer).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (ex is IOException or InvalidOperationException
+                        or ArgumentException or DecoderFallbackException)
+                    {
+                        // Our own editing failed. The page itself is fine — serve it.
+                        _logger.LogWarning(
+                            ex, "SSO: could not add the login button script; serving the page as it was.");
+                    }
 
                     context.Response.Body = original;
                     buffer.Position = 0;
@@ -67,19 +80,14 @@ public sealed class LoginFormScriptInjection : IStartupFilter
                         return;
                     }
 
-                    var bytes = System.Text.Encoding.UTF8.GetBytes(rewritten);
+                    var bytes = Encoding.UTF8.GetBytes(rewritten);
                     context.Response.ContentLength = bytes.Length;
                     await original.WriteAsync(bytes).ConfigureAwait(false);
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "SSO: could not add the login button script; serving the page as it was.");
-                    context.Response.Body = original;
-                    buffer.Position = 0;
-                    await buffer.CopyToAsync(original).ConfigureAwait(false);
-                }
                 finally
                 {
+                    // Whatever happened, the response must end up on the real stream and
+                    // the request must look untouched to everything after us.
                     context.Request.Headers.AcceptEncoding = encodings;
                     context.Response.Body = original;
                 }

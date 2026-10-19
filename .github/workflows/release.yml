@@ -12,14 +12,17 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
-  # Provenance: the attestation is signed for this repository and workflow run.
-  id-token: write
-  attestations: write
+  contents: read
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      # Pushes the manifest commit and creates the release.
+      contents: write
+      # Provenance: the attestation is signed for this repository and run.
+      id-token: write
+      attestations: write
     steps:
       - name: Check out main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

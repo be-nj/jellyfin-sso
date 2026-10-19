@@ -17,13 +17,16 @@ on:
   schedule:
     - cron: '0 5 * * 1'
 
+# Least privilege at the top; the job that needs to write findings asks for it itself.
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   analyze:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

@@ -851,10 +851,12 @@ public sealed class SsoController : ControllerBase
     private string ExternalBaseUri()
     {
         var req = HttpContext.Request;
-        var scheme = req.Headers["X-Forwarded-Proto"].FirstOrDefault()
-            ?? req.Headers["X-Forwarded-Scheme"].FirstOrDefault()
-            ?? req.Scheme;
-        var host = req.Headers["X-Forwarded-Host"].FirstOrDefault() ?? req.Host.ToString();
+        var scheme = ForwardedPaths.Scheme(
+            req.Headers["X-Forwarded-Proto"].FirstOrDefault()
+                ?? req.Headers["X-Forwarded-Scheme"].FirstOrDefault(),
+            req.Scheme);
+        var host = ForwardedPaths.Host(
+            req.Headers["X-Forwarded-Host"].FirstOrDefault(), req.Host.ToString());
 
         // A server published under a sub-path ("BaseUrl" in Jellyfin's network settings,
         // or a proxy that keeps the prefix) must keep that prefix in its redirect URI,
