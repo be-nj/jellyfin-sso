@@ -21,6 +21,7 @@ public sealed class SsoController : ControllerBase
     private readonly ClaimsExtractor _claims;
     private readonly UserProvisioner _provisioner;
     private readonly PermissionSync _permissions;
+    private readonly SessionRevoker _revoker;
     private readonly EphemeralSecretStore _secrets;
     private readonly QuickConnectApprovalStore _approvals;
     private readonly ProviderLogos _logos;
@@ -34,6 +35,7 @@ public sealed class SsoController : ControllerBase
         ClaimsExtractor claims,
         UserProvisioner provisioner,
         PermissionSync permissions,
+        SessionRevoker revoker,
         EphemeralSecretStore secrets,
         QuickConnectApprovalStore approvals,
         ProviderLogos logos,
@@ -46,6 +48,7 @@ public sealed class SsoController : ControllerBase
         _claims = claims;
         _provisioner = provisioner;
         _permissions = permissions;
+        _revoker = revoker;
         _secrets = secrets;
         _approvals = approvals;
         _logos = logos;
@@ -59,11 +62,7 @@ public sealed class SsoController : ControllerBase
     // ──────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Stable entry point. With one enabled provider it goes straight there; with several
-    /// it asks which one. The URL never changes, so the login button can be static.
-    /// </summary>
-    /// <summary>
-    /// The script that places the login button inside Jellyfin's login form. Served only
+    /// The script that places    /// The script that places the login button inside Jellyfin's login form. Served only
     /// when the administrator asked for it; otherwise it is an empty file, so a cached
     /// index.html cannot keep a button alive after the switch is turned off.
     /// </summary>
@@ -81,75 +80,7 @@ public sealed class SsoController : ControllerBase
             return Content("/* SSO: the in-form login button is off. */", "application/javascript");
         }
 
-        var basePath = BasePath();
-        var buttons = providers.Select(p => new
-        {
-            name = string.IsNullOrWhiteSpace(p.Name) ? "SSO" : p.Name,
-            href = $"{basePath}/sso/oidc/start/{Uri.EscapeDataString(p.Id)}",
-            icon = $"{basePath}/sso/icon/{ProviderIcons.SlugFor(p.Name, p.Authority)}",
-        });
-
-        var json = System.Text.Json.JsonSerializer.Serialize(buttons);
-
-        // Written as plain ES5 so it runs in whatever a television calls a browser.
-        var script = $$"""
-            (function () {
-              var buttons = {{json}};
-
-              function form() {
-                return document.querySelector('.loginForm')
-                  || document.querySelector('form.login')
-                  || document.querySelector('#loginPage form')
-                  || document.querySelector('form');
-              }
-
-              function onLoginPage() {
-                var hash = (location.hash || '').toLowerCase();
-                return hash.indexOf('login') !== -1
-                  || document.querySelector('input[type="password"]') !== null;
-              }
-
-              function place() {
-                if (!onLoginPage() || document.querySelector('.sso-form-button')) return;
-                var target = form();
-                if (!target) return;
-
-                buttons.forEach(function (button) {
-                  var link = document.createElement('a');
-                  link.className = 'raised block emby-button sso-form-button';
-                  link.setAttribute('data-role', 'button');
-                  link.href = button.href;
-                  link.style.display = 'flex';
-                  link.style.alignItems = 'center';
-                  link.style.justifyContent = 'center';
-                  link.style.gap = '.6em';
-
-                  var mark = document.createElement('img');
-                  mark.src = button.icon;
-                  mark.alt = '';
-                  mark.width = 20;
-                  mark.height = 20;
-
-                  var label = document.createElement('span');
-                  label.textContent = 'Login with ' + button.name;
-
-                  link.appendChild(mark);
-                  link.appendChild(label);
-                  target.appendChild(link);
-                });
-              }
-
-              // jellyfin-web is a single page: the form arrives, and comes back, long
-              // after this script runs.
-              document.addEventListener('DOMContentLoaded', place);
-              window.addEventListener('hashchange', function () { setTimeout(place, 200); });
-              new MutationObserver(function () { place(); })
-                .observe(document.documentElement, { childList: true, subtree: true });
-              place();
-            })();
-            """;
-
-        return Content(script, "application/javascript");
+        return Content(SsoPages.LoginButtonScript(BasePath(), providers), "application/javascript");
     }
 
     /// <summary>
@@ -197,6 +128,10 @@ public sealed class SsoController : ControllerBase
         return Content(ProviderIcons.Svg(slug), "image/svg+xml");
     }
 
+    /// <summary>
+    /// Stable entry point. With one enabled provider it goes straight there; with several
+    /// it asks which one. The URL never changes, so the login button can be static.
+    /// </summary>
     [HttpGet("oidc/start")]
     [AllowAnonymous]
     public async Task<IActionResult> StartDefault(CancellationToken ct)
@@ -233,24 +168,7 @@ public sealed class SsoController : ControllerBase
         if (provider is null)
             return NotFoundText("No such provider, or it is not enabled.");
 
-        var redirectUri = BuildCallbackUri(providerId);
-        var (state, pending) = _states.Issue(provider.Id, redirectUri);
-
-        var disco = await _oidc.GetDiscoveryDocumentAsync(provider, ct).ConfigureAwait(false);
-
-        var authorizeUrl = new RequestUrl(disco.AuthorizeEndpoint
-            ?? throw new InvalidOperationException("Discovery document has no authorize endpoint."))
-            .CreateAuthorizeUrl(
-                clientId: provider.ClientId,
-                responseType: "code",
-                scope: string.Join(' ', provider.EffectiveScopes()),
-                redirectUri: redirectUri,
-                state: state,
-                nonce: pending.Nonce,
-                codeChallenge: PendingStateStore.CodeChallenge(pending.CodeVerifier),
-                codeChallengeMethod: "S256");
-
-        return Redirect(authorizeUrl);
+        return Redirect(await AuthorizeUrlAsync(provider, ct).ConfigureAwait(false));
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -269,24 +187,8 @@ public sealed class SsoController : ControllerBase
         if (provider is null)
             return NotFoundText("No such provider, or it is not enabled.");
 
-        var redirectUri = BuildCallbackUri(providerId);
-        var (state, pending) = _states.Issue(provider.Id, redirectUri, quickConnectCode: code);
-
-        var disco = await _oidc.GetDiscoveryDocumentAsync(provider, ct).ConfigureAwait(false);
-
-        var authorizeUrl = new RequestUrl(disco.AuthorizeEndpoint
-            ?? throw new InvalidOperationException("Discovery document has no authorize endpoint."))
-            .CreateAuthorizeUrl(
-                clientId: provider.ClientId,
-                responseType: "code",
-                scope: string.Join(' ', provider.EffectiveScopes()),
-                redirectUri: redirectUri,
-                state: state,
-                nonce: pending.Nonce,
-                codeChallenge: PendingStateStore.CodeChallenge(pending.CodeVerifier),
-                codeChallengeMethod: "S256");
-
-        return Redirect(authorizeUrl);
+        return Redirect(await AuthorizeUrlAsync(provider, ct, quickConnectCode: code)
+            .ConfigureAwait(false));
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -344,6 +246,76 @@ public sealed class SsoController : ControllerBase
             _logger.LogWarning(ex, "Provider logout failed for {Id}", KnownProviderId(provider.Id));
             return LocalRedirect(home);
         }
+    }
+
+    /// <summary>
+    /// Where the identity provider says a session has ended (OpenID Connect Back-Channel
+    /// Logout 1.0). Anonymous because the caller is the provider's own back end and has no
+    /// Jellyfin token; the signed logout token is what authorises it, and nothing happens
+    /// until that token checks out against the same JWKS a login is checked against.
+    /// </summary>
+    [HttpPost("oidc/backchannel-logout/{providerId}")]
+    [AllowAnonymous]
+    [Consumes("application/x-www-form-urlencoded")]
+    public async Task<IActionResult> BackChannelLogout(
+        string providerId,
+        [FromForm(Name = "logout_token")] string? logoutToken,
+        CancellationToken ct)
+    {
+        // "The response MUST be cached by neither the client nor any intermediary."
+        Response.Headers.CacheControl = "no-store";
+
+        var provider = GetEnabledProvider(providerId);
+        if (provider is null)
+            return NotFoundText("No such provider, or it is not enabled.");
+
+        if (!provider.AcceptBackChannelLogout)
+            return NotFoundText("Back-channel logout is turned off for this provider.");
+
+        if (string.IsNullOrWhiteSpace(logoutToken))
+            return BadRequestText("No logout_token in the request.");
+
+        LogoutSubject subject;
+        try
+        {
+            var disco = await _oidc.GetDiscoveryDocumentAsync(provider, ct).ConfigureAwait(false);
+            subject = LogoutTokenValidator.Validate(
+                provider, disco.Issuer, OidcClientFactory.SigningKeysFrom(disco), logoutToken);
+        }
+        catch (Microsoft.IdentityModel.Tokens.SecurityTokenException ex)
+        {
+            // The message describes the token, never quotes it.
+            _logger.LogWarning(
+                "Rejected a back-channel logout for provider {Id}: {Reason}",
+                KnownProviderId(provider.Id), ex.Message);
+            return BadRequestText("The logout token is not valid.");
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Discovery failed: the provider is unreachable, so the token cannot be checked.
+            _logger.LogWarning(
+                ex, "Could not check a back-channel logout for provider {Id}",
+                KnownProviderId(provider.Id));
+            return BadRequestText("The logout token could not be checked.");
+        }
+
+        if (subject.Sub is null)
+        {
+            // A token that names only the provider's session id cannot be matched: the
+            // plugin stores the subject, not the session.
+            _logger.LogInformation(
+                "Back-channel logout for provider {Id} named only a session id; nothing to do.",
+                KnownProviderId(provider.Id));
+            return Ok();
+        }
+
+        var revoked = await _revoker.RevokeAsync(provider.Id, subject.Sub, ct).ConfigureAwait(false);
+
+        _logger.LogInformation(
+            "Back-channel logout from provider {Id} ended the sessions of {Count} account(s).",
+            KnownProviderId(provider.Id), revoked);
+
+        return Ok();
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -445,65 +417,7 @@ public sealed class SsoController : ControllerBase
         if (providers.Count == 0)
             return NotFound("No enabled SSO provider configured.");
 
-        var options = string.Join("\n", providers.Select(p =>
-            $"<option value={JsonEscape(p.Id)}>{Html(p.Name)}</option>"));
-
-        var html = $$"""
-            <!DOCTYPE html>
-            <html><head><meta charset="utf-8"/><title>Link SSO account</title>
-            <style>
-              body{font-family:system-ui,sans-serif;background:#1c1c1c;color:#ddd;display:flex;
-                   align-items:center;justify-content:center;height:100vh;margin:0}
-              .card{max-width:30em;padding:2em;line-height:1.5}
-              select,button{font:inherit;padding:.5em;margin-top:.75em}
-              #msg{color:#f88}
-            </style>
-            </head><body><div class="card">
-            <h1>Link your SSO account</h1>
-            <p>You are signed in to Jellyfin. Linking connects this account to your identity
-               provider so you can sign in with it from now on.</p>
-            <select id="provider">{{options}}</select>
-            <button id="go" type="button">Continue to provider</button>
-            <p id="msg"></p>
-            <script>
-            (function() {
-              const msg = document.getElementById('msg');
-
-              function token() {
-                try {
-                  const creds = JSON.parse(localStorage.getItem('jellyfin_credentials') || '{}');
-                  const server = (creds.Servers || [])[0];
-                  return server && server.AccessToken;
-                } catch (e) { return null; }
-              }
-
-              document.getElementById('go').addEventListener('click', async function() {
-                const accessToken = token();
-                if (!accessToken) {
-                  msg.textContent = 'Please sign in to Jellyfin in this browser first.';
-                  return;
-                }
-                msg.textContent = '';
-                try {
-                  const providerId = document.getElementById('provider').value;
-                  const res = await fetch('{{BasePath()}}/sso/link/start?providerId='
-                    + encodeURIComponent(providerId), {
-                    method: 'POST',
-                    headers: { 'Authorization': 'MediaBrowser Token="' + accessToken + '"' },
-                  });
-                  if (!res.ok) throw new Error(await res.text() || ('HTTP ' + res.status));
-                  const data = await res.json();
-                  window.location.href = data.AuthorizeUrl;
-                } catch (e) {
-                  msg.textContent = 'Could not start linking: ' + e.message;
-                }
-              });
-            })();
-            </script>
-            </div></body></html>
-            """;
-
-        return Content(html, "text/html");
+        return Content(SsoPages.SelfServiceLink(BasePath(), providers), "text/html");
     }
 
     /// <summary>
@@ -529,21 +443,8 @@ public sealed class SsoController : ControllerBase
         if (config.Links.Any(l => l.ProviderId == provider.Id && l.JellyfinUserId == userId))
             return Conflict("This account is already linked for that provider.");
 
-        var redirectUri = BuildCallbackUri(provider.Id);
-        var (state, pending) = _states.Issue(provider.Id, redirectUri, linkUserId: userId);
-        var disco = await _oidc.GetDiscoveryDocumentAsync(provider, ct).ConfigureAwait(false);
-
-        var authorizeUrl = new RequestUrl(disco.AuthorizeEndpoint
-            ?? throw new InvalidOperationException("Discovery document has no authorize endpoint."))
-            .CreateAuthorizeUrl(
-                clientId: provider.ClientId,
-                responseType: "code",
-                scope: string.Join(' ', provider.EffectiveScopes()),
-                redirectUri: redirectUri,
-                state: state,
-                nonce: pending.Nonce,
-                codeChallenge: PendingStateStore.CodeChallenge(pending.CodeVerifier),
-                codeChallengeMethod: "S256");
+        var authorizeUrl = await AuthorizeUrlAsync(provider, ct, linkUserId: userId)
+            .ConfigureAwait(false);
 
         _logger.LogInformation(
             "Self-service link started by user {UserId} for provider {Id}",
@@ -581,102 +482,41 @@ public sealed class SsoController : ControllerBase
     // Helpers
     // ──────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Issues the state for a new flow and builds the provider's authorize URL for it.
+    /// Every entry point — plain login, Quick Connect, self-service linking — differs only
+    /// in what it writes into that state, so the request itself is built in one place.
+    /// </summary>
+    private async Task<string> AuthorizeUrlAsync(
+        ProviderConfig provider,
+        CancellationToken ct,
+        string? quickConnectCode = null,
+        Guid? linkUserId = null)
+    {
+        var redirectUri = BuildCallbackUri(provider.Id);
+        var (state, pending) = _states.Issue(provider.Id, redirectUri, quickConnectCode, linkUserId);
+
+        var disco = await _oidc.GetDiscoveryDocumentAsync(provider, ct).ConfigureAwait(false);
+
+        return new RequestUrl(disco.AuthorizeEndpoint
+            ?? throw new InvalidOperationException("Discovery document has no authorize endpoint."))
+            .CreateAuthorizeUrl(
+                clientId: provider.ClientId,
+                responseType: "code",
+                scope: string.Join(' ', provider.EffectiveScopes()),
+                redirectUri: redirectUri,
+                state: state,
+                nonce: pending.Nonce,
+                codeChallenge: PendingStateStore.CodeChallenge(pending.CodeVerifier),
+                codeChallengeMethod: "S256");
+    }
+
     private Task<IActionResult> CompleteWebLoginAsync(string username, CancellationToken ct)
     {
         var secret = _secrets.Issue(username);
 
-        // The callback page runs standalone (outside Jellyfin's SPA) so window.ApiClient
-        // is unavailable. We authenticate via raw fetch, write the result into Jellyfin's
-        // localStorage credential format, then redirect into the SPA.
-        var html = $$"""
-            <!DOCTYPE html>
-            <html><head><meta charset="utf-8"/><title>SSO Login</title>
-            <style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#1c1c1c;color:#ddd}</style>
-            </head><body>
-            <p id="msg">Completing login&hellip;</p>
-            <script>
-            (async function() {
-              const msg = document.getElementById('msg');
-              try {
-                // crypto.randomUUID only exists in a secure context, so a server reached
-                // over plain HTTP on a LAN address would fail here. Fall back to
-                // getRandomValues, which has no such restriction.
-                function uuid() {
-                  if (window.crypto && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
-                  const bytes = new Uint8Array(16);
-                  if (window.crypto && typeof crypto.getRandomValues === 'function') {
-                    crypto.getRandomValues(bytes);
-                  } else {
-                    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
-                  }
-                  bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
-                  bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 1
-                  let hex = '';
-                  for (const b of bytes) hex += b.toString(16).padStart(2, '0');
-                  return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16)
-                    + '-' + hex.slice(16, 20) + '-' + hex.slice(20);
-                }
-
-                const deviceId = localStorage.getItem('_deviceId2') || uuid();
-                localStorage.setItem('_deviceId2', deviceId);
-
-                // Authenticate as the web client with its device id. Jellyfin keys sessions
-                // by client + device id, so the token belongs to the same session the web
-                // app later plays on, instead of a second session that shares the device id.
-                const info = await fetch('{{BasePath()}}/System/Info/Public').then(function(r){ return r.json(); });
-                // Rough match of the names jellyfin-web reports, so the device list stays readable.
-                const ua = navigator.userAgent;
-                const device = /Edg\//.test(ua) ? 'Edge Chromium'
-                  : /Firefox\//.test(ua) ? 'Firefox'
-                  : /Chrome\//.test(ua) ? 'Chrome'
-                  : /Safari\//.test(ua) ? 'Safari'
-                  : 'Web Browser';
-                const authHeader = 'MediaBrowser Client="Jellyfin Web", Device="' + device + '", DeviceId="'
-                  + deviceId + '", Version="' + info.Version + '"';
-
-                const res = await fetch('{{BasePath()}}/Users/AuthenticateByName', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
-                  body: JSON.stringify({ Username: {{JsonEscape(username)}}, Pw: {{JsonEscape(secret)}} })
-                });
-
-                if (!res.ok) throw new Error('Auth failed: HTTP ' + res.status);
-                const data = await res.json();
-
-                // Write credentials into localStorage in Jellyfin's expected format.
-                const credsKey = 'jellyfin_credentials';
-                let creds = { Servers: [] };
-                try { creds = JSON.parse(localStorage.getItem(credsKey) || '{"Servers":[]}'); } catch(e) {}
-
-                const serverEntry = {
-                  Id: data.ServerId,
-                  AccessToken: data.AccessToken,
-                  UserId: data.User.Id,
-                  UserName: data.User.Name,
-                  // jellyfin-web resolves the API address from the entry itself; without
-                  // an address for the chosen mode it throws "Must supply a serverAddress".
-                  ManualAddress: window.location.origin,
-                  LastConnectionMode: 2,
-                  DateLastAccessed: Date.now(),
-                };
-
-                const idx = creds.Servers.findIndex(function(s){ return s.Id === data.ServerId; });
-                if (idx >= 0) { creds.Servers[idx] = Object.assign(creds.Servers[idx], serverEntry); }
-                else { creds.Servers.push(serverEntry); }
-
-                localStorage.setItem(credsKey, JSON.stringify(creds));
-
-                msg.textContent = 'Login successful — redirecting…';
-                window.location.href = '{{BasePath()}}/web/index.html';
-              } catch(e) {
-                msg.textContent = 'SSO login failed: ' + e.message;
-              }
-            })();
-            </script>
-            </body></html>
-            """;
-
-        return Task.FromResult<IActionResult>(Content(html, "text/html"));
+        return Task.FromResult<IActionResult>(
+            Content(SsoPages.CompleteWebLogin(BasePath(), username, secret), "text/html"));
     }
 
     /// <summary>
@@ -689,31 +529,9 @@ public sealed class SsoController : ControllerBase
     {
         var token = _approvals.Issue(userId, username, quickConnectCode);
 
-        var html = $$"""
-            <!DOCTYPE html>
-            <html><head><meta charset="utf-8"/><title>Approve this device</title>
-            <style>
-              body{font-family:system-ui,sans-serif;background:#1c1c1c;color:#ddd;display:flex;
-                   align-items:center;justify-content:center;height:100vh;margin:0}
-              .card{max-width:28em;padding:2em;line-height:1.5;text-align:center}
-              .code{font-size:2em;letter-spacing:.2em;margin:.5em 0;font-family:ui-monospace,monospace}
-              button{font:inherit;padding:.6em 1.4em;margin-top:1em;cursor:pointer}
-              a{color:#9bf}
-            </style>
-            </head><body><div class="card">
-            <h1>Approve this device?</h1>
-            <p>Signed in as <strong>{{Html(username)}}</strong>. A device is waiting with this code:</p>
-            <p class="code">{{Html(quickConnectCode)}}</p>
-            <p>Approve only if this is the code your own device is showing.</p>
-            <form method="post" action="{{BasePath()}}/sso/oidc/qc/approve">
-              <input type="hidden" name="token" value="{{Html(token)}}"/>
-              <button type="submit">Approve</button>
-            </form>
-            <p><a href="{{BasePath()}}/web/index.html">Cancel</a></p>
-            </div></body></html>
-            """;
-
-        return Content(html, "text/html");
+        return Content(
+            SsoPages.ApproveQuickConnect(BasePath(), username, quickConnectCode, token),
+            "text/html");
     }
 
     /// <summary>Approves the code the page just showed, once.</summary>
@@ -738,21 +556,7 @@ public sealed class SsoController : ControllerBase
         if (!authorized)
             return BadRequestText("Quick Connect authorization failed. The code may have expired.");
 
-        var html = """
-            <!DOCTYPE html>
-            <html><head><meta charset="utf-8"/><title>Login approved</title>
-            <style>
-              body{font-family:system-ui,sans-serif;background:#1c1c1c;color:#ddd;display:flex;
-                   align-items:center;justify-content:center;height:100vh;margin:0}
-              .card{max-width:24em;padding:2em;text-align:center;line-height:1.5}
-            </style>
-            </head><body><div class="card">
-            <h1>Login approved</h1>
-            <p>You can close this tab and go back to the app.</p>
-            </div></body></html>
-            """;
-
-        return Content(html, "text/html");
+        return Content(SsoPages.QuickConnectApproved(), "text/html");
     }
 
     /// <summary>Attaches the identity to the account the user is already signed into.</summary>
@@ -805,52 +609,11 @@ public sealed class SsoController : ControllerBase
     }
 
     private IActionResult LinkResultPage(string message, bool success)
-    {
-        var html = $$"""
-            <!DOCTYPE html>
-            <html><head><meta charset="utf-8"/><title>SSO linking</title>
-            <style>
-              body{font-family:system-ui,sans-serif;background:#1c1c1c;color:#ddd;display:flex;
-                   align-items:center;justify-content:center;height:100vh;margin:0}
-              .card{max-width:30em;padding:2em;line-height:1.5;text-align:center}
-              a{color:#9bf}
-            </style>
-            </head><body><div class="card">
-            <h1>{{(success ? "Account linked" : "Linking failed")}}</h1>
-            <p>{{Html(message)}}</p>
-            <p><a href="{{BasePath()}}/web/index.html">Back to Jellyfin</a></p>
-            </div></body></html>
-            """;
-
-        return Content(html, "text/html");
-    }
+        => Content(SsoPages.LinkResult(BasePath(), message, success), "text/html");
 
     /// <summary>Lets the user choose when more than one provider is enabled.</summary>
     private IActionResult ProviderPicker(IReadOnlyList<ProviderConfig> providers, string queryString)
-    {
-        var buttons = string.Join("\n", providers.Select(p =>
-            $"<a class=\"choice\" href=\"{BasePath()}/sso/oidc/start/{Uri.EscapeDataString(p.Id)}{queryString}\">"
-            + $"{Html(p.Name)}</a>"));
-
-        var html = $$"""
-            <!DOCTYPE html>
-            <html><head><meta charset="utf-8"/><title>Choose a login provider</title>
-            <style>
-              body{font-family:system-ui,sans-serif;background:#1c1c1c;color:#ddd;display:flex;
-                   align-items:center;justify-content:center;height:100vh;margin:0}
-              .card{max-width:24em;padding:2em;text-align:center}
-              .choice{display:block;margin:.5em 0;padding:.75em 1em;background:#2c2c2c;color:#ddd;
-                      border-radius:.25em;text-decoration:none}
-              .choice:hover{background:#3a3a3a}
-            </style>
-            </head><body><div class="card">
-            <h1>Sign in with</h1>
-            {{buttons}}
-            </div></body></html>
-            """;
-
-        return Content(html, "text/html");
-    }
+        => Content(SsoPages.ProviderPicker(BasePath(), providers, queryString), "text/html");
 
     private static List<ProviderConfig> EnabledProviders()
         => Plugin.Instance?.Configuration.Providers.Where(p => p.Enabled).ToList() ?? [];
@@ -922,10 +685,6 @@ public sealed class SsoController : ControllerBase
             ContentType = "text/plain",
         };
 
-    /// <summary>Minimal HTML escaping for the few values these pages print.</summary>
-    private static string Html(string? value)
-        => System.Net.WebUtility.HtmlEncode(value ?? string.Empty);
-
     private static ProviderConfig? GetEnabledProvider(string providerId)
         => Plugin.Instance?.Configuration.Providers
             .FirstOrDefault(p => p.Enabled &&
@@ -961,7 +720,4 @@ public sealed class SsoController : ControllerBase
         "temporarily_unavailable" => "temporarily_unavailable",
         _ => "unrecognised_error",
     };
-
-    private static string JsonEscape(string s)
-        => System.Text.Json.JsonSerializer.Serialize(s);
 }

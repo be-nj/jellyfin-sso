@@ -20,6 +20,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<ClaimsExtractor>();
         serviceCollection.AddSingleton<UserProvisioner>();
         serviceCollection.AddSingleton<PermissionSync>();
+        serviceCollection.AddSingleton<SessionRevoker>();
         serviceCollection.AddSingleton<LoginBranding>();
         serviceCollection.AddSingleton<ProviderLogos>();
         serviceCollection.AddScoped<IAuthenticationProvider, SsoAuthenticationProvider>();

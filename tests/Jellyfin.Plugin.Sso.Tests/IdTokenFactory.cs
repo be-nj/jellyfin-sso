@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using Jellyfin.Plugin.Sso.Oidc;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using Microsoft.IdentityModel.Tokens;
@@ -48,13 +49,9 @@ internal sealed class IdTokenFactory : IDisposable
             claims.Add(new Claim("preferred_username", preferredUsername));
         }
 
-
         if (name is not null)
-
         {
-
             claims.Add(new Claim("name", name));
-
         }
 
         if (nonce is not null)
@@ -80,6 +77,73 @@ internal sealed class IdTokenFactory : IDisposable
             notBefore: notBefore,
             expires: expires,
             signingCredentials: new SigningCredentials(_key, SecurityAlgorithms.RsaSha256));
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+
+    /// <summary>
+    /// Mints a back-channel logout token the way a provider would. The <c>events</c> claim
+    /// is a JSON object, as the specification has it, rather than a string that looks like
+    /// one — the two reach the validator differently.
+    /// </summary>
+    public string MintLogoutToken(
+        string? sub = "ben",
+        string? sid = "session-1",
+        string issuer = Issuer,
+        string audience = Audience,
+        string? nonce = null,
+        object? events = null,
+        bool withEvents = true,
+        bool withIssuedAt = true,
+        TimeSpan? age = null,
+        TimeSpan? lifetime = null)
+    {
+        var now = DateTimeOffset.UtcNow - (age ?? TimeSpan.Zero);
+
+        var payload = new JwtPayload
+        {
+            { "iss", issuer },
+            { "aud", audience },
+            { "jti", Guid.NewGuid().ToString("N") },
+        };
+
+        if (sub is not null)
+        {
+            payload.Add("sub", sub);
+        }
+
+        if (sid is not null)
+        {
+            payload.Add("sid", sid);
+        }
+
+        if (nonce is not null)
+        {
+            payload.Add("nonce", nonce);
+        }
+
+        if (withIssuedAt)
+        {
+            payload.Add("iat", now.ToUnixTimeSeconds());
+        }
+
+        if (withEvents)
+        {
+            payload.Add("events", events ?? new Dictionary<string, object>
+            {
+                [LogoutTokenValidator.EventName] = new Dictionary<string, object>(),
+            });
+        }
+
+        if (lifetime is { } span)
+        {
+            payload.Add("exp", now.Add(span).ToUnixTimeSeconds());
+        }
+
+        var token = new JwtSecurityToken(
+            new JwtHeader(new SigningCredentials(_key, SecurityAlgorithms.RsaSha256)),
+            payload);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }

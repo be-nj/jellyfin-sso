@@ -31,7 +31,8 @@ public sealed class ClaimsExtractor
         CancellationToken ct = default)
     {
         var (sub, preferredUsername, groups) = ValidateIdToken(
-            provider, disco.Issuer, SigningKeysFrom(disco), idToken, expectedNonce);
+            provider, disco.Issuer, OidcClientFactory.SigningKeysFrom(disco),
+            idToken, expectedNonce);
 
         // Some providers — Authelia among them — keep the profile claims out of the ID
         // token, which left the JIT-created Jellyfin user named after the opaque subject.
@@ -58,14 +59,6 @@ public sealed class ClaimsExtractor
 
         return new OidcIdentity(sub, preferredUsername, groups);
     }
-
-    /// <summary>Reads the signing keys out of the provider's JWKS.</summary>
-    private static List<SecurityKey> SigningKeysFrom(DiscoveryDocumentResponse disco)
-        => disco.KeySet?.Keys?
-            .Select(k => new JsonWebKey(JsonSerializer.Serialize(k)))
-            .Cast<SecurityKey>()
-            .ToList()
-            ?? throw new SecurityTokenException("No signing keys in discovery document.");
 
     /// <summary>
     /// Validates signature, issuer, audience, lifetime and nonce, then reads the claims

@@ -8,8 +8,9 @@ Dashboard → **Plugins → SSO Authentication**.
 
 One card per identity provider: *Display name*, *Enabled*, *Issuer URL* (must answer at
 `<issuer>/.well-known/openid-configuration`), *Client ID*, *Groups claim name*, *Fetch
-groups from userinfo endpoint*, *Scopes*. The card prints the provider id, the redirect
-URI and the login URL.
+groups from userinfo endpoint*, *Accept back-channel logout*, *Paint the login button in
+this provider's colour*, *Scopes*. The card prints the provider id, the redirect URI, the
+login URL and the back-channel logout URL.
 
 <a href="img/provider-card.png"><img src="img/provider-card.png" alt="The provider card in the plugin's configuration page" width="520"></a>
 
@@ -50,6 +51,9 @@ A public client with PKCE is the default and covers most setups.
   Jellyfin's page as it is served so the button sits with *Sign In*
   ([Login and logout](login-and-logout.md)).
 - **Sign out of the identity provider too** — [Login and logout](login-and-logout.md).
+- **Accept back-channel logout from this provider** (per provider, on by default) — lets
+  the provider end a Jellyfin session when the session ends on its side
+  ([Login and logout](login-and-logout.md#back-channel-logout)).
 - **Let users link their own account** — [Linking accounts](linking.md).
 
 ## Group Mappings

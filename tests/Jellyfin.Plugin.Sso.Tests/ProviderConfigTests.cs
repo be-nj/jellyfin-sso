@@ -22,6 +22,14 @@ public sealed class ProviderConfigTests
         Assert.False(provider.GroupsFromUserInfo);
         Assert.Equal(OidcClientType.Public, provider.ClientType);
         Assert.Null(provider.ConfidentialSecretRef);
+
+        // The login button looks like Jellyfin's own until somebody asks for otherwise.
+        Assert.False(provider.BrandedLoginButton);
+        Assert.Equal(string.Empty, provider.ButtonColour);
+
+        // On: the endpoint acts only on a token the provider signed, and a provider only
+        // posts one once an administrator has registered the URL with it.
+        Assert.True(provider.AcceptBackChannelLogout);
     }
 
     [Fact]
@@ -37,6 +45,15 @@ public sealed class ProviderConfigTests
         Assert.False(config.PreserveAdminPermissions);
         Assert.False(config.SignOutOfIdentityProvider);
         Assert.True(config.AllowSelfServiceLinking);
+
+        // The button is written into the branding, with the provider's own logo on it.
+        Assert.True(config.AddLoginButtonToBranding);
+        Assert.True(config.UseProviderLogos);
+
+        // Off: it rewrites a response that belongs to Jellyfin.
+        Assert.False(config.InjectLoginButtonIntoForm);
+
+        Assert.Equal(500, PluginConfiguration.MaxSeenGroups);
     }
 
     [Fact]
