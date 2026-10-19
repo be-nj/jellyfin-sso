@@ -1,3 +1,5 @@
+using MediaBrowser.Common.Configuration;
+using MediaBrowser.Common.Net;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Model.Branding;
 using Microsoft.Extensions.Logging;
@@ -45,19 +47,5 @@ public sealed class LoginBranding
     /// The sub-path Jellyfin is served under, if any. Branding holds plain HTML, so the
     /// links have to carry the prefix themselves.
     /// </summary>
-    private string BasePath()
-    {
-        try
-        {
-            var network = _configManager.GetConfiguration("network");
-            var property = network?.GetType().GetProperty("BaseUrl");
-            return property?.GetValue(network) as string ?? string.Empty;
-        }
-        catch (Exception ex)
-        {
-            // A missing or renamed network configuration must not keep the button away.
-            _logger.LogDebug(ex, "SSO: could not read the server's base URL; assuming none.");
-            return string.Empty;
-        }
-    }
+    private string BasePath() => _configManager.GetNetworkConfiguration().BaseUrl ?? string.Empty;
 }
