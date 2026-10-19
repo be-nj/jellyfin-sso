@@ -1,0 +1,115 @@
+# Contributing
+
+Everything about building, testing and releasing the plugin lives here, so the README can
+stay about running it.
+
+## Layout
+
+- Source: `Jellyfin.Plugin.Sso/`
+- Config UI: `Configuration/configPage.html` + `configPage.js` (ES module loaded via
+  `data-controller="__plugin/SSO Authentication.js"`).
+- `make build` / `make publish` / `make deploy`.
+
+### Tests
+
+```bash
+make test        # dotnet test tests/Jellyfin.Plugin.Sso.Tests -c Release --logger trx
+```
+
+Tests live under `tests/`; everything a run produces (binaries, obj, TRX results) goes to
+`tests/runs/`, which is gitignored. They cover the security-relevant paths: ID token
+validation (signature, issuer, audience, lifetime, nonce, `alg=none`), the ephemeral
+secret bridge (single use, no empty password, no cross-user use), PKCE state handling, and
+the provisioning and permission rules (never adopt an account by username, revoke access
+when groups disappear).
+
+### End-to-end tests
+
+```bash
+make e2e
+```
+
+A throwaway Jellyfin container is started from the image matching the pinned
+`Jellyfin.Controller` version, with the **release ZIP** installed as a plugin — so the
+artifact users download is the one under test. Alongside it runs a fake OIDC provider (a
+small ASP.NET host in the test process, serving HTTPS with a self-signed certificate the
+container is made to trust), and the browser hop is driven by Playwright.
+
+One tier up, the suite starts **real identity providers** in containers — Keycloak from a
+realm file and Authelia from a generated config — and signs in through their own login
+forms in the browser. That is the only way to prove the groups really arrive in the claims
+and that the plugin copes with providers nobody here controls. These tests carry the trait
+`Category=RealIdp` and run as their own CI job:
+
+```bash
+make e2e E2E_FILTER='--filter "Category=RealIdp"'
+```
+
+Both found real bugs the fake provider could not: Keycloak rejects an unknown `groups`
+scope, and Authelia keeps the profile claims out of the ID token, which used to leave the
+new Jellyfin user named after the opaque subject.
+
+Covered there: the plugin loads in a real server, the redirect and PKCE code exchange, JIT
+provisioning, group-to-library permissions applied through Jellyfin's own user policy,
+Jellyfin minting an access token for the ephemeral secret, the username-collision refusal,
+and the localStorage handoff into the web client. The admin page is driven too — it is
+plain JavaScript inside Jellyfin's dashboard, where only a browser notices a typo — so a
+mapping edited in the UI is read back through the API. Screenshots and page dumps of
+failed browser runs land in `tests/runs/playwright/`.
+
+`make e2e` runs inside the .NET SDK image (no local SDK needed) and talks to the host's
+Docker daemon; it needs Docker and about 1 GB for the Jellyfin image.
+
+Both suites run on every push and pull request, and again before a release is published.
+
+### Cutting a release
+
+```bash
+git tag v1.12.1 && git push origin v1.12.1
+```
+
+The `Release` workflow builds the ZIP, attaches it to a GitHub release and appends the
+version to `manifest.json` on `main`, which is what servers poll. The `targetAbi` written
+into the manifest is derived from the `Jellyfin.Controller` reference in the csproj, so a
+Jellyfin bump automatically applies to the next release.
+
+Tags must be four-part or three-part (`v1.12.1` becomes `1.12.1.0`) and must point at a
+commit on `main`.
+
+---
+
+## Manual install while developing
+
+Jellyfin loads a plugin from a folder in its config volume, by default
+`/config/plugins/SSO Authentication_<version>/`. The folder needs the plugin DLL **and**
+the dependencies Jellyfin does not ship:
+
+```
+Jellyfin.Plugin.Sso.dll
+Duende.IdentityModel.dll
+Microsoft.IdentityModel.Abstractions.dll
+Microsoft.IdentityModel.JsonWebTokens.dll
+Microsoft.IdentityModel.Logging.dll
+Microsoft.IdentityModel.Protocols.dll
+Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
+Microsoft.IdentityModel.Tokens.dll
+System.IdentityModel.Tokens.Jwt.dll
+```
+
+`scripts/package.sh <version>` builds exactly that set as a ZIP; `make deploy` copies it to
+the server named in the `Makefile` and restarts the container.
+
+If the DLL is dropped without its dependencies, Jellyfin logs
+`Failed to load assembly … IdentityModel …` and deletes the plugin folder on the next
+restart. Always deploy all of them together.
+
+## Porting to a new Jellyfin version
+
+The plugin pins `Jellyfin.Controller` and `Jellyfin.Model` to one server version; Jellyfin
+refuses to load a plugin built against a different one. After a server upgrade:
+
+1. Bump both package references in `Jellyfin.Plugin.Sso.csproj`.
+2. Build and fix what the compiler complains about.
+3. Run both test suites — the e2e harness reads the pinned version and starts the matching
+   server image, so it tests against the Jellyfin you are porting to.
+4. Tag a release. `targetAbi` in the manifest follows the csproj automatically.

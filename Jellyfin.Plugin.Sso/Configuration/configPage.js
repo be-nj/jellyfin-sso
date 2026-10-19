@@ -216,7 +216,11 @@ function collectProviders(view) {
         };
         var authority = val('.sso-provider-authority');
         var clientId = val('.sso-provider-client');
-        if (!authority && !clientId) return null;
+        var name = val('.sso-provider-name');
+        // A provider saved with only a name is kept on purpose: its id is what the
+        // identity provider's redirect URI has to contain, so it has to exist before
+        // the rest can be filled in.
+        if (!authority && !clientId && !name) return null;
 
         var previous = ((_config && _config.Providers) || []).filter(function (p) {
             return p.Id === card.dataset.providerId;
@@ -224,7 +228,7 @@ function collectProviders(view) {
 
         return {
             Id: card.dataset.providerId,
-            Name: val('.sso-provider-name') || 'SSO',
+            Name: name || 'SSO',
             Enabled: card.querySelector('.sso-provider-enabled').checked,
             Authority: authority,
             ClientId: clientId,

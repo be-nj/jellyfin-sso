@@ -110,6 +110,26 @@ public sealed class ConfigPageTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_provider_can_be_saved_with_nothing_but_a_name()
+    {
+        // The documented first step: save a provider to learn its id, because the
+        // identity provider's redirect URI has to contain it before anything else works.
+        var page = await OpenConfigPageAsync();
+        await page.ClickAsync(".sso-tab[data-tab=\"provider\"]");
+
+        await page.ClickAsync("#AddProvider");
+        await page.Locator(".sso-provider").Last.Locator(".sso-provider-name").FillAsync("Half filled");
+
+        await page.ClickAsync("#Save");
+
+        var config = await WaitForConfigAsync(c => c["Providers"]!.AsArray()
+            .Any(p => p!["Name"]!.GetValue<string>() == "Half filled"));
+        var saved = config["Providers"]!.AsArray()
+            .First(p => p!["Name"]!.GetValue<string>() == "Half filled")!;
+        Assert.False(string.IsNullOrWhiteSpace(saved["Id"]!.GetValue<string>()));
+    }
+
+    [Fact]
     public async Task The_admin_page_saves_the_session_settings()
     {
         var page = await OpenConfigPageAsync();
