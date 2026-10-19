@@ -47,6 +47,11 @@ public static class ProviderIcons
 
         if (haystack.Contains("authentik", StringComparison.Ordinal)) return "authentik";
         if (haystack.Contains("keycloak", StringComparison.Ordinal)) return "keycloak";
+
+        // A household that renames its provider — "Beckmann SSO" on auth.example.net —
+        // still issues from a path only one product uses.
+        if (haystack.Contains("/application/o/", StringComparison.Ordinal)) return "authentik";
+        if (haystack.Contains("/realms/", StringComparison.Ordinal)) return "keycloak";
         if (haystack.Contains("authelia", StringComparison.Ordinal)) return "authelia";
         if (haystack.Contains("okta", StringComparison.Ordinal)) return "okta";
         if (haystack.Contains("auth0", StringComparison.Ordinal)) return "auth0";
@@ -92,6 +97,30 @@ public static class ProviderIcons
         string Channel(int value)
             => Math.Clamp(dark ? value + 28 : (int)Math.Round(value * 0.86), 0, 255)
                 .ToString("x2", CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// A colour an administrator typed, if it is one this may safely be written into a
+    /// stylesheet: #rgb or #rrggbb and nothing else. Anything else returns null, because
+    /// the value ends up in Jellyfin's custom CSS.
+    /// </summary>
+    public static string? SanitiseColour(string? colour)
+    {
+        var trimmed = colour?.Trim();
+        if (string.IsNullOrEmpty(trimmed) || trimmed[0] != '#' || (trimmed.Length != 4 && trimmed.Length != 7))
+        {
+            return null;
+        }
+
+        foreach (var c in trimmed.AsSpan(1))
+        {
+            if (!Uri.IsHexDigit(c))
+            {
+                return null;
+            }
+        }
+
+        return trimmed;
     }
 
     /// <summary>Relative luminance as WCAG defines it, 0 for black and 1 for white.</summary>

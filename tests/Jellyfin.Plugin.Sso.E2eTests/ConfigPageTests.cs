@@ -141,7 +141,7 @@ public sealed class ConfigPageTests : IAsyncLifetime
         var page = await OpenConfigPageAsync();
         await page.ClickAsync(".sso-tab[data-tab=\"provider\"]");
 
-        var text = await page.Locator(".sso-provider").First.Locator(".sso-provider-urls").InnerTextAsync();
+        var text = await page.Locator(".sso-provider").First.Locator(".sso-copy-list").InnerTextAsync();
 
         Assert.Contains($"{_env.BaseUrl}/sso/oidc/callback/{JellyfinEnvironment.ProviderId}", text);
         Assert.Contains(JellyfinEnvironment.ProviderId, text);

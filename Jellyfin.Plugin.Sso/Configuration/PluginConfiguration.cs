@@ -106,6 +106,13 @@ public class ProviderConfig
     /// carries the provider's colour on its left edge alone.
     /// </summary>
     public bool BrandedLoginButton { get; set; }
+
+    /// <summary>
+    /// The colour that button is painted in, as #rgb or #rrggbb. Empty means the colour
+    /// the provider is recognised by. Anything that is not a hex colour is ignored: the
+    /// value is written into Jellyfin's custom CSS.
+    /// </summary>
+    public string ButtonColour { get; set; } = string.Empty;
 }
 
 public enum OidcClientType
