@@ -118,8 +118,36 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
         Assert.NotEqual(_idp.MemberUser.Username, sub);
     }
 
-    /// <summary>Walks the login the way a person would, including the provider's form.</summary>
+    /// <summary>
+    /// Walks the login the way a person would. Chromium in CI occasionally loses every
+    /// connection under the running page — "net::ERR_NETWORK_CHANGED", the runner's
+    /// network reconfiguring under it — which has nothing to do with the plugin, so a
+    /// login that fails that way is walked once more in a fresh context.
+    /// </summary>
     private async Task<IPage> SignInAsync(RealIdentityUser user)
+    {
+        try
+        {
+            return await SignInOnceAsync(user);
+        }
+        catch (BrowserNetworkFlake first)
+        {
+            try
+            {
+                return await SignInOnceAsync(user);
+            }
+            catch (BrowserNetworkFlake second)
+            {
+                Assert.Fail(
+                    $"The browser lost the network twice in a row.\nfirst: {first.Message}"
+                    + $"\nsecond: {second.Message}");
+                throw;
+            }
+        }
+    }
+
+    /// <summary>One attempt, from an empty browser context to a signed-in web client.</summary>
+    private async Task<IPage> SignInOnceAsync(RealIdentityUser user)
     {
         await using var context = await _browser!.NewContextAsync(new BrowserNewContextOptions
         {
@@ -143,6 +171,8 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
         }
         catch (PlaywrightException ex)
         {
+            ThrowIfNetworkFlake("opening /sso/oidc/start", [ex.Message]);
+
             using var probe = JellyfinEnvironment.TrustingClient();
             string fromTestProcess;
             try
@@ -167,6 +197,8 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
         }
         catch (TimeoutException)
         {
+            ThrowIfNetworkFlake($"{_idp.Name}'s login form", consoleErrors);
+
             await BrowserSupport.CaptureAsync(page, $"{_idp.Name.ToLowerInvariant()}-form");
             var logs = (await _env.ServerLogsAsync()).Split('\n')
                 .Where(l => l.Contains("Sso", StringComparison.Ordinal)
@@ -191,6 +223,8 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
         }
         catch (TimeoutException)
         {
+            ThrowIfNetworkFlake("the web client's session", consoleErrors);
+
             await BrowserSupport.CaptureAsync(page, $"{_idp.Name.ToLowerInvariant()}-login");
             var serverLog = (await _env.ServerLogsAsync()).Split('\n')
                 .Where(l => l.Contains("Sso", StringComparison.Ordinal)
@@ -205,6 +239,40 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
         }
 
         return page;
+    }
+
+    /// <summary>
+    /// Chromium reports a network that moved under it as a load failure on every pending
+    /// resource. Recognising those by name keeps the retry from papering over a plugin
+    /// bug: anything else fails the test with its diagnostics, as before.
+    /// </summary>
+    private static void ThrowIfNetworkFlake(string what, IEnumerable<string> messages)
+    {
+        string[] transient =
+        [
+            "ERR_NETWORK_CHANGED",
+            "ERR_NETWORK_IO_SUSPENDED",
+            "ERR_INTERNET_DISCONNECTED",
+            "ERR_NAME_NOT_RESOLVED",
+            "ERR_CONNECTION_RESET",
+        ];
+
+        var hit = messages.FirstOrDefault(
+            message => transient.Any(name => message.Contains(name, StringComparison.Ordinal)));
+
+        if (hit is not null)
+        {
+            throw new BrowserNetworkFlake($"{what} — {hit.Trim()}");
+        }
+    }
+}
+
+/// <summary>The browser lost its network mid-login; the run says nothing about the plugin.</summary>
+internal sealed class BrowserNetworkFlake : Exception
+{
+    public BrowserNetworkFlake(string message)
+        : base(message)
+    {
     }
 }
 

@@ -1,78 +1,62 @@
 # Linking accounts
 
-Back to the [documentation index](README.md) · [README](../README.md)
+[Documentation index](README.md) · [README](../README.md)
 
-New users are linked automatically at their first SSO login. Linking by hand is for
-accounts that existed before SSO.
+New users are linked at their first SSO login. Linking by hand is for accounts that
+existed before SSO.
 
 ## Identity matching and the IdP subject
 
-The plugin keys each Jellyfin user to an OIDC identity by `(provider, sub)` — **never by
-username** (that is the source of the old plugin's admin-takeover bug). A user is matched
-only via an explicit link; an unknown `sub` always becomes a new account. That is why the
-first SSO login for an existing name is refused with *"Username 'ben' already exists"*
-until an administrator links it.
+The plugin keys each Jellyfin user to an identity by `(provider, sub)`, **never by
+username** — that is what made the old plugin's admin takeover possible. An unknown `sub`
+becomes a new account, so the first SSO login for an existing username is refused with
+*"Username 'ben' already exists"* until an administrator links it.
 
-### Authentik: choose a Subject mode
+### Authentik: Subject mode
 
-In **Applications → Providers → (your provider) → Advanced protocol settings → Subject
-mode**, Authentik decides what `sub` contains:
+**Applications → Providers → (your provider) → Advanced protocol settings → Subject mode**
+decides what `sub` contains:
 
-| Subject mode | `sub` value | Notes |
+| Subject mode | `sub` value | |
 |---|---|---|
-| **Based on the User's hashed ID (default)** | opaque SHA256 hash | **Recommended.** Stable and safe; the value is only learnable from a login, which [manual linking](#manual-linking) covers. |
-| Based on the User's username | the username | Easy to link by hand, and brittle: see the trade-offs below. |
-| Based on the User's UUID | the user UUID | Stable; only readable via the API (`/api/v3/core/users/`). |
+| **Hashed ID (default)** | opaque SHA256 hash | **Recommended.** Survives renames; learnable only from a login. |
+| Username | the username | Trivial to link, brittle — see below. |
+| UUID | the user UUID | Stable; readable via `/api/v3/core/users/`. |
 
-The username mode trades safety for convenience, which is why the setup guide recommends
-leaving Authentik's default in place:
-
-- **Renaming someone at the provider breaks their link**, because the `sub` changes with
-  the name. They have to be linked again by hand.
-- **Reusing a username is dangerous**: delete `ben`, create a different person as `ben`
-  later, and they inherit the old account's link — including whatever it could see. Only
-  pick this mode if usernames in your directory are never recycled.
-- In return the subject *is* the username, so linking an existing account is typing a name
-  instead of hunting for a hash.
-
-People who are new to Jellyfin never need any of this: their account is created and linked
-at their first login.
+Username mode breaks every link when someone is renamed, and hands the old account to
+whoever gets a recycled username. Take it only if usernames in your directory are never
+reused.
 
 ## Manual linking
 
-Use the **Account Links** tab to connect an account that existed before SSO:
+**Account Links** tab:
 
 ![The manual account link form](img/account-links.png)
 
-- **Provider** + **Jellyfin user** are dropdowns.
-- **Subject** is the identity's `sub` at the provider. With Authentik's *Subject mode:
-  username* it is simply the username.
-- With any other subject mode you cannot know the value in advance, so let the person try
-  to log in once. The attempt is refused and Jellyfin's log (Dashboard → **Logs**, or
-  `docker logs jellyfin`) carries the value you need:
+*Provider* and *Jellyfin user* are dropdowns. *Subject* is the `sub` at the provider —
+with Authentik's username mode, the username.
 
-  ```
-  [WRN] Jellyfin.Plugin.Sso.Provisioning.UserProvisioner: SSO JIT blocked: username 'ben'
-  already exists. To link manually: ProviderId=ab12… Sub=f81d4fae-7dec-11d0-a765-… JellyfinUserId=…
-  ```
+Otherwise you cannot know it in advance: let the person log in once. The attempt is
+refused, and the log (Dashboard → **Logs**, or `docker logs jellyfin`) carries the value:
 
-  Copy the `Sub=` value into the form. Repeat per person; for a household moving over from
-  another plugin, plan an evening for it.
+```
+[WRN] Jellyfin.Plugin.Sso.Provisioning.UserProvisioner: SSO JIT blocked: username 'ben'
+already exists. ProviderId=ab12… Sub=f81d4fae-7dec-11d0-a765-… JellyfinUserId=…
+```
 
-Keep one administrator unlinked, with a password, as your way back in.
+Copy the `Sub=` value into the form, one person at a time. Keep one administrator
+unlinked, with a password.
 
 ## Self-service linking
 
-With **Let users link their own account** enabled, signed-in users can link their own
-account at **`/sso/link`**: the page reads the session the web client stored, starts the
-OIDC flow for that user, and attaches the identity to their account. An identity that is
-already linked to a different Jellyfin account is refused — only an administrator can move
-a link.
+With **Let users link their own account** enabled, a signed-in user links themselves at
+**`/sso/link`**: the page uses the session the web client stored, runs the OIDC flow and
+attaches the identity. An identity already linked to a different Jellyfin account is
+refused; only an administrator can move a link.
 
-Unlinking has no button for users yet. **An administrator removes any link under the
-Account Links tab**, which is the practical route. There is an endpoint for a user's own
-link, `DELETE /sso/link/self` with their Jellyfin token, but nothing in the web client
-calls it — treat it as something you do for your household, not something they do.
+Users cannot unlink from the web client. An administrator removes links on the **Account
+Links** tab; `DELETE /sso/link/self` with the user's own token exists, but nothing calls
+it.
 
-Linking grants nothing by itself. Library access and the admin flag are applied on the
-next SSO login, from the groups, as always.
+Linking grants nothing. Libraries and the admin flag come from the groups at the next
+login.

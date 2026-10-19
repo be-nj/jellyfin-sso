@@ -1,8 +1,6 @@
 # Glossary
 
-Back to the [documentation index](README.md) · [README](../README.md)
-
-Only the words this documentation cannot avoid.
+[Documentation index](README.md) · [README](../README.md)
 
 | Word | In plain language |
 |---|---|

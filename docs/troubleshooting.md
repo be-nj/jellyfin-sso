@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Back to the [documentation index](README.md) · [README](../README.md)
+[Documentation index](README.md) · [README](../README.md)
 
 Jellyfin's log is the first place to look: every rejection the plugin makes is logged with
 the provider and the reason. Dashboard → **Logs**, or `docker logs jellyfin`.

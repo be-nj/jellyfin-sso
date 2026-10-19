@@ -708,7 +708,15 @@ public sealed class SsoController : ControllerBase
             ?? req.Headers["X-Forwarded-Scheme"].FirstOrDefault()
             ?? req.Scheme;
         var host = req.Headers["X-Forwarded-Host"].FirstOrDefault() ?? req.Host.ToString();
-        return $"{scheme}://{host}";
+
+        // A server published under a sub-path ("BaseUrl" in Jellyfin's network settings,
+        // or a proxy that keeps the prefix) must keep that prefix in its redirect URI,
+        // or the provider sends the browser to a path this server does not serve.
+        var prefix = req.Headers["X-Forwarded-Prefix"].FirstOrDefault()
+            ?? req.PathBase.Value
+            ?? string.Empty;
+
+        return $"{scheme}://{host}{prefix.TrimEnd('/')}";
     }
 
     /// <summary>

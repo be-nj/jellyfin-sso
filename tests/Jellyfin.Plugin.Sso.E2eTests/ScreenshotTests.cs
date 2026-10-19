@@ -53,6 +53,7 @@ public sealed class ScreenshotTests : IAsyncLifetime
             provider["Name"] = "Authentik";
             provider["Authority"] = "https://auth.example.com/application/o/jellyfin/";
             provider["ClientId"] = "jellyfin";
+            provider["Enabled"] = false;
             provider["Scopes"] = new JsonArray();
         });
 
@@ -60,17 +61,11 @@ public sealed class ScreenshotTests : IAsyncLifetime
 
         // The provider card, with the redirect URI the quick start tells people to copy.
         await page.ClickAsync(".sso-tab[data-tab=\"provider\"]");
-        await page.Locator(".sso-provider").First.ScreenshotAsync(new LocatorScreenshotOptions
-        {
-            Path = Path.Combine(directory, "provider-card.png"),
-        });
+        await ShootAsync(page, ".sso-provider", Path.Combine(directory, "provider-card.png"));
 
         // A group mapping with its libraries and permissions.
         await page.ClickAsync(".sso-tab[data-tab=\"mappings\"]");
-        await page.Locator(".sso-mapping").First.ScreenshotAsync(new LocatorScreenshotOptions
-        {
-            Path = Path.Combine(directory, "group-mapping.png"),
-        });
+        await ShootAsync(page, ".sso-mapping", Path.Combine(directory, "group-mapping.png"));
 
         // The manual linking form, the fiddliest screen and the one the docs can only
         // describe in words.
@@ -82,15 +77,56 @@ public sealed class ScreenshotTests : IAsyncLifetime
             State = WaitForSelectorState.Visible,
             Timeout = 10_000,
         });
-        await page.Locator("[data-panel='links']").ScreenshotAsync(new LocatorScreenshotOptions
-        {
-            Path = Path.Combine(directory, "account-links.png"),
-        });
+        await ShootAsync(page, "[data-panel='links']", Path.Combine(directory, "account-links.png"));
 
         foreach (var file in new[] { "provider-card.png", "group-mapping.png", "account-links.png" })
         {
             Assert.True(new FileInfo(Path.Combine(directory, file)).Length > 5_000, file);
         }
+    }
+
+    /// <summary>
+    /// Screenshots one element with room around it. A flush crop pasted into a document
+    /// looks like a hole in it, so the element is wrapped in a padded frame for the
+    /// duration of the shot. The frame takes the colour of whatever actually sits behind
+    /// the element, so the padding is the page continuing, not a border.
+    /// </summary>
+    private static async Task ShootAsync(IPage page, string selector, string path)
+    {
+        var element = page.Locator(selector).First;
+        await element.EvaluateAsync(
+            """
+            el => {
+              const opaque = colour =>
+                colour && colour !== 'transparent' && !colour.startsWith('rgba(0, 0, 0, 0)');
+
+              let behind = 'rgb(16, 16, 16)';
+              for (let node = el.parentElement; node; node = node.parentElement) {
+                const colour = getComputedStyle(node).backgroundColor;
+                if (opaque(colour)) { behind = colour; break; }
+              }
+
+              const frame = document.createElement('div');
+              frame.setAttribute('data-shot', '');
+              frame.style.padding = '28px';
+              frame.style.background = behind;
+              el.parentNode.insertBefore(frame, el);
+              frame.appendChild(el);
+            }
+            """);
+
+        await page.Locator("[data-shot]").ScreenshotAsync(new LocatorScreenshotOptions { Path = path });
+
+        // Put the page back the way it was, so the next shot sees the original tree.
+        await page.EvaluateAsync(
+            """
+            () => {
+              const frame = document.querySelector('[data-shot]');
+              if (!frame) return;
+              frame.parentNode.insertBefore(frame.firstElementChild, frame);
+              frame.remove();
+            }
+            """);
     }
 
     /// <summary>Opens the plugin page with a seeded administrator session.</summary>
@@ -101,6 +137,8 @@ public sealed class ScreenshotTests : IAsyncLifetime
             BaseURL = _env.BaseUrl,
             IgnoreHTTPSErrors = true,
             ViewportSize = new ViewportSize { Width = 1100, Height = 900 },
+            // Retina-sized, so the images stay readable when a browser scales them down.
+            DeviceScaleFactor = 2,
         });
 
         var credentials = new JsonObject

@@ -1,8 +1,8 @@
 # Authelia setup
 
-Back to the [documentation index](README.md) · [README](../README.md)
+[Documentation index](README.md) · [README](../README.md)
 
-In Authelia's `configuration.yml`, under `identity_providers.oidc.clients`:
+In `configuration.yml`, under `identity_providers.oidc.clients`:
 
 ```yaml
 - client_id: 'jellyfin'
@@ -19,16 +19,14 @@ In Authelia's `configuration.yml`, under `identity_providers.oidc.clients`:
   token_endpoint_auth_method: 'none'
 ```
 
-Then, in the plugin's provider card:
+In the plugin's provider card:
 
-- *Issuer URL*: Authelia's own base URL, for example `https://auth.example.com`.
-- *Scopes*: `openid profile email groups` — Authelia only reports groups when the
-  `groups` scope is asked for, which is why this is the one provider where the field is
-  not left empty.
-- *Fetch groups from userinfo endpoint*: **on**. Authelia keeps the groups out of the
-  login token and answers with them at its userinfo endpoint instead.
+- *Issuer URL*: Authelia's base URL, for example `https://auth.example.com`.
+- *Scopes*: `openid profile email groups` — Authelia reports groups only when asked.
+- *Fetch groups from userinfo endpoint*: **on**. Authelia keeps groups out of the ID token
+  and answers with them at the userinfo endpoint.
 
-Groups themselves come from the `groups` list in Authelia's user file.
+Groups come from the `groups` list in Authelia's user file.
 
-Authelia also refuses a plain-HTTP redirect URI for public clients, so Jellyfin needs an
-`https://` address (or a `localhost`-style name) for this provider to work at all.
+Authelia refuses plain-HTTP redirect URIs for public clients, so this provider needs
+Jellyfin on `https://`.

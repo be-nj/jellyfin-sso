@@ -37,8 +37,14 @@ deploy: publish
 clean:
 	rm -rf $(PLUGIN_SRC)/bin $(PLUGIN_SRC)/obj
 
+# Unit tests. There is no local dotnet SDK, so they run inside the SDK image like the
+# e2e suite; CI, which has the SDK, runs the same command without the wrapper.
 test:
-	dotnet test tests/Jellyfin.Plugin.Sso.Tests -c Release --logger trx
+	docker run --rm \
+	  -v "$(CURDIR)":"$(CURDIR)" -w "$(CURDIR)" \
+	  -e HOME=/tmp -e NUGET_PACKAGES="$(CURDIR)/tests/runs/nuget" \
+	  mcr.microsoft.com/dotnet/sdk:10.0 \
+	  dotnet test tests/Jellyfin.Plugin.Sso.Tests -c Release --logger trx
 
 # The e2e suite starts a throwaway Jellyfin container, a fake identity provider and a
 # headless browser. E2E_FILTER passes a vstest filter through, e.g.
