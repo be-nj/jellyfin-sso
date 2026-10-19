@@ -32,14 +32,26 @@ OpenID Connect single sign-on for Jellyfin — for households already running
 - **Optional single logout** that ends the provider's session too.
 - **Lockout guards** — the last administrator is never demoted.
 
+## What it looks like
+
+<div align="center">
+
+<img src="docs/img/login-flow.gif" alt="A login: Jellyfin's login page, the button, Authentik's form, the home screen" width="760">
+
+</div>
+
+Not a mock-up: the clip is a test run. A throwaway Jellyfin, a real Authentik in a
+container, and the button this plugin adds — recorded by `make demo`, which fails if any
+step of the login does not happen. [Sharper version](docs/img/login-flow.mp4).
+
 ## How it is tested
 
 Against real software, not mocks. Every push runs:
 
 | | |
 |---|---|
-| **139 unit tests** | Token validation, permissions, lockout guards, markup |
-| **52 end-to-end tests** | Throwaway Jellyfin container, fake provider, real browser |
+| **168 unit tests** | Token validation, permissions, lockout guards, markup |
+| **64 end-to-end tests** | Throwaway Jellyfin container, fake provider, real browser |
 | **Three Jellyfin versions** | The same build against 12.0, 12.1 and 12.2 |
 | **9 real-provider logins** | Authentik, Keycloak and Authelia, through their own forms |
 | **Mutation testing** | Stryker checks that the tests notice a defect; floor in CI |
