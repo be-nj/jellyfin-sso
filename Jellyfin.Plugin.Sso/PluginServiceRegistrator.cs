@@ -14,6 +14,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
         serviceCollection.AddSingleton<EphemeralSecretStore>();
+        serviceCollection.AddSingleton<QuickConnectApprovalStore>();
         serviceCollection.AddSingleton<PendingStateStore>();
         serviceCollection.AddSingleton<OidcClientFactory>();
         serviceCollection.AddSingleton<ClaimsExtractor>();

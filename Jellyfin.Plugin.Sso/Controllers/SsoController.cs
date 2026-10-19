@@ -22,6 +22,7 @@ public sealed class SsoController : ControllerBase
     private readonly UserProvisioner _provisioner;
     private readonly PermissionSync _permissions;
     private readonly EphemeralSecretStore _secrets;
+    private readonly QuickConnectApprovalStore _approvals;
     private readonly IQuickConnect _quickConnect;
     private readonly MediaBrowser.Controller.Library.IUserManager _userManager;
     private readonly ILogger<SsoController> _logger;
@@ -33,6 +34,7 @@ public sealed class SsoController : ControllerBase
         UserProvisioner provisioner,
         PermissionSync permissions,
         EphemeralSecretStore secrets,
+        QuickConnectApprovalStore approvals,
         IQuickConnect quickConnect,
         MediaBrowser.Controller.Library.IUserManager userManager,
         ILogger<SsoController> logger)
@@ -43,6 +45,7 @@ public sealed class SsoController : ControllerBase
         _provisioner = provisioner;
         _permissions = permissions;
         _secrets = secrets;
+        _approvals = approvals;
         _quickConnect = quickConnect;
         _userManager = userManager;
         _logger = logger;
@@ -103,7 +106,7 @@ public sealed class SsoController : ControllerBase
     {
         var provider = GetEnabledProvider(providerId);
         if (provider is null)
-            return NotFound($"Provider '{providerId}' not found or not enabled.");
+            return NotFoundText("No such provider, or it is not enabled.");
 
         var redirectUri = BuildCallbackUri(providerId);
         var (state, pending) = _states.Issue(provider.Id, redirectUri);
@@ -139,7 +142,7 @@ public sealed class SsoController : ControllerBase
 
         var provider = GetEnabledProvider(providerId);
         if (provider is null)
-            return NotFound($"Provider '{providerId}' not found or not enabled.");
+            return NotFoundText("No such provider, or it is not enabled.");
 
         var redirectUri = BuildCallbackUri(providerId);
         var (state, pending) = _states.Issue(provider.Id, redirectUri, quickConnectCode: code);
@@ -259,9 +262,16 @@ public sealed class SsoController : ControllerBase
                 provider, disco, code, pending.RedirectUri, pending.CodeVerifier, ct)
                 .ConfigureAwait(false);
 
+            if (string.IsNullOrEmpty(tokens.IdentityToken))
+            {
+                return BadRequestText(
+                    "The provider returned no ID token. Check that the 'openid' scope is "
+                    + "allowed for this application.");
+            }
+
             var identity = await _claims.ExtractAsync(
                 provider, disco,
-                tokens.IdentityToken!, tokens.AccessToken!,
+                tokens.IdentityToken, tokens.AccessToken ?? string.Empty,
                 pending.Nonce, ct)
                 .ConfigureAwait(false);
 
@@ -276,8 +286,7 @@ public sealed class SsoController : ControllerBase
             await _permissions.SyncAsync(userId, identity, ct).ConfigureAwait(false);
 
             if (pending.QuickConnectCode is not null)
-                return await CompleteQuickConnectAsync(userId, username, pending.QuickConnectCode, ct)
-                    .ConfigureAwait(false);
+                return AskToApproveQuickConnect(userId, username, pending.QuickConnectCode);
 
             return await CompleteWebLoginAsync(username, ct).ConfigureAwait(false);
         }
@@ -388,7 +397,7 @@ public sealed class SsoController : ControllerBase
 
         var provider = GetEnabledProvider(providerId);
         if (provider is null)
-            return NotFound("Provider not found or not enabled.");
+            return NotFoundText("No such provider, or it is not enabled.");
 
         if (config.Links.Any(l => l.ProviderId == provider.Id && l.JellyfinUserId == userId))
             return Conflict("This account is already linked for that provider.");
@@ -543,8 +552,58 @@ public sealed class SsoController : ControllerBase
         return Task.FromResult<IActionResult>(Content(html, "text/html"));
     }
 
-    private async Task<IActionResult> CompleteQuickConnectAsync(
-        Guid userId, string username, string quickConnectCode, CancellationToken ct)
+    /// <summary>
+    /// Asks before approving. The login is finished at this point; what is left is the
+    /// decision to let the device that printed this code in, and only the person in front
+    /// of the browser can make it.
+    /// </summary>
+    private IActionResult AskToApproveQuickConnect(
+        Guid userId, string username, string quickConnectCode)
+    {
+        var token = _approvals.Issue(userId, username, quickConnectCode);
+
+        var html = $$"""
+            <!DOCTYPE html>
+            <html><head><meta charset="utf-8"/><title>Approve this device</title>
+            <style>
+              body{font-family:system-ui,sans-serif;background:#1c1c1c;color:#ddd;display:flex;
+                   align-items:center;justify-content:center;height:100vh;margin:0}
+              .card{max-width:28em;padding:2em;line-height:1.5;text-align:center}
+              .code{font-size:2em;letter-spacing:.2em;margin:.5em 0;font-family:ui-monospace,monospace}
+              button{font:inherit;padding:.6em 1.4em;margin-top:1em;cursor:pointer}
+              a{color:#9bf}
+            </style>
+            </head><body><div class="card">
+            <h1>Approve this device?</h1>
+            <p>Signed in as <strong>{{Html(username)}}</strong>. A device is waiting with this code:</p>
+            <p class="code">{{Html(quickConnectCode)}}</p>
+            <p>Approve only if this is the code your own device is showing.</p>
+            <form method="post" action="{{BasePath()}}/sso/oidc/qc/approve">
+              <input type="hidden" name="token" value="{{Html(token)}}"/>
+              <button type="submit">Approve</button>
+            </form>
+            <p><a href="{{BasePath()}}/web/index.html">Cancel</a></p>
+            </div></body></html>
+            """;
+
+        return Content(html, "text/html");
+    }
+
+    /// <summary>Approves the code the page just showed, once.</summary>
+    [HttpPost("oidc/qc/approve")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ApproveQuickConnect([FromForm] string? token)
+    {
+        var pending = _approvals.Consume(token);
+        if (pending is null)
+        {
+            return BadRequestText("This approval has expired. Start the login again.");
+        }
+
+        return await CompleteQuickConnectAsync(pending.UserId, pending.Code).ConfigureAwait(false);
+    }
+
+    private async Task<IActionResult> CompleteQuickConnectAsync(Guid userId, string quickConnectCode)
     {
         var authorized = await _quickConnect.AuthorizeRequest(userId, quickConnectCode)
             .ConfigureAwait(false);
@@ -718,6 +777,14 @@ public sealed class SsoController : ControllerBase
     /// JSON string, which a person who lands on the callback URL reads with quotes around
     /// it.
     /// </summary>
+    private static IActionResult NotFoundText(string message)
+        => new ContentResult
+        {
+            StatusCode = StatusCodes.Status404NotFound,
+            Content = message,
+            ContentType = "text/plain",
+        };
+
     private static IActionResult BadRequestText(string message)
         => new ContentResult
         {

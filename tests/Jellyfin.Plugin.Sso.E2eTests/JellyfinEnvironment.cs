@@ -179,16 +179,23 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
     /// the page would post to Jellyfin's native auth endpoint.
     /// </summary>
     public async Task<SsoLoginResult> StartWebLoginAsync(
-        FakeUser user, HttpClient? client = null, string? providerId = null)
+        FakeUser user,
+        HttpClient? client = null,
+        string? providerId = null,
+        string? quickConnectCode = null)
     {
         Idp.NextUser = user;
         client ??= TrustingClient();
 
         // Redirects are followed by hand: the chain crosses from the server (http) to the
         // provider (https) and back, and HttpClient refuses to follow a downgrade.
-        var url = providerId is null
-            ? $"{BaseUrl}/sso/oidc/start"
-            : $"{BaseUrl}/sso/oidc/start/{providerId}";
+        var url = (providerId, quickConnectCode) switch
+        {
+            (null, null) => $"{BaseUrl}/sso/oidc/start",
+            (null, _) => $"{BaseUrl}/sso/oidc/start/qc?code={quickConnectCode}",
+            (_, null) => $"{BaseUrl}/sso/oidc/start/{providerId}",
+            _ => $"{BaseUrl}/sso/oidc/start/{providerId}/qc?code={quickConnectCode}",
+        };
         HttpResponseMessage response;
         for (var hop = 0; ; hop++)
         {
