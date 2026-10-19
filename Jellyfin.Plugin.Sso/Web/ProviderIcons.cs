@@ -18,7 +18,7 @@ public static class ProviderIcons
     /// <summary>The mark used when nothing matches: the plugin's own.</summary>
     private static readonly Icon Fallback = new(
         "#00A4DC",
-        "M3.2 12h7.1M3.2 7.2c2.6 0 2.3 4.8 4.9 4.8M3.2 16.8c2.6 0 2.3-4.8 4.9-4.8");
+        "M2.4 12h6.4M2.4 6.6c3 0 2.6 5.4 5.6 5.4M2.4 17.4c3 0 2.6-5.4 5.6-5.4");
 
     private static readonly Dictionary<string, Icon> Known = new(StringComparer.Ordinal)
     {
@@ -62,10 +62,11 @@ public static class ProviderIcons
         // the icon Jellyfin shows for the plugin itself.
         var c = Fallback.Colour;
         return Document(
-            $"<g fill=\"none\" stroke=\"{c}\" stroke-width=\"2\" stroke-linecap=\"round\">"
+            $"<g fill=\"none\" stroke=\"{c}\" stroke-width=\"2.6\" stroke-linecap=\"round\">"
             + $"<path d=\"{Fallback.Path}\"/></g>"
-            + $"<circle cx=\"15.8\" cy=\"12\" r=\"4.4\" fill=\"none\" stroke=\"{c}\" stroke-width=\"2\"/>"
-            + $"<circle cx=\"15.8\" cy=\"12\" r=\"1.4\" fill=\"{c}\"/>");
+            + $"<circle cx=\"16\" cy=\"12\" r=\"5.6\" fill=\"{c}\"/>"
+            + "<circle cx=\"16\" cy=\"11\" r=\"1.9\" fill=\"#101418\"/>"
+            + "<path d=\"M16 12.2v2.6\" stroke=\"#101418\" stroke-width=\"2.2\" stroke-linecap=\"round\"/>");
     }
 
     private static string Document(string body)

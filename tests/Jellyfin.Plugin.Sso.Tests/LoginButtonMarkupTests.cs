@@ -76,6 +76,33 @@ public sealed class LoginButtonMarkupTests
     }
 
     [Fact]
+    public void The_styling_is_fenced_like_the_buttons_are()
+    {
+        const string Theirs = ".myClass { color: red; }";
+
+        var withCss = LoginButtonMarkup.SpliceCss(Theirs, LoginButtonMarkup.Css(anyProvider: true));
+
+        Assert.StartsWith(Theirs, withCss);
+        Assert.Contains(".sso-login-button", withCss);
+        Assert.Contains("width:100%", withCss);
+
+        var cleared = LoginButtonMarkup.SpliceCss(withCss, LoginButtonMarkup.Css(anyProvider: false));
+
+        Assert.Equal(Theirs, cleared);
+    }
+
+    [Fact]
+    public void The_styling_is_written_once_however_often_it_is_applied()
+    {
+        var css = LoginButtonMarkup.Css(anyProvider: true);
+        var once = LoginButtonMarkup.SpliceCss(null, css);
+        var twice = LoginButtonMarkup.SpliceCss(once, css);
+
+        Assert.Equal(once, twice);
+        Assert.Equal(1, Occurrences(twice, ".sso-login-button"));
+    }
+
+    [Fact]
     public void A_provider_name_cannot_inject_markup()
     {
         var block = LoginButtonMarkup.Build(

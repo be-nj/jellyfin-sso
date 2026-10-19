@@ -34,11 +34,15 @@ public sealed class LoginBranding
 
         var block = LoginButtonMarkup.Build(enabled, BasePath());
         var disclaimer = LoginButtonMarkup.Splice(branding.LoginDisclaimer, block);
+        var css = LoginButtonMarkup.SpliceCss(
+            branding.CustomCss, LoginButtonMarkup.Css(enabled.Count > 0));
 
-        if (string.Equals(branding.LoginDisclaimer, disclaimer, StringComparison.Ordinal))
+        if (string.Equals(branding.LoginDisclaimer, disclaimer, StringComparison.Ordinal)
+            && string.Equals(branding.CustomCss, css, StringComparison.Ordinal))
             return; // no change needed
 
         branding.LoginDisclaimer = disclaimer;
+        branding.CustomCss = css;
         _configManager.SaveConfiguration("branding", branding);
 
         _logger.LogInformation(

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Checks that the review's accounting is real: every commit the review document names
-# exists in this repository's history, and every issue it names exists and is in the
-# state the document implies (a closed issue for a fix, an open one for deferred work).
+# exists in this repository's history, every issue it names exists, and every test it
+# credits with holding a fix is actually in the test sources. A list of findings that
+# nobody resolves is a claim; this makes it a check.
 #
 #   scripts/check-review-audit.sh
 #
@@ -46,10 +47,22 @@ else
     done
 fi
 
+echo "== tests the review names"
+mapfile -t tests < <(grep -oE '`[A-Z][A-Za-z0-9_]{10,}`' "$DOC" | tr -d '`' | sort -u)
+for test in "${tests[@]}"; do
+    if grep -rqs --include='*.cs' "$test" "$REPO_ROOT/tests"; then
+        file=$(grep -rls --include='*.cs' "$test" "$REPO_ROOT/tests" | head -1)
+        printf '  ok   %-62s %s\n' "$test" "$(basename "$file")"
+    else
+        printf '  MISSING %s\n' "$test"
+        failures=$((failures + 1))
+    fi
+done
+
 echo
 if (( failures > 0 )); then
     echo "$failures reference(s) in the review do not resolve" >&2
     exit 1
 fi
 
-echo "every commit and issue the review names resolves"
+echo "every commit, issue and test the review names resolves"

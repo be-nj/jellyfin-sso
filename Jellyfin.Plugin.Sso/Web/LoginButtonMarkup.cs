@@ -16,6 +16,29 @@ public static class LoginButtonMarkup
     internal const string Start = "<!-- sso-login-buttons:start -->";
     internal const string End = "<!-- sso-login-buttons:end -->";
 
+    internal const string CssStart = "/* sso-login-buttons:start */";
+    internal const string CssEnd = "/* sso-login-buttons:end */";
+
+    /// <summary>
+    /// The styling for those buttons, for Jellyfin's custom CSS. The disclaimer that
+    /// holds them shrink-wraps its content and sits in a centred flex row, so without
+    /// this the button is a small grey pill under the full-width buttons above it.
+    /// </summary>
+    public static string Css(bool anyProvider)
+        => anyProvider
+            ? CssStart
+              + ".loginDisclaimerContainer{display:block;}"
+              + ".loginDisclaimer{margin:0;}"
+              + ".sso-login-button{display:flex;align-items:center;justify-content:center;"
+              + "gap:.6em;width:100%;margin:.25em 0;}"
+              + ".sso-login-mark{flex:0 0 auto;}"
+              + CssEnd
+            : string.Empty;
+
+    /// <summary>Puts the styling into the administrator's own custom CSS, fenced.</summary>
+    public static string SpliceCss(string? customCss, string block)
+        => SpliceBetween(customCss, block, CssStart, CssEnd);
+
     /// <summary>
     /// One button per enabled provider, or nothing when none is enabled. Jellyfin's own
     /// button classes are used so themes style these like any other button.
@@ -42,7 +65,7 @@ public static class LoginButtonMarkup
             // style an anchor's text only under a[data-role=button] — without it the label
             // keeps the link colour and disappears on a coloured button.
             markup
-                .Append("<a data-role=\"button\" class=\"raised block emby-button\" href=\"")
+                .Append("<a data-role=\"button\" class=\"raised block emby-button sso-login-button\" href=\"")
                 .Append(prefix)
                 .Append("/sso/oidc/start/")
                 .Append(WebUtility.UrlEncode(provider.Id))
@@ -50,7 +73,7 @@ public static class LoginButtonMarkup
                 .Append(prefix)
                 .Append("/sso/icon/")
                 .Append(ProviderIcons.SlugFor(provider.Name, provider.Authority))
-                .Append("\" alt=\"\" width=\"20\" height=\"20\"/>&nbsp;")
+                .Append("\" alt=\"\" width=\"22\" height=\"22\" class=\"sso-login-mark\"/>")
                 .Append(WebUtility.HtmlEncode(label))
                 .Append("</a>");
         }
@@ -64,8 +87,11 @@ public static class LoginButtonMarkup
     /// block removes the fenced part.
     /// </summary>
     public static string Splice(string? disclaimer, string block)
+        => SpliceBetween(disclaimer, block, Start, End);
+
+    private static string SpliceBetween(string? text, string block, string Start, string End)
     {
-        var existing = disclaimer ?? string.Empty;
+        var existing = text ?? string.Empty;
 
         var start = existing.IndexOf(Start, StringComparison.Ordinal);
         var end = existing.IndexOf(End, StringComparison.Ordinal);
