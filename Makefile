@@ -43,7 +43,7 @@ test:
 	docker run --rm \
 	  -v "$(CURDIR)":"$(CURDIR)" -w "$(CURDIR)" \
 	  -e HOME=/tmp -e NUGET_PACKAGES="$(CURDIR)/tests/runs/nuget" \
-	  mcr.microsoft.com/dotnet/sdk:10.0 \
+	  mcr.microsoft.com/dotnet/sdk:10.0.402 \
 	  dotnet test tests/Jellyfin.Plugin.Sso.Tests -c Release --logger trx
 
 # Mutation testing: changes the code (a < into a <=, a condition into its opposite) and
@@ -54,7 +54,7 @@ mutants:
 	docker run --rm \
 	  -v "$(CURDIR)":"$(CURDIR)" -w "$(CURDIR)" \
 	  -e HOME=/tmp -e NUGET_PACKAGES="$(CURDIR)/tests/runs/nuget" \
-	  mcr.microsoft.com/dotnet/sdk:10.0 \
+	  mcr.microsoft.com/dotnet/sdk:10.0.402 \
 	  bash -c 'rm -rf Jellyfin.Plugin.Sso/StrykerOutput \
 	    && dotnet tool install -g dotnet-stryker >/dev/null \
 	    && export PATH="$$PATH:/tmp/.dotnet/tools" \
@@ -78,6 +78,6 @@ e2e:
 	  -v "$(CURDIR)":"$(CURDIR)" -w "$(CURDIR)" \
 	  -e HOME=/tmp -e NUGET_PACKAGES="$(CURDIR)/tests/runs/nuget" \
 	  -e E2E_PLAYWRIGHT_WITH_DEPS=1 \
-	  mcr.microsoft.com/dotnet/sdk:10.0 \
+	  mcr.microsoft.com/dotnet/sdk:10.0.402 \
 	  bash -c 'apt-get update -qq && apt-get install -y -qq zip docker.io >/dev/null \
 	    && dotnet test tests/Jellyfin.Plugin.Sso.E2eTests -c Release --logger trx $(E2E_FILTER)'
