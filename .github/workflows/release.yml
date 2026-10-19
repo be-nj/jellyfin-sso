@@ -122,3 +122,7 @@ jobs:
           fi
 
           gh pr merge "$branch" --auto --squash --delete-branch
+
+          # A pull request opened with GITHUB_TOKEN starts no workflows, so the checks
+          # main requires are dispatched against the branch by hand.
+          gh workflow run test.yml --ref "$branch"

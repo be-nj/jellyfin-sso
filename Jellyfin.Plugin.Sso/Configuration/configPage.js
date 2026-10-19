@@ -71,6 +71,7 @@ function load(view) {
         renderProviders(view, _config.Providers || []);
         setChk(view, 'SignOutOfIdentityProvider', !!_config.SignOutOfIdentityProvider);
         setChk(view, 'AddLoginButtonToBranding', _config.AddLoginButtonToBranding !== false);
+        setChk(view, 'UseProviderLogos', _config.UseProviderLogos !== false);
         setChk(view, 'InjectLoginButtonIntoForm', !!_config.InjectLoginButtonIntoForm);
         setChk(view, 'AllowSelfServiceLinking', !!_config.AllowSelfServiceLinking);
         setChk(view, 'PreserveAdminPermissions', !!_config.PreserveAdminPermissions);
@@ -136,6 +137,7 @@ function save(view) {
         PreserveAdminPermissions: getChk(view, 'PreserveAdminPermissions'),
         SignOutOfIdentityProvider: getChk(view, 'SignOutOfIdentityProvider'),
         AddLoginButtonToBranding: getChk(view, 'AddLoginButtonToBranding'),
+        UseProviderLogos: getChk(view, 'UseProviderLogos'),
         InjectLoginButtonIntoForm: getChk(view, 'InjectLoginButtonIntoForm'),
         AllowSelfServiceLinking: getChk(view, 'AllowSelfServiceLinking'),
         SyncExcludedUserIds: collectExcluded(view),

@@ -3,10 +3,15 @@ name: Tests
 # No path filter on purpose. main requires these checks, and a check that does not run
 # on a documentation-only pull request never reports, so auto-merge waits for ever. The
 # matrix is cheap enough to run on everything.
+# workflow_dispatch exists for one reason: a pull request opened by the release workflow
+# runs with GITHUB_TOKEN, and GitHub does not start workflows for those — the required
+# checks would never report and auto-merge would wait for ever. The release dispatches
+# this run against its own branch instead.
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read

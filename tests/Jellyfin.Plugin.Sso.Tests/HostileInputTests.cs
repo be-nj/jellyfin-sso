@@ -122,9 +122,10 @@ public sealed class HostileInputTests
                 basePath: string.Empty);
 
             // The name is text, the id is part of a URL: neither may end the attribute
-            // or the element it sits in. The label is what follows the icon element.
-            var label = markup[(markup.IndexOf("/>", StringComparison.Ordinal) + 2)..];
-            Assert.DoesNotContain("<", label[..label.IndexOf("</a>", StringComparison.Ordinal)]);
+            // or the element it sits in.
+            const string LabelOpen = "<span class=\"sso-login-label\">";
+            var label = markup[(markup.IndexOf(LabelOpen, StringComparison.Ordinal) + LabelOpen.Length)..];
+            Assert.DoesNotContain("<", label[..label.IndexOf("</span>", StringComparison.Ordinal)]);
             Assert.Equal(1, Occurrences(markup, "</a>"));
             Assert.Equal(1, Occurrences(markup, "<a "));
         }
