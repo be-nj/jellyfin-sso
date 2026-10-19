@@ -182,6 +182,11 @@ is merged — by a second person where there is one, and otherwise by a delibera
 pass with a different lens than the one that wrote it. Current practice, and what the last
 round of it found, is in [docs/reviews/](docs/reviews/).
 
+`main` takes no direct pushes, from anybody, including the maintainer and the release
+workflow: every change arrives as a pull request that the test matrix has to pass, and
+auto-merge lands it when it does. That is also why the release publishes its manifest
+through a pull request rather than pushing it.
+
 The project is open to co-maintainers, and the rule above is the part of it that does not
 wait for one: no change to the authentication path goes in on the strength of a green test
 run alone.

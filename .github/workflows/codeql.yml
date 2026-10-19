@@ -10,8 +10,6 @@ on:
       - 'docs/**'
       - 'CNAME'
       - 'LICENSE'
-      - 'manifest.json'
-      - 'm.json'
   pull_request:
     paths-ignore: *prose
   schedule:
