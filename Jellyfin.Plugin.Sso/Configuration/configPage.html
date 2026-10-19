@@ -133,6 +133,18 @@
             </div>
             <div class="checkboxContainer">
               <label>
+                <input id="UseProviderLogos" type="checkbox" is="emby-checkbox" />
+                <span>Use the provider's own logo on the button</span>
+              </label>
+              <div class="fieldDescription">
+                Fetches the logo your provider shows on its own login page, so a rebranded
+                Authentik looks like itself here too. The server fetches and caches it; the
+                login page never reaches out to the provider. Off means the plugin's stock
+                mark.
+              </div>
+            </div>
+            <div class="checkboxContainer">
+              <label>
                 <input id="InjectLoginButtonIntoForm" type="checkbox" is="emby-checkbox" />
                 <span>Put the button inside the login form</span>
               </label>

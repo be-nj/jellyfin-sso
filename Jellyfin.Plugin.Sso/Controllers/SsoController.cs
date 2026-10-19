@@ -23,6 +23,7 @@ public sealed class SsoController : ControllerBase
     private readonly PermissionSync _permissions;
     private readonly EphemeralSecretStore _secrets;
     private readonly QuickConnectApprovalStore _approvals;
+    private readonly ProviderLogos _logos;
     private readonly IQuickConnect _quickConnect;
     private readonly MediaBrowser.Controller.Library.IUserManager _userManager;
     private readonly ILogger<SsoController> _logger;
@@ -35,6 +36,7 @@ public sealed class SsoController : ControllerBase
         PermissionSync permissions,
         EphemeralSecretStore secrets,
         QuickConnectApprovalStore approvals,
+        ProviderLogos logos,
         IQuickConnect quickConnect,
         MediaBrowser.Controller.Library.IUserManager userManager,
         ILogger<SsoController> logger)
@@ -46,6 +48,7 @@ public sealed class SsoController : ControllerBase
         _permissions = permissions;
         _secrets = secrets;
         _approvals = approvals;
+        _logos = logos;
         _quickConnect = quickConnect;
         _userManager = userManager;
         _logger = logger;
@@ -147,6 +150,38 @@ public sealed class SsoController : ControllerBase
             """;
 
         return Content(script, "application/javascript");
+    }
+
+    /// <summary>
+    /// The provider's own logo, when it has one the plugin can find, and the built-in
+    /// mark otherwise. Fetched by the server and cached, so the login page itself never
+    /// talks to the identity provider.
+    /// </summary>
+    [HttpGet("icon/provider/{providerId}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ProviderIcon(string providerId, CancellationToken ct)
+    {
+        var provider = GetEnabledProvider(providerId);
+        if (provider is null)
+        {
+            return NotFoundText("No such provider, or it is not enabled.");
+        }
+
+        Response.Headers.CacheControl = "public, max-age=3600";
+
+        var config = Plugin.Instance?.Configuration;
+        if (config is { UseProviderLogos: true })
+        {
+            var logo = await _logos.GetAsync(provider, ct).ConfigureAwait(false);
+            if (logo is not null)
+            {
+                return File(logo.Bytes, logo.ContentType);
+            }
+        }
+
+        return Content(
+            ProviderIcons.Svg(ProviderIcons.SlugFor(provider.Name, provider.Authority)),
+            "image/svg+xml");
     }
 
     /// <summary>

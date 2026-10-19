@@ -25,13 +25,35 @@ public static class LoginButtonMarkup
     /// this the button is a small grey pill under the full-width buttons above it.
     /// </summary>
     public static string Css(bool anyProvider)
+        => Css(anyProvider, []);
+
+    /// <summary>
+    /// The styling, plus one rule per provider so each button carries its own mark's
+    /// colour on its edge rather than all of them looking alike.
+    /// </summary>
+    public static string Css(bool anyProvider, IReadOnlyList<ProviderConfig> providers)
         => anyProvider
             ? CssStart
-              + ".loginDisclaimerContainer{display:block;}"
-              + ".loginDisclaimer{margin:0;}"
-              + ".sso-login-button{display:flex;align-items:center;justify-content:center;"
-              + "gap:.6em;width:100%;margin:.25em 0;}"
-              + ".sso-login-mark{flex:0 0 auto;}"
+              // The disclaimer is a centred flex row that shrink-wraps whatever is in it,
+              // so the button only fills the form once the container is a block.
+              // Jellyfin centres the disclaimer in a flex row and gives it an auto
+              // margin, which left the button a few pixels off the column the buttons
+              // above it stand in.
+              + ".loginDisclaimerContainer{display:block;margin:1.2em 0 0;padding:0;}"
+              + ".loginDisclaimer{margin:0;padding:0;width:100%;}"
+              // Spaced away from Jellyfin's own buttons, because it does something else:
+              // it leaves this server.
+              + ".loginDisclaimer .sso-login-button{display:flex;align-items:center;"
+              + "justify-content:center;gap:.7em;width:100%;margin:.4em 0;"
+              + "font-weight:600;letter-spacing:.01em;"
+              + "border-left:3px solid var(--sso-mark, #00a4dc);"
+              + "transition:background .15s ease;}"
+              + ".loginDisclaimer .sso-login-button:hover{background:#4a4a4a;}"
+              + ".sso-login-mark{flex:0 0 auto;display:block;}"
+              + ".sso-login-label{display:block;font-weight:600;}"
+              + string.Concat(providers.Select(p =>
+                  $".sso-login-button[data-provider=\"{WebUtility.HtmlEncode(p.Id)}\"]"
+                  + "{--sso-mark:" + ProviderIcons.ColourFor(p.Name, p.Authority) + ";}"))
               + CssEnd
             : string.Empty;
 
@@ -65,16 +87,21 @@ public static class LoginButtonMarkup
             // style an anchor's text only under a[data-role=button] — without it the label
             // keeps the link colour and disappears on a coloured button.
             markup
-                .Append("<a data-role=\"button\" class=\"raised block emby-button sso-login-button\" href=\"")
+                .Append("<a data-role=\"button\" class=\"raised block emby-button sso-login-button\" ")
+                .Append("data-provider=\"")
+                .Append(WebUtility.HtmlEncode(provider.Id))
+                .Append("\" href=\"")
                 .Append(prefix)
                 .Append("/sso/oidc/start/")
                 .Append(WebUtility.UrlEncode(provider.Id))
                 .Append("\"><img src=\"")
                 .Append(prefix)
-                .Append("/sso/icon/")
-                .Append(ProviderIcons.SlugFor(provider.Name, provider.Authority))
+                .Append("/sso/icon/provider/")
+                .Append(WebUtility.UrlEncode(provider.Id))
                 .Append("\" alt=\"\" width=\"22\" height=\"22\" class=\"sso-login-mark\"/>")
+                .Append("<span class=\"sso-login-label\">")
                 .Append(WebUtility.HtmlEncode(label))
+                .Append("</span>")
                 .Append("</a>");
         }
 

@@ -72,6 +72,10 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
     /// <summary>The identity handed out by the next authorize call.</summary>
     public FakeUser NextUser { get; set; } = new("sub-default", "default-user", []);
 
+    /// <summary>The smallest valid PNG, so the logo path has real bytes to carry.</summary>
+    internal static byte[] OnePixelPng() => Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+
     /// <summary>
     /// When set, the next authorize call reports this OAuth error instead of issuing a
     /// code — what a provider does when the user cancels or the client is misconfigured.
@@ -111,6 +115,16 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
             ["code_challenge_methods_supported"] = new[] { "S256" },
             ["grant_types_supported"] = new[] { "authorization_code" },
         }));
+
+        // A branded provider: the plugin should put this on the login button rather than
+        // its own stock mark.
+        app.MapGet("/api/v3/core/brands/current/", () => Results.Json(new Dictionary<string, object>
+        {
+            ["branding_title"] = "Fake IdP",
+            ["branding_logo"] = "/static/brand-logo.png",
+        }));
+
+        app.MapGet("/static/brand-logo.png", () => Results.File(OnePixelPng(), "image/png"));
 
         app.MapGet("/jwks", () =>
         {

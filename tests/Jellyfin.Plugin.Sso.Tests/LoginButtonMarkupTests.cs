@@ -99,7 +99,8 @@ public sealed class LoginButtonMarkupTests
         var twice = LoginButtonMarkup.SpliceCss(once, css);
 
         Assert.Equal(once, twice);
-        Assert.Equal(1, Occurrences(twice, ".sso-login-button"));
+        Assert.Equal(1, Occurrences(twice, LoginButtonMarkup.CssStart));
+        Assert.Equal(1, Occurrences(twice, LoginButtonMarkup.CssEnd));
     }
 
     [Fact]
