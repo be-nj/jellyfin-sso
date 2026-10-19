@@ -5,6 +5,7 @@ using Jellyfin.Plugin.Sso.Oidc;
 using Jellyfin.Plugin.Sso.Provisioning;
 using MediaBrowser.Controller.QuickConnect;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
@@ -206,8 +207,11 @@ public sealed class SsoController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Callback(
         string providerId,
-        [FromQuery] string code,
-        [FromQuery] string state,
+        // Nullable on purpose: a provider that reports an error sends no code, and model
+        // validation would otherwise answer with a raw error blob before the error branch
+        // below ever runs.
+        [FromQuery] string? code,
+        [FromQuery] string? state,
         [FromQuery] string? error,
         CancellationToken ct)
     {
@@ -216,16 +220,19 @@ public sealed class SsoController : ControllerBase
             var errorCode = OAuthErrorCode(error);
             _logger.LogWarning(
                 "OIDC callback error for provider {Id}: {Error}", KnownProviderId(providerId), errorCode);
-            return BadRequest($"IdP returned error: {errorCode}");
+            return BadRequestText($"IdP returned error: {errorCode}");
         }
+
+        if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(state))
+            return BadRequestText("The provider returned neither an authorization code nor an error.");
 
         var pending = _states.Consume(state);
         if (pending is null)
-            return BadRequest("Invalid or expired state. Please try logging in again.");
+            return BadRequestText("Invalid or expired state. Please try logging in again.");
 
         var provider = GetEnabledProvider(providerId);
         if (provider is null || provider.Id != pending.ProviderId)
-            return BadRequest("Provider mismatch.");
+            return BadRequestText("Provider mismatch.");
 
         try
         {
@@ -260,7 +267,7 @@ public sealed class SsoController : ControllerBase
         catch (InvalidOperationException ex)
         {
             _logger.LogWarning(ex, "SSO login failed for provider {Id}", KnownProviderId(providerId));
-            return BadRequest(ex.Message);
+            return BadRequestText(ex.Message);
         }
     }
 
@@ -703,6 +710,19 @@ public sealed class SsoController : ControllerBase
         var host = req.Headers["X-Forwarded-Host"].FirstOrDefault() ?? req.Host.ToString();
         return $"{scheme}://{host}";
     }
+
+    /// <summary>
+    /// A 400 the browser shows as written. The default BadRequest(string) serialises to a
+    /// JSON string, which a person who lands on the callback URL reads with quotes around
+    /// it.
+    /// </summary>
+    private static IActionResult BadRequestText(string message)
+        => new ContentResult
+        {
+            StatusCode = StatusCodes.Status400BadRequest,
+            Content = message,
+            ContentType = "text/plain",
+        };
 
     /// <summary>Minimal HTML escaping for the few values these pages print.</summary>
     private static string Html(string? value)

@@ -7,6 +7,7 @@ Users log in through your identity provider; their library access is derived fro
 IdP groups and re-applied on every login. Admins configure the group → library mapping
 in a native Jellyfin dashboard page.
 
+- **Providers:** Authentik (in production), Keycloak (covered by e2e tests), Authelia.
 - **Target:** Jellyfin **12.1.x**, `net10.0`. `Jellyfin.Controller` must match the server version exactly.
 - **Install:** add the [plugin repository](#from-the-plugin-repository-recommended) to your
   Jellyfin dashboard — no manual DLL copying.
@@ -159,6 +160,20 @@ After deploy, restart Jellyfin and confirm `Loaded plugin: SSO Authentication` i
 Configure an OIDC client with PKCE (public client), the same redirect URI, and ensure the
 `groups` claim is emitted.
 
+### Keycloak
+
+1. Create a client: **Client authentication off** (public), standard flow, PKCE method
+   `S256`, redirect URI `https://<your-jellyfin>/sso/oidc/callback/<providerId>`.
+2. Add a **Group Membership** mapper to the client, claim name `groups`, and switch
+   **Full group path off** — otherwise the claim reads `/media` instead of `media` and your
+   group mapping has to spell it that way.
+3. Leave the plugin's scopes at the default `openid profile email`. Keycloak has **no**
+   `groups` scope unless someone creates one, and requesting a scope it does not know fails
+   the whole authorization with `invalid_scope`.
+
+The e2e suite runs a real Keycloak with exactly this setup, so the three points above are
+verified rather than remembered.
+
 ---
 
 ## Plugin configuration
@@ -296,6 +311,11 @@ A throwaway Jellyfin container is started from the image matching the pinned
 artifact users download is the one under test. Alongside it runs a fake OIDC provider (a
 small ASP.NET host in the test process, serving HTTPS with a self-signed certificate the
 container is made to trust), and the browser hop is driven by Playwright.
+
+One tier up, the suite also starts a **real Keycloak** from a realm file and signs in
+through its own login form in the browser, which is the only way to prove that the groups
+really arrive in the claims and that the plugin copes with a provider nobody here
+controls.
 
 Covered there: the plugin loads in a real server, the redirect and PKCE code exchange, JIT
 provisioning, group-to-library permissions applied through Jellyfin's own user policy,

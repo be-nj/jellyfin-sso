@@ -32,6 +32,12 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
 
     public FakeIdentityProvider Idp { get; private set; } = null!;
 
+    /// <summary>The certificate every identity provider in the suite serves, fake or real.</summary>
+    public TestCertificate Certificate { get; private set; } = null!;
+
+    /// <summary>Scratch directory for container inputs such as realm and config files.</summary>
+    public string WorkDirectory { get; private set; } = string.Empty;
+
     /// <summary>Base URL of the server as seen from the test process and the browser.</summary>
     public string BaseUrl { get; private set; } = string.Empty;
 
@@ -54,8 +60,9 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
         var pluginDir = BuildPluginPackage(repoRoot);
         var mediaDir = CreateMediaTree(repoRoot);
 
-        Idp = await FakeIdentityProvider.StartAsync(
-            Path.Combine(repoRoot, "tests", "runs", "e2e", "certs"));
+        WorkDirectory = Path.Combine(repoRoot, "tests", "runs", "e2e");
+        Certificate = TestCertificate.Create(Path.Combine(WorkDirectory, "certs"));
+        Idp = await FakeIdentityProvider.StartAsync(Certificate);
 
         _jellyfin = new ContainerBuilder($"jellyfin/jellyfin:{ServerImageTag(repoRoot)}")
             .WithPortBinding(8096, true)
@@ -63,7 +70,7 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
             .WithExtraHost("host.docker.internal", "host-gateway")
             .WithBindMount(pluginDir, $"/config/plugins/SSO Authentication_{PluginVersion}", AccessMode.ReadWrite)
             .WithBindMount(mediaDir, "/media", AccessMode.ReadOnly)
-            .WithBindMount(Idp.CertificatePath, "/usr/local/share/ca-certificates/fake-idp.crt", AccessMode.ReadOnly)
+            .WithBindMount(Certificate.CertificatePath, "/usr/local/share/ca-certificates/e2e-idp.crt", AccessMode.ReadOnly)
             // The fake provider serves HTTPS with a self-signed certificate, so the server
             // has to trust it before Jellyfin starts.
             .WithEntrypoint("/bin/sh", "-c")

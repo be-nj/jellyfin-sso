@@ -140,6 +140,31 @@ public sealed class SsoLoginTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_provider_error_is_reported_in_plain_words()
+    {
+        // What the provider sends when the user cancels on its consent screen.
+        _env.Idp.NextAuthorizeError = "access_denied";
+
+        var login = await _env.StartWebLoginAsync(new FakeUser("sub-cancel", "canceller", ["media"]));
+
+        Assert.Equal(HttpStatusCode.BadRequest, login.CallbackStatus);
+        Assert.Equal("IdP returned error: access_denied", login.Body);
+        Assert.Null(await _env.FindUserAsync("canceller"));
+    }
+
+    [Fact]
+    public async Task A_callback_without_code_or_error_is_refused()
+    {
+        using var client = JellyfinEnvironment.TrustingClient();
+
+        var response = await client.GetAsync(
+            $"{_env.BaseUrl}/sso/oidc/callback/{JellyfinEnvironment.ProviderId}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("neither an authorization code nor an error", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task A_replayed_callback_state_is_refused()
     {
         var login = await _env.StartWebLoginAsync(new FakeUser("sub-heidi", "heidi", ["media"]));
