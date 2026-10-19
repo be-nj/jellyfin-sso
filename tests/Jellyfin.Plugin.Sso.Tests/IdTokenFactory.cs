@@ -29,6 +29,7 @@ internal sealed class IdTokenFactory : IDisposable
     public string Mint(
         string sub = "ben",
         string? preferredUsername = "ben",
+        string? name = null,
         string? nonce = "test-nonce",
         IEnumerable<string>? groups = null,
         string issuer = Issuer,
@@ -45,6 +46,15 @@ internal sealed class IdTokenFactory : IDisposable
         if (preferredUsername is not null)
         {
             claims.Add(new Claim("preferred_username", preferredUsername));
+        }
+
+
+        if (name is not null)
+
+        {
+
+            claims.Add(new Claim("name", name));
+
         }
 
         if (nonce is not null)

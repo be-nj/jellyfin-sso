@@ -15,7 +15,20 @@ namespace Jellyfin.Plugin.Sso.Auth;
 /// </summary>
 public sealed class QuickConnectApprovalStore
 {
-    private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan DefaultTtl = TimeSpan.FromMinutes(2);
+
+    private readonly TimeSpan _ttl;
+
+    public QuickConnectApprovalStore()
+        : this(DefaultTtl)
+    {
+    }
+
+    /// <summary>Lets a test watch an approval expire without waiting two minutes.</summary>
+    internal QuickConnectApprovalStore(TimeSpan ttl)
+    {
+        _ttl = ttl;
+    }
 
     public sealed record Pending(Guid UserId, string Username, string Code, DateTimeOffset Expiry);
 
@@ -27,7 +40,7 @@ public sealed class QuickConnectApprovalStore
         Purge();
 
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-        _store[token] = new Pending(userId, username, code, DateTimeOffset.UtcNow.Add(Ttl));
+        _store[token] = new Pending(userId, username, code, DateTimeOffset.UtcNow.Add(_ttl));
         return token;
     }
 

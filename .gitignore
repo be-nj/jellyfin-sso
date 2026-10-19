@@ -4,3 +4,4 @@ obj/
 .vs/
 tests/runs/
 dist/
+StrykerOutput/

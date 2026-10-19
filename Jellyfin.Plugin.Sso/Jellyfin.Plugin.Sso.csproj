@@ -16,8 +16,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Jellyfin.Controller" Version="12.2.0" />
-    <PackageReference Include="Jellyfin.Model" Version="12.2.0" />
+    <PackageReference Include="Jellyfin.Controller" Version="12.0.0" />
+    <PackageReference Include="Jellyfin.Model" Version="12.0.0" />
     <!-- OIDC: discovery + PKCE + token endpoint (IdentityModel's maintained successor) -->
     <PackageReference Include="Duende.IdentityModel" Version="8.1.0" />
     <!-- ID token validation -->

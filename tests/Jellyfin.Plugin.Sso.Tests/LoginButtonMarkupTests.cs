@@ -43,6 +43,39 @@ public sealed class LoginButtonMarkupTests
     }
 
     [Fact]
+    public void A_provider_without_a_name_still_gets_a_readable_button()
+    {
+        var block = LoginButtonMarkup.Build(
+            [new ProviderConfig { Id = "p1", Name = "   ", Enabled = true }], basePath: string.Empty);
+
+        Assert.Contains("Login with SSO", block);
+        Assert.Contains("href=\"/sso/oidc/start/p1\"", block);
+    }
+
+    [Fact]
+    public void A_disclaimer_with_only_an_opening_marker_is_left_alone()
+    {
+        const string Broken = "<p>House rules</p><!-- sso-login-buttons:start -->";
+        var block = LoginButtonMarkup.Build(
+            [new ProviderConfig { Id = "p1", Name = "Authentik", Enabled = true }], string.Empty);
+
+        var spliced = LoginButtonMarkup.Splice(Broken, block);
+
+        // The fence is incomplete, so the block is appended rather than replacing text
+        // the plugin cannot delimit.
+        Assert.StartsWith(Broken, spliced);
+        Assert.Contains("/sso/oidc/start/p1", spliced);
+    }
+
+    [Fact]
+    public void An_empty_block_leaves_an_untouched_disclaimer_exactly_as_it_was()
+    {
+        const string House = "<p>Be nice to each other.</p>";
+
+        Assert.Equal(House, LoginButtonMarkup.Splice(House, LoginButtonMarkup.Build([], string.Empty)));
+    }
+
+    [Fact]
     public void A_provider_name_cannot_inject_markup()
     {
         var block = LoginButtonMarkup.Build(

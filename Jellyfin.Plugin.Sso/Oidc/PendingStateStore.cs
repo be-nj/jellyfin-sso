@@ -10,7 +10,20 @@ namespace Jellyfin.Plugin.Sso.Oidc;
 /// </summary>
 public sealed class PendingStateStore
 {
-    private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan DefaultTtl = TimeSpan.FromMinutes(10);
+
+    private readonly TimeSpan _ttl;
+
+    public PendingStateStore()
+        : this(DefaultTtl)
+    {
+    }
+
+    /// <summary>Lets a test watch a login expire without waiting ten minutes.</summary>
+    internal PendingStateStore(TimeSpan ttl)
+    {
+        _ttl = ttl;
+    }
 
     public sealed record PendingState(
         string ProviderId,
@@ -42,7 +55,7 @@ public sealed class PendingStateStore
             verifier,
             nonce,
             redirectUri,
-            DateTimeOffset.UtcNow.Add(Ttl),
+            DateTimeOffset.UtcNow.Add(_ttl),
             quickConnectCode,
             linkUserId);
 

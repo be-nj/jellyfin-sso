@@ -1,0 +1,35 @@
+{
+  "stryker-config": {
+    "project": "Jellyfin.Plugin.Sso.csproj",
+    "test-projects": [
+      "../tests/Jellyfin.Plugin.Sso.Tests/Jellyfin.Plugin.Sso.Tests.csproj"
+    ],
+    "reporters": [
+      "html",
+      "progress",
+      "json"
+    ],
+    "thresholds": {
+      "high": 75,
+      "low": 60,
+      "break": 50
+    },
+    "mutate": [
+      "Oidc/**/*.cs",
+      "Auth/**/*.cs",
+      "Provisioning/**/*.cs",
+      "Web/LoginButtonMarkup.cs",
+      "Web/LoginBranding.cs",
+      "Web/ForwardedPaths.cs",
+      "Configuration/PluginConfiguration.cs"
+    ],
+    "report-file-name": "mutation-report",
+    "ignore-methods": [
+      "Log*",
+      "*LogInformation",
+      "*LogWarning",
+      "*LogDebug",
+      "*LogError"
+    ]
+  }
+}

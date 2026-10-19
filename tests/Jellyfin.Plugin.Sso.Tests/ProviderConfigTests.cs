@@ -9,6 +9,51 @@ namespace Jellyfin.Plugin.Sso.Tests;
 public sealed class ProviderConfigTests
 {
     [Fact]
+    public void A_new_provider_starts_disabled_with_an_id_and_the_usual_groups_claim()
+    {
+        var provider = new ProviderConfig();
+
+        // Disabled, because a provider is saved before it is finished: an enabled
+        // half-provider puts a dead button on the household's login page.
+        Assert.False(provider.Enabled);
+        Assert.Equal(32, provider.Id.Length);
+        Assert.NotEqual(new ProviderConfig().Id, provider.Id);
+        Assert.Equal("groups", provider.GroupsClaim);
+        Assert.False(provider.GroupsFromUserInfo);
+        Assert.Equal(OidcClientType.Public, provider.ClientType);
+        Assert.Null(provider.ConfidentialSecretRef);
+    }
+
+    [Fact]
+    public void A_new_configuration_manages_nobody_and_allows_self_service_linking()
+    {
+        var config = new PluginConfiguration();
+
+        Assert.Empty(config.Providers);
+        Assert.Empty(config.GroupMappings);
+        Assert.Empty(config.Links);
+        Assert.Empty(config.SeenGroups);
+        Assert.Empty(config.SyncExcludedUserIds);
+        Assert.False(config.PreserveAdminPermissions);
+        Assert.False(config.SignOutOfIdentityProvider);
+        Assert.True(config.AllowSelfServiceLinking);
+    }
+
+    [Fact]
+    public void A_group_mapping_grants_nothing_until_it_is_filled_in()
+    {
+        var mapping = new GroupMappingConfig();
+
+        Assert.Empty(mapping.Group);
+        Assert.Empty(mapping.LibraryIds);
+        Assert.False(mapping.IsAdministrator);
+        Assert.False(mapping.EnableLiveTvAccess);
+        Assert.False(mapping.EnableLiveTvManagement);
+        Assert.False(mapping.EnableContentDownloading);
+        Assert.Null(mapping.MaxParentalRating);
+    }
+
+    [Fact]
     public void An_unconfigured_provider_requests_the_default_scopes()
     {
         var provider = new ProviderConfig();

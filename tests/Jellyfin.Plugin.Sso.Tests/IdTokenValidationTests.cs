@@ -123,6 +123,26 @@ public sealed class IdTokenValidationTests : IDisposable
     }
 
     [Fact]
+    public void The_username_falls_back_to_the_name_claim_before_the_sub()
+    {
+        var token = _idp.Mint(sub: "90b1e0f2", preferredUsername: null, name: "Ben Beckmann");
+
+        var (_, username, _) = Validate(token);
+
+        Assert.Equal("Ben Beckmann", username);
+    }
+
+    [Fact]
+    public void A_preferred_username_wins_over_the_name_claim()
+    {
+        var token = _idp.Mint(sub: "90b1e0f2", preferredUsername: "ben", name: "Ben Beckmann");
+
+        var (_, username, _) = Validate(token);
+
+        Assert.Equal("ben", username);
+    }
+
+    [Fact]
     public void Claims_under_a_different_name_are_not_read_as_groups()
     {
         // The provider is configured for "groups"; a "roles" claim must not leak in,

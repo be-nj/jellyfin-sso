@@ -1,0 +1,38 @@
+name: Mutants
+
+# Mutation testing: change the code, see whether the tests notice. A suite that stays
+# green while the code is broken is worth nothing, and that failure is invisible to any
+# ordinary test run — so it is measured on a schedule and on demand, not guessed at.
+on:
+  schedule:
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mutants:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Run Stryker
+        run: |
+          dotnet tool install -g dotnet-stryker
+          cd Jellyfin.Plugin.Sso
+          dotnet-stryker --config-file ../stryker-config.json
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: mutation-report
+          path: Jellyfin.Plugin.Sso/StrykerOutput/**/reports/
+          if-no-files-found: ignore

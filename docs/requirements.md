@@ -4,23 +4,27 @@
 
 ## Jellyfin version
 
-Dashboard → **About**, or `http://<your-jellyfin>/System/Info/Public`. Each plugin build
-is compiled against one server version; Jellyfin hides the rest:
+Dashboard → **About**, or `http://<your-jellyfin>/System/Info/Public`.
 
 | Jellyfin | Plugin |
 |---|---|
-| 12.2.x | 1.12.2 and newer |
-| 12.1.x | 1.12.0 – 1.12.1 |
-| 12.0.x, 11.x | none — this plugin started at 12.1 |
-| 10.11.x and older | none — upgrade Jellyfin first |
+| 12.0, 12.1, 12.2 | 1.12.6 and newer |
+| 12.2 only | 1.12.2 – 1.12.5 |
+| 12.1 only | 1.12.0 – 1.12.1 |
+| 11.x and older | none — upgrade Jellyfin first |
 
-An empty catalog after adding the repository means no build matches your server, not a
-broken URL.
+A build's `targetAbi` is a **minimum**: 1.12.6 is compiled against Jellyfin 12.0 and runs
+on every 12.x server from there. Jellyfin hides builds whose minimum is higher than the
+server, which is why an empty catalog means your server is older than any build here, not
+that the URL is wrong.
+
+The range is measured rather than assumed: every push runs the whole end-to-end suite
+three times, against Jellyfin 12.0, 12.1 and 12.2 containers, with the same build.
 
 **Pin the Jellyfin image tag** (`jellyfin/jellyfin:12.2`, not `latest`) and upgrade
-deliberately, checking for a matching plugin build first. If a Jellyfin release arrives
-before the plugin does, your local administrator is the way in until it catches up.
-Upgrading the server is its own evening's work —
+deliberately. A Jellyfin release that breaks the plugin API arrives without warning, and
+your local administrator is the way in until a matching build exists. Upgrading the server
+is its own evening's work —
 [container documentation](https://jellyfin.org/docs/general/installation/container/) —
 and not one to combine with adding an authentication plugin.
 

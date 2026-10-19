@@ -20,10 +20,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: '10.0.x'
 
@@ -32,35 +32,44 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: test-results
           path: tests/runs/dotnet/results/
           if-no-files-found: ignore
 
+  # The plugin is built against the oldest server it claims to support, and the same
+  # build is run against every server in that range. The claim in the README is this
+  # job's result, not an assumption about ABI stability.
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        jellyfin: ['12.0', '12.1', '12.2']
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: '10.0.x'
 
       # Drives a throwaway Jellyfin container with the real plugin ZIP, a fake identity
       # provider and a headless browser.
-      - name: Run the e2e suite
+      - name: Run the e2e suite against Jellyfin ${{ matrix.jellyfin }}
+        env:
+          E2E_JELLYFIN_TAG: ${{ matrix.jellyfin }}
         run: >
           dotnet test tests/Jellyfin.Plugin.Sso.E2eTests -c Release --logger trx
           --filter "Category!=RealIdp&Category!=Screenshots"
 
       - name: Upload e2e artifacts
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: e2e-results
+          name: e2e-results-${{ matrix.jellyfin }}
           path: |
             tests/runs/dotnet/results/
             tests/runs/playwright/*.png
@@ -73,10 +82,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: '10.0.x'
 
@@ -87,7 +96,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: real-idp-results
           path: |

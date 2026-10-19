@@ -46,6 +46,21 @@ test:
 	  mcr.microsoft.com/dotnet/sdk:10.0 \
 	  dotnet test tests/Jellyfin.Plugin.Sso.Tests -c Release --logger trx
 
+# Mutation testing: changes the code (a < into a <=, a condition into its opposite) and
+# counts how many of those changes the tests notice. A green suite that notices nothing
+# is the failure mode this catches, and it is the one tests written alongside the code
+# are most prone to. Slow — minutes, not seconds — so it is not part of `make test`.
+mutants:
+	docker run --rm \
+	  -v "$(CURDIR)":"$(CURDIR)" -w "$(CURDIR)" \
+	  -e HOME=/tmp -e NUGET_PACKAGES="$(CURDIR)/tests/runs/nuget" \
+	  mcr.microsoft.com/dotnet/sdk:10.0 \
+	  bash -c 'rm -rf Jellyfin.Plugin.Sso/StrykerOutput \
+	    && dotnet tool install -g dotnet-stryker >/dev/null \
+	    && export PATH="$$PATH:/tmp/.dotnet/tools" \
+	    && cd Jellyfin.Plugin.Sso \
+	    && dotnet-stryker --config-file ../stryker-config.json'
+
 # The e2e suite starts a throwaway Jellyfin container, a fake identity provider and a
 # headless browser. E2E_FILTER passes a vstest filter through, e.g.
 #   make e2e E2E_FILTER='--filter "Category=RealIdp"'   # only Keycloak and Authelia

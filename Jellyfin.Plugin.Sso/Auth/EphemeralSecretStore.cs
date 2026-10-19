@@ -11,7 +11,20 @@ namespace Jellyfin.Plugin.Sso.Auth;
 /// </summary>
 public sealed class EphemeralSecretStore
 {
-    private static readonly TimeSpan Ttl = TimeSpan.FromSeconds(90);
+    private static readonly TimeSpan DefaultTtl = TimeSpan.FromSeconds(90);
+
+    private readonly TimeSpan _ttl;
+
+    public EphemeralSecretStore()
+        : this(DefaultTtl)
+    {
+    }
+
+    /// <summary>Lets a test watch a secret expire without waiting 90 seconds.</summary>
+    internal EphemeralSecretStore(TimeSpan ttl)
+    {
+        _ttl = ttl;
+    }
 
     private sealed record Entry(string Username, DateTimeOffset Expiry);
 
@@ -21,7 +34,7 @@ public sealed class EphemeralSecretStore
     {
         Purge();
         var secret = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-        _store[secret] = new Entry(username, DateTimeOffset.UtcNow.Add(Ttl));
+        _store[secret] = new Entry(username, DateTimeOffset.UtcNow.Add(_ttl));
         return secret;
     }
 

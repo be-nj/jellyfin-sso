@@ -35,17 +35,29 @@ EXTRA_DLLS=(
     System.IdentityModel.Tokens.Jwt.dll
 )
 
+# Deterministic build: the same source has to produce the same bytes, so anyone can
+# rebuild a release and compare the checksum with the one in the manifest. The compiler
+# writes the source paths into the PDB and the assembly, so they are normalised too.
+export SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(git -C "$REPO_ROOT" log -1 --format=%ct 2>/dev/null || echo 1700000000)}"
+
 dotnet publish "$PLUGIN_SRC" -c Release -o "$PUBLISH_DIR" \
-    -p:Version="$VERSION" -p:AssemblyVersion="$VERSION" -p:FileVersion="$VERSION"
+    -p:Version="$VERSION" -p:AssemblyVersion="$VERSION" -p:FileVersion="$VERSION" \
+    -p:Deterministic=true -p:ContinuousIntegrationBuild=true -p:DebugType=none
 
 mkdir -p "$DIST_DIR"
 rm -f "$ZIP"
 
 # Jellyfin unpacks the ZIP straight into plugins/<name>_<version>/, so the DLLs
-# must sit at the root of the archive.
-( cd "$PUBLISH_DIR" && zip -q -X "$ZIP" Jellyfin.Plugin.Sso.dll "${EXTRA_DLLS[@]}" )
+# must sit at the root of the archive. Timestamps inside the archive are pinned to the
+# commit date and the entries are written in a fixed order, so two builds of one commit
+# produce byte-identical ZIPs.
+ZIP_STAMP=$(date -u -d "@$SOURCE_DATE_EPOCH" +'%Y%m%d%H%M.%S' 2>/dev/null || echo '202001010000.00')
+( cd "$PUBLISH_DIR" \
+    && touch -t "$ZIP_STAMP" Jellyfin.Plugin.Sso.dll "${EXTRA_DLLS[@]}" \
+    && zip -q -X -o "$ZIP" Jellyfin.Plugin.Sso.dll "${EXTRA_DLLS[@]}" )
 
 md5sum "$ZIP" | cut -d' ' -f1 > "$ZIP.md5"
 
 echo "built $ZIP"
 echo "md5   $(cat "$ZIP.md5")"
+echo "built deterministically from SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH"

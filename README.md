@@ -9,7 +9,7 @@ groups decide who sees which libraries.**
 
 [![Tests](https://github.com/be-nj/jellyfin-sso/actions/workflows/test.yml/badge.svg)](https://github.com/be-nj/jellyfin-sso/actions/workflows/test.yml)
 [![Release](https://img.shields.io/github/v/release/be-nj/jellyfin-sso?logo=github&color=success)](https://github.com/be-nj/jellyfin-sso/releases)
-[![Jellyfin](https://img.shields.io/badge/Jellyfin-12.2.x-00A4DC?logo=jellyfin&logoColor=white)](https://jellyfin.org)
+[![Jellyfin](https://img.shields.io/badge/Jellyfin-12.0%20%E2%80%93%2012.2-00A4DC?logo=jellyfin&logoColor=white)](https://jellyfin.org)
 [![License](https://img.shields.io/github/license/be-nj/jellyfin-sso?color=blue)](LICENSE)
 
 [Install](#install) · [Set it up](#set-it-up) · [Documentation](docs/README.md) ·
@@ -70,8 +70,8 @@ The differences that matter when one of these sits in front of your media:
   sync — a typo in a group name costs a log line, not your server.
 - **No client secret in the configuration file.** PKCE by default; a confidential client
   reads its secret from the environment or a file at login.
-- **Builds are pinned to one Jellyfin ABI**, so the catalog cannot offer you a plugin that
-  will not load.
+- **The supported Jellyfin range is tested, not claimed** — every push runs the whole
+  end-to-end suite against 12.0, 12.1 and 12.2.
 - **Self-service linking, several providers at once, RP-initiated logout** and Quick
   Connect for TVs.
 - **No SAML**, deliberately — OIDC is what self-hosted providers speak.
@@ -88,8 +88,8 @@ Then **Plugins → Catalog → Authentication → SSO Authentication → Install
 Jellyfin. Typing it on a screen instead of pasting? `jf.be-nj.net/m.json` is the same
 file.
 
-Needs **Jellyfin 12.2.x**. Each build targets one server version and Jellyfin hides the
-rest, so an empty catalog means no build matches yours
+Needs **Jellyfin 12.0 or newer**; every release is tested against 12.0, 12.1 and 12.2.
+An empty catalog means your server is older than any build here
 ([table](docs/requirements.md#jellyfin-version)). Building by hand:
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
