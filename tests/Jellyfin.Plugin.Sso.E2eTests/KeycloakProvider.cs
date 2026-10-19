@@ -106,6 +106,11 @@ internal sealed class KeycloakProvider : IRealIdentityProvider
     private static JsonNode RealmJson() => new JsonObject
     {
         ["realm"] = Realm,
+        // Keycloak prints the realm's display name across the top of its login page, and
+        // falls back to the realm's own name. The realm is called "jellyfin" because that
+        // is what it is for — which made Keycloak's page say JELLYFIN in Keycloak's own
+        // letters, so the recording looked as if the login had never left Jellyfin.
+        ["displayName"] = "Keycloak",
         ["enabled"] = true,
         ["sslRequired"] = "none",
         ["groups"] = new JsonArray
