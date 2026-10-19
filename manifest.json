@@ -8,6 +8,14 @@
     "category": "Authentication",
     "versions": [
       {
+        "version": "1.12.4.0",
+        "changelog": "See the release notes for v1.12.4.",
+        "targetAbi": "12.2.0.0",
+        "sourceUrl": "https://github.com/be-nj/jellyfin-sso/releases/download/v1.12.4/jellyfin-sso_1.12.4.0.zip",
+        "checksum": "ec35a2be66d71de7bb7111e18016b929",
+        "timestamp": "2026-10-19T04:07:59Z"
+      },
+      {
         "version": "1.12.3.0",
         "changelog": "See the release notes for v1.12.3.",
         "targetAbi": "12.2.0.0",
