@@ -31,7 +31,7 @@ reused.
 
 **Account Links** tab:
 
-![The manual account link form](img/account-links.png)
+<a href="img/account-links.png"><img src="img/account-links.png" alt="The manual account link form" width="520"></a>
 
 *Provider* and *Jellyfin user* are dropdowns. *Subject* is the `sub` at the provider —
 with Authentik's username mode, the username.

@@ -11,7 +11,7 @@ One card per identity provider: *Display name*, *Enabled*, *Issuer URL* (must an
 groups from userinfo endpoint*, *Scopes*. The card prints the provider id, the redirect
 URI and the login URL.
 
-![The provider card in the plugin's configuration page](img/provider-card.png)
+<a href="img/provider-card.png"><img src="img/provider-card.png" alt="The provider card in the plugin's configuration page" width="520"></a>
 
 Leave *Scopes* empty to request `openid profile email`. [Authelia](authelia.md) needs
 `groups` added; [Keycloak](keycloak.md) rejects it.
@@ -50,7 +50,7 @@ A public client with PKCE is the default and covers most setups.
 One card per group: *Group name*, *Libraries*, **Admin (all libraries)**, *Live TV
 access*, *Live TV management*, *Downloads*, *Max parental rating* (empty = no limit).
 
-![A group mapping with its libraries and permissions](img/group-mapping.png)
+<a href="img/group-mapping.png"><img src="img/group-mapping.png" alt="A group mapping with its libraries and permissions" width="520"></a>
 
 The group name must match the provider's spelling. The field autocompletes from groups
 seen at a login, so the first one is typed blind; after a test login the log shows what

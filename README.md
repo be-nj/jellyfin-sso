@@ -118,7 +118,7 @@ Worked example with Authentik; [Keycloak](docs/keycloak.md) and
    **Plugins → SSO Authentication → Providers → + Add Provider**. It is created disabled;
    the card now prints the **Redirect URI** for the next step.
 
-   ![The provider card in the plugin's configuration page](docs/img/provider-card.png)
+   <a href="docs/img/provider-card.png"><img src="docs/img/provider-card.png" alt="The provider card in the plugin's configuration page" width="440"></a>
 
    Open the dashboard on **the address your household uses** — the redirect URI is built
    from it ([why](docs/requirements.md#one-address-for-jellyfin-used-everywhere)).

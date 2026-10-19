@@ -87,9 +87,8 @@ public sealed class ScreenshotTests : IAsyncLifetime
 
     /// <summary>
     /// Screenshots one element with room around it. A flush crop pasted into a document
-    /// looks like a hole in it, so the element is wrapped in a padded frame for the
-    /// duration of the shot. The frame takes the colour of whatever actually sits behind
-    /// the element, so the padding is the page continuing, not a border.
+    /// looks like a hole in it, so the element is wrapped in a padded, rounded frame in
+    /// the element's own surface colour for the duration of the shot.
     /// </summary>
     private static async Task ShootAsync(IPage page, string selector, string path)
     {
@@ -100,22 +99,26 @@ public sealed class ScreenshotTests : IAsyncLifetime
               const opaque = colour =>
                 colour && colour !== 'transparent' && !colour.startsWith('rgba(0, 0, 0, 0)');
 
-              let behind = 'rgb(16, 16, 16)';
-              for (let node = el.parentElement; node; node = node.parentElement) {
-                const colour = getComputedStyle(node).backgroundColor;
-                if (opaque(colour)) { behind = colour; break; }
+              let surface = getComputedStyle(el).backgroundColor;
+              for (let node = el; node && !opaque(surface); node = node.parentElement) {
+                surface = getComputedStyle(node).backgroundColor;
               }
 
               const frame = document.createElement('div');
               frame.setAttribute('data-shot', '');
               frame.style.padding = '28px';
-              frame.style.background = behind;
+              frame.style.borderRadius = '10px';
+              frame.style.background = opaque(surface) ? surface : 'rgb(32, 32, 32)';
               el.parentNode.insertBefore(frame, el);
               frame.appendChild(el);
             }
             """);
 
-        await page.Locator("[data-shot]").ScreenshotAsync(new LocatorScreenshotOptions { Path = path });
+        await page.Locator("[data-shot]").ScreenshotAsync(new LocatorScreenshotOptions
+        {
+            Path = path,
+            OmitBackground = true,
+        });
 
         // Put the page back the way it was, so the next shot sees the original tree.
         await page.EvaluateAsync(
