@@ -72,7 +72,22 @@ public sealed class ScreenshotTests : IAsyncLifetime
             Path = Path.Combine(directory, "group-mapping.png"),
         });
 
-        foreach (var file in new[] { "provider-card.png", "group-mapping.png" })
+        // The manual linking form, the fiddliest screen and the one the README can only
+        // describe in words.
+        await page.ClickAsync(".sso-tab[data-tab=\"links\"]");
+        // The form lives in a collapsed <details>; a screenshot of it closed shows a line.
+        await page.ClickAsync(".sso-link-form-summary");
+        await page.WaitForSelectorAsync("#LinkSub", new PageWaitForSelectorOptions
+        {
+            State = WaitForSelectorState.Visible,
+            Timeout = 10_000,
+        });
+        await page.Locator("[data-panel='links']").ScreenshotAsync(new LocatorScreenshotOptions
+        {
+            Path = Path.Combine(directory, "account-links.png"),
+        });
+
+        foreach (var file in new[] { "provider-card.png", "group-mapping.png", "account-links.png" })
         {
             Assert.True(new FileInfo(Path.Combine(directory, file)).Length > 5_000, file);
         }

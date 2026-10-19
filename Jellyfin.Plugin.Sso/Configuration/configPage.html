@@ -181,8 +181,9 @@
                 <div class="inputContainer">
                   <input id="LinkSub" type="text" is="emby-input" label="OIDC subject (sub)" />
                   <div class="fieldDescription">
-                    The user's stable identifier from the IdP. Tip: have the user attempt an SSO
-                    login once — the rejected-collision log line prints their <code>Sub=</code>.
+                    The user's stable identifier at the provider. Tip: have them try an SSO
+                    login once. It is refused, and Jellyfin's log then prints the value
+                    after <code>Sub=</code>.
                   </div>
                 </div>
                 <button is="emby-button" type="button" id="AddLink" class="raised">Link Account</button>

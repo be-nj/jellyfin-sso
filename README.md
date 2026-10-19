@@ -10,8 +10,10 @@ the deprecated [9p4/jellyfin-plugin-sso](https://github.com/9p4/jellyfin-plugin-
 - **Install:** add one URL to Jellyfin's plugin repositories, no file copying.
 - **Status:** in active development, running in the author's household.
 
-New to the words in here — *claim*, *scope*, *issuer*, *subject*? There is a
-[glossary](#glossary) at the bottom in plain language.
+**Tonight's path:** [What this changes](#what-this-changes-on-your-server) →
+[Requirements](#requirements) → the eight steps of the [quick start](#quick-start). The
+rest is reference — provider details, recovery, security, and a
+[glossary](#glossary) in plain language for *claim*, *scope*, *issuer* and *subject*.
 
 ---
 
@@ -94,7 +96,8 @@ surprise people.
   container's DNS cannot see your provider — fix that first, the plugin cannot work around
   it. ("executable file not found" would mean the check itself is wrong for your image,
   not that the provider is unreachable.)
-- **Admin access to both**, and the public URL your household uses to reach Jellyfin.
+- **Admin access to both**, and the address your household uses to reach Jellyfin —
+  public or LAN, whichever it is.
 
 ---
 
@@ -112,7 +115,8 @@ setting that changes what you type in step 6 — all three are written out under
    ```bash
    docker compose stop jellyfin
    cp -a /path/you/mounted/at/config ./jellyfin-config-backup   # bind mount
-   # named volume instead of a folder?
+   # named volume instead of a folder? docker volume ls shows yours; compose prefixes
+   # it with the project name, so it is often <project>_jellyfin_config
    docker run --rm -v jellyfin_config:/from -v "$PWD":/to alpine \
      tar czf /to/jellyfin-config-backup.tar.gz -C /from .
    docker compose start jellyfin
@@ -137,11 +141,17 @@ setting that changes what you type in step 6 — all three are written out under
 
    ![The provider card in the plugin's configuration page](docs/img/provider-card.png)
 
+   Behind a reverse proxy this needs nothing extra: the address in your browser is the
+   address that ends up in the redirect URI, and the plugin honours the usual
+   `X-Forwarded-Proto` and `X-Forwarded-Host` headers when it builds the same URI
+   server-side.
+
    The card prints three values at the bottom: the **Provider ID**, the **Redirect URI**
    and the **Login URL**. The redirect URI is built from the address you are looking at the
-   dashboard with, so open the dashboard on the **public URL your household uses**
-   (`https://jellyfin.example.com`), not on `http://<server>:8096` — otherwise you will
-   register a LAN address at your provider and every outside login will fail. Copy the Redirect URI — that is the one your provider needs, complete,
+   dashboard with, so open the dashboard on **the address your household actually uses**
+   (`https://jellyfin.example.com`), not on `http://<server>:8096` — otherwise you
+   register the wrong address at your provider and logins fail from everywhere else. If
+   LAN is the only address you have, that is the right one to use here. Copy the Redirect URI — that is the one your provider needs, complete,
    with no guessing about which part of the URL is the id. The login URL is what you open
    to test later; the provider id only matters if you build links yourself.
 
@@ -233,6 +243,8 @@ Named volume — the tarball you made instead:
 
 ```bash
 docker compose stop jellyfin
+# same volume name as in the backup — check with docker volume ls before running this,
+# the first thing it does is empty the target
 docker run --rm -v jellyfin_config:/to -v "$PWD":/from alpine \
   sh -c 'rm -rf /to/..?* /to/.[!.]* /to/* 2>/dev/null; tar xzf /from/jellyfin-config-backup.tar.gz -C /to'
 docker compose start jellyfin
@@ -464,6 +476,8 @@ next SSO login, from the groups, as always.
 
 New users are linked automatically. Use the **Account Links** tab only to connect an
 account that existed before SSO:
+
+![The manual account link form](docs/img/account-links.png)
 
 - **Provider** + **Jellyfin user** are dropdowns.
 - **Subject** is the identity's `sub` at the provider. With Authentik's *Subject mode:
