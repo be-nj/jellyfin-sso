@@ -13,6 +13,20 @@ provider removes the block alone.
 
 <a href="img/login-button.png"><img src="img/login-button.png" alt="Jellyfin's login page with a Login with Authentik button" width="520"></a>
 
+**Two looks, per provider.** *Paint the login button in this provider's colour* on the
+provider's card decides which one. Off, the button is one of Jellyfin's — the provider's
+colour sits on its left edge alone. On, the whole button carries that colour, and the mark
+and the label turn black or white, whichever reads on it. With several providers each one
+chooses for itself.
+
+<a href="img/login-button.png"><img src="img/login-button.png" alt="The plain button: Jellyfin's surface with an orange edge" width="400"></a>
+<a href="img/login-button-branded.png"><img src="img/login-button-branded.png" alt="The branded button: Authentik's orange with a black mark" width="400"></a>
+
+The colour is the provider's own, recognised from its name or issuer — Authentik's orange,
+Keycloak's grey, Authelia's and Google's blue, Okta's, Auth0's — and anything unrecognised
+gets Jellyfin's blue. Black or white is picked by measuring the colour's luminance, not by
+taste, so a light brand does not end up with white text nobody can read.
+
 The whole login, recorded against a real Authentik in the test suite:
 
 <a href="img/login-flow.mp4"><img src="img/login-flow.gif" alt="A login through the button: Jellyfin's login page, Authentik's form, the home screen" width="640"></a>

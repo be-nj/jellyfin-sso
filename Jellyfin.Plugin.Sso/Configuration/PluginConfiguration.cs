@@ -99,6 +99,13 @@ public class ProviderConfig
 
     /// <summary>When true, fetch groups from userinfo endpoint instead of the ID token.</summary>
     public bool GroupsFromUserInfo { get; set; }
+
+    /// <summary>
+    /// When true the login button is painted in the provider's own colour, with its mark
+    /// in black or white on top. Off, the button looks like Jellyfin's other buttons and
+    /// carries the provider's colour on its left edge alone.
+    /// </summary>
+    public bool BrandedLoginButton { get; set; }
 }
 
 public enum OidcClientType
