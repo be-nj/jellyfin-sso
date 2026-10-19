@@ -1,0 +1,9 @@
+name: SSO plugin
+
+# Generated sources are the compiler's business, not this repository's: the regex source
+# generator alone produces thousands of lines nobody here can change, and alerts in them
+# bury the ones that matter.
+paths-ignore:
+  - '**/obj/**'
+  - '**/bin/**'
+  - 'tests/runs/**'
