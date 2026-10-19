@@ -71,11 +71,15 @@ its signature is checked, and the group names that arrive with it.
 
 ## How the claims are kept honest
 
-- 225 unit tests and 73 browser-driven end-to-end tests run on every push, against
+- 282 unit tests and 73 browser-driven end-to-end tests run on every push, against
   Jellyfin 12.0, 12.1 and 12.2.
 - Every release signs in through real Authentik, Keycloak and Authelia containers.
 - CodeQL runs on every push, and Scorecard rates the repository from outside. Alerts that
   are dismissed carry the reason at the alert.
+- Mutation testing breaks the code on purpose — a `<` into a `<=`, a condition into its
+  opposite — and counts how many of those changes the tests notice: 72 %, with the build
+  failing below 65 %. It answers what a passing suite cannot, which is whether the tests
+  would catch a defect at all.
 - Release artifacts carry a provenance attestation (`gh attestation verify`) and are
   byte-reproducible from their tag — the recipe is in
   [CONTRIBUTING.md](../CONTRIBUTING.md).

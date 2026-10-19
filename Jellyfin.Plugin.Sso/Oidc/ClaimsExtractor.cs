@@ -106,8 +106,12 @@ public sealed class ClaimsExtractor
         return (sub, username, groups);
     }
 
-    /// <summary>Reads a string claim out of the userinfo response, if it is there.</summary>
-    private static string? StringClaim(JsonElement? nullableRoot, string name)
+    /// <summary>
+    /// Reads a string claim out of the userinfo response, if it is there. Internal because
+    /// the userinfo path cannot be reached without a live provider, and what it reads
+    /// decides what a JIT-created account is called.
+    /// </summary>
+    internal static string? StringClaim(JsonElement? nullableRoot, string name)
     {
         if (nullableRoot is not { } root || root.ValueKind != JsonValueKind.Object)
         {
@@ -123,8 +127,12 @@ public sealed class ClaimsExtractor
         return string.IsNullOrWhiteSpace(text) ? null : text;
     }
 
-    // UserInfoResponse.Json is JsonElement? in IdentityModel
-    private static List<string> ExtractGroupsFromElement(JsonElement? nullableRoot, string claimName)
+    /// <summary>
+    /// The groups out of a userinfo response. UserInfoResponse.Json is JsonElement? in
+    /// IdentityModel, and a provider may answer with an array, a single string, or neither.
+    /// Internal for the same reason as <see cref="StringClaim"/>.
+    /// </summary>
+    internal static List<string> ExtractGroupsFromElement(JsonElement? nullableRoot, string claimName)
     {
         if (nullableRoot is not { } root)
             return [];
@@ -133,7 +141,10 @@ public sealed class ClaimsExtractor
 
     private static List<string> ExtractGroupsFromElement(JsonElement root, string claimName)
     {
-        if (root.ValueKind == JsonValueKind.Undefined || root.ValueKind == JsonValueKind.Null)
+        // Anything but an object has no properties to ask for, and asking anyway throws.
+        // A provider that answers with an array, a string or a number grants nothing,
+        // like one that answers without the claim.
+        if (root.ValueKind != JsonValueKind.Object)
             return [];
 
         if (!root.TryGetProperty(claimName, out var el))
