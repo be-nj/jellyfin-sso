@@ -19,55 +19,48 @@ groups decide who sees which libraries.**
 
 ---
 
-OpenID Connect single sign-on for Jellyfin, for households that already run
+OpenID Connect single sign-on for Jellyfin — for households already running
 [Authentik](docs/authentik.md), [Keycloak](docs/keycloak.md) or
-[Authelia](docs/authelia.md). Replaces the deprecated
-[9p4/jellyfin-plugin-sso](https://github.com/9p4/jellyfin-plugin-sso).
+[Authelia](docs/authelia.md).
 
 - **Sign in through your provider.** PKCE public client, no secret stored.
-- **Groups decide access** — libraries, Live TV, downloads, parental rating, admin
-  rights — reapplied on every login.
-- **Accounts created at first login**; existing ones [linked explicitly](docs/linking.md),
-  never matched by username.
+- **Groups decide access** — libraries, Live TV, downloads, parental rating, admin —
+  reapplied on every login.
+- **Accounts created at first login**, existing ones [linked explicitly](docs/linking.md).
 - **Phones and TVs** via Jellyfin's [Quick Connect](docs/clients.md).
 - **Several providers at once**, each with its own login button.
 - **Optional single logout** that ends the provider's session too.
-- **Lockout guards**: the last administrator is never demoted, and users can be excluded
-  from sync.
+- **Lockout guards** — the last administrator is never demoted.
 
 ## How it is tested
 
-A login either works or it does not, and the ways it can go subtly wrong are hard to spot
-from the outside — so the tests run against real software rather than mocks. Every push
-runs:
+Against real software, not mocks. Every push runs:
 
 | | |
 |---|---|
-| **139 unit tests** | Token validation — signature, `iss`, `aud`, `exp`, `nonce`, `state` — permission resolution, the lockout guards, the login-button markup |
-| **52 end-to-end tests** | A throwaway Jellyfin container with the packaged plugin, a fake provider and a real browser: logins, rejected callbacks, the configuration page, linking, Quick Connect |
+| **139 unit tests** | Token validation, permissions, lockout guards, markup |
+| **52 end-to-end tests** | Throwaway Jellyfin container, fake provider, real browser |
 | **Three Jellyfin versions** | The same build against 12.0, 12.1 and 12.2 |
-| **9 real-provider logins** | **Authentik**, **Keycloak** and **Authelia** in containers, each driven through its own login form in the browser |
-| **Mutation testing** | Stryker changes the code and checks that the tests notice; the score is published and has a floor in CI |
-| **CodeQL** | On every push, currently no open alerts |
+| **9 real-provider logins** | Authentik, Keycloak and Authelia, through their own forms |
+| **Mutation testing** | Stryker checks that the tests notice a defect; floor in CI |
+| **CodeQL** | No open alerts |
 
-The provider guides in [docs/](docs/README.md) are the same configuration the test suite
-applies to those containers, and the screenshots come out of the running plugin, so both
-stay in step with the code. What the plugin trusts, and which test holds each claim, is
-written down in the [threat model](docs/threat-model.md).
+The provider guides are the configuration those containers get, and the screenshots come
+from the running plugin. What the plugin trusts, and which test holds each claim:
+[threat model](docs/threat-model.md).
 
 ## Compared with the other plugins
 
-Several plugins solve this problem, most of them forks of the archived
+Most alternatives are forks of the archived
 [9p4/jellyfin-plugin-sso](https://github.com/9p4/jellyfin-plugin-sso).
-[K0lin's](https://github.com/K0lin/jellyfin-plugin-sso) is the most active of those, and
-it supports SAML and more providers than this one does — worth a look if you need either.
+[K0lin's](https://github.com/K0lin/jellyfin-plugin-sso) is the most active, supports SAML
+and lists more providers — worth a look if you need either.
 
-This plugin is a separate implementation rather than a fork: measured against 9p4's
-sources, 30 of its 1,092 significant lines also appear there, and all thirty are `using`
-directives, Jellyfin CSS class names and one-line property declarations. That is also why
-it is MIT-licensed where the forks are GPL-3.0.
+This one is a separate implementation, not a fork: 30 of its 1,092 significant lines also
+appear in 9p4's sources, all of them `using` directives, Jellyfin CSS classes and one-line
+properties. Hence MIT where the forks are GPL-3.0.
 
-Where it takes a different route:
+Different routes it takes:
 
 - **Identity is keyed by `(provider, sub)`, never by username**, so an account cannot be
   reached by registering the right name at the provider. Accounts that existed before SSO
@@ -90,14 +83,12 @@ Dashboard → **Plugins → Repositories → +**, name it `SSO Authentication`, 
 https://jf.be-nj.net/manifest.json
 ```
 
-Then **Plugins → Catalog → Authentication → SSO Authentication → Install**, and restart
-Jellyfin. Typing it on a screen instead of pasting? `jf.be-nj.net/m.json` is the same
-file.
+Then **Plugins → Catalog → Authentication → SSO Authentication → Install**, and restart.
 
-Needs **Jellyfin 12.0 or newer**; every release is tested against 12.0, 12.1 and 12.2.
-An empty catalog means your server is older than any build here
-([table](docs/requirements.md#jellyfin-version)). Building by hand:
-[CONTRIBUTING.md](CONTRIBUTING.md).
+- Needs **Jellyfin 12.0 or newer** — an empty catalog means yours is older
+  ([table](docs/requirements.md#jellyfin-version)).
+- Typing the URL by hand? `jf.be-nj.net/m.json` is the same file.
+- Building it yourself: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 > ### Before you switch
 >
@@ -113,33 +104,32 @@ An empty catalog means your server is older than any build here
 
 ## Set it up
 
-Worked example with Authentik; [Keycloak](docs/keycloak.md) and
-[Authelia](docs/authelia.md) differ in steps 4 and 5. Half an hour the first time.
+Authentik as the example; [Keycloak](docs/keycloak.md) and [Authelia](docs/authelia.md)
+differ in steps 4 and 5. Half an hour the first time.
 
-1. **Back up Jellyfin's config with the server stopped** —
+1. **Back up Jellyfin's config, server stopped** —
    [two commands](docs/recovery.md#backup-and-restore). A copy taken while it runs is not
    a backup.
 2. **Install the plugin** ([above](#install)) and restart.
-3. **Add a provider** with nothing but a display name, and **Save**. Dashboard →
-   **Plugins → SSO Authentication → Providers → + Add Provider**. It is created disabled;
-   the card now prints the **Redirect URI** for the next step.
+3. **Add a provider**, display name only, **Save**. Dashboard → **Plugins → SSO
+   Authentication → Providers → + Add Provider**. It starts disabled and prints the
+   **Redirect URI** you need next.
 
    <a href="docs/img/provider-card.png"><img src="docs/img/provider-card.png" alt="The provider card in the plugin's configuration page" width="440"></a>
 
-   Open the dashboard on **the address your household uses** — the redirect URI is built
-   from it ([why](docs/requirements.md#one-address-for-jellyfin-used-everywhere)).
+   Use **the address your household uses** when you open the dashboard — the redirect URI
+   is built from it ([why](docs/requirements.md#one-address-for-jellyfin-used-everywhere)).
 4. **Create the application at your provider**, public client, with that redirect URI:
    [Authentik](docs/authentik.md) (needs a *Signing Key*), [Keycloak](docs/keycloak.md),
    [Authelia](docs/authelia.md). Note the **Client ID** and the **issuer URL**.
 5. **Finish the provider card**: issuer URL, client id, **Enabled**, **Save**. No restart
    ([every field](docs/configuration.md#providers)).
-6. **Map a group**: **Group Mappings → + Add Mapping**, the group name exactly as the
-   provider spells it, tick the libraries, **Save**. Without a mapping people sign in and
-   see nothing ([permissions](docs/configuration.md#group-mappings)).
-7. **Test with a throwaway account**, not your own: open
-   `https://<your-jellyfin>/sso/oidc/start` in a private window and sign in as a spare
-   user from that group. The Jellyfin account is created on the spot.
-8. **Link the accounts you already have.** The first SSO login for an existing username is
+6. **Map a group**: **Group Mappings → + Add Mapping**, group name exactly as the provider
+   spells it, tick libraries, **Save**. No mapping means people sign in and see nothing
+   ([permissions](docs/configuration.md#group-mappings)).
+7. **Test with a throwaway account**, not your own: `/sso/oidc/start` in a private window,
+   signed in as a spare user from that group. Their Jellyfin account appears on the spot.
+8. **Link your existing accounts.** The first SSO login for a name that already exists is
    refused until an administrator links it ([how](docs/linking.md#manual-linking)). Leave
    one administrator unlinked.
 
@@ -161,13 +151,12 @@ Errors: [Troubleshooting](docs/troubleshooting.md). Locked out:
 
 ## Contributing
 
-Issues and patches: <https://github.com/be-nj/jellyfin-sso/issues>. Attach the Jellyfin
-log around the failed login, your provider and the plugin version. Building, the three
-test tiers and releases: [CONTRIBUTING.md](CONTRIBUTING.md); decisions:
-[docs/adr/](docs/adr/).
-
-**Roadmap:** active revocation (group changes apply at the next login today), QR-code
-login for TVs and the device-code grant — both need changes in the Jellyfin apps.
+- **Issues and patches:** <https://github.com/be-nj/jellyfin-sso/issues> — attach the
+  Jellyfin log around the failed login, your provider and the plugin version.
+- **Building, the test tiers, releases:** [CONTRIBUTING.md](CONTRIBUTING.md) ·
+  **decisions:** [docs/adr/](docs/adr/) · **reviews:** [docs/reviews/](docs/reviews/)
+- **Roadmap:** active revocation (today group changes apply at the next login); QR-code
+  login and the device-code grant, both needing changes in the Jellyfin apps.
 
 ## License
 
