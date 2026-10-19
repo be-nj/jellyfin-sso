@@ -41,8 +41,40 @@ OpenID Connect single sign-on for Jellyfin, for households that already run
 - **Lockout guards**: the last administrator is never demoted, and users can be excluded
   from sync.
 
-Every release signs in through real Authentik, Keycloak and Authelia containers in a
-browser, in CI.
+## How it is tested
+
+Authentication plugins fail in ways nobody notices until the wrong person is an
+administrator, so this one is checked against running software rather than mocks. Every
+push runs:
+
+| | |
+|---|---|
+| **72 unit tests** | Token validation — signature, `iss`, `aud`, `exp`, `nonce`, `state` — permission resolution, the lockout guards, the login-button markup |
+| **40 end-to-end tests** | A throwaway Jellyfin container with the packaged plugin, a fake provider and a real browser: logins, rejected callbacks, the configuration page, linking, sessions |
+| **9 real-provider logins** | **Authentik**, **Keycloak** and **Authelia** in containers, each driven through its own login form in the browser, asserting the Jellyfin policy that comes out |
+| **CodeQL** | On every push, currently zero alerts |
+
+The provider guides in [docs/](docs/README.md) are the configuration the test suite
+actually applies to those containers, and the screenshots are generated from the running
+plugin — neither can quietly drift from what the code does.
+
+## Compared with the other forks
+
+Same ancestry as the other [9p4](https://github.com/9p4/jellyfin-plugin-sso) forks, with
+the differences that matter when one of them is in front of your media:
+
+- **Identity is keyed by `(provider, sub)`, never by username.** Matching on names is what
+  let a stranger with the right username inherit an administrator account. Existing
+  accounts are linked [explicitly](docs/linking.md).
+- **The last administrator is never demoted**, and individual users can be excluded from
+  sync — a typo in a group name costs a log line, not your server.
+- **No client secret in the configuration file.** PKCE by default; a confidential client
+  reads its secret from the environment or a file at login.
+- **Builds are pinned to one Jellyfin ABI**, so the catalog cannot offer you a plugin that
+  will not load.
+- **Self-service linking, several providers at once, RP-initiated logout** and Quick
+  Connect for TVs.
+- **No SAML**, deliberately — OIDC is what self-hosted providers speak.
 
 ## Install
 

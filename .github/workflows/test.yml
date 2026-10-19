@@ -69,7 +69,7 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Run the suite against Keycloak and Authelia
+      - name: Run the suite against Authentik, Keycloak and Authelia
         run: >
           dotnet test tests/Jellyfin.Plugin.Sso.E2eTests -c Release --logger trx
           --filter "Category=RealIdp"
