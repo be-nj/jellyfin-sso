@@ -43,11 +43,19 @@ gif() {
   palette="$(mktemp -t demo-palette-XXXXXX.png)"
 
   local filters="setpts=$speed*PTS,fps=$fps,scale=$width:-2:flags=lanczos"
-  # 48 colours rather than 64: Jellyfin's dark chrome and one photographic backdrop do
-  # not need more, and it is worth 130 KB on the clip the README embeds.
-  ffmpeg -y -loglevel error -i "$clip" -vf "$filters,palettegen=max_colors=48" "$palette"
+  # Three GIF-specific economies, worth about 40 % together on the clip the README
+  # embeds, and none of them touches the part a reader is looking at:
+  #
+  #   max_colors=32   a login page is dark chrome, white panels and one photograph
+  #   stats_mode=diff builds the palette from what moves, not from the still backdrop
+  #   diff_mode=rect  writes only the changed rectangle of each frame
+  #
+  # The Bayer dither stays: without it the sky behind Authentik's form bands visibly,
+  # and that costs more in how finished the clip looks than the 40 KB it saves.
+  ffmpeg -y -loglevel error -i "$clip" \
+    -vf "$filters,palettegen=max_colors=32:stats_mode=diff" "$palette"
   ffmpeg -y -loglevel error -i "$clip" -i "$palette" \
-    -lavfi "$filters[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=3" \
+    -lavfi "$filters[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=3:diff_mode=rectangle" \
     "$target"
   rm -f "$palette"
   written+=("$target")
