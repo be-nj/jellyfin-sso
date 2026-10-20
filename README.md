@@ -120,22 +120,22 @@ same way for each of the four, this one included.
 
 | | Since | Latest | ★ | Licence | Written by AI | Tests |
 |---|---|---|---:|---|---|---|
-| **This one** | 2026-09 | v1.12.14 · 2026-10 | 1 | MIT → GPLv3 | **93 %** of commits | 341 + 84 |
+| **This one** | 2026-09 | v1.12.14 · 2026-10 | 1 | MIT → GPLv3 | **93 of 114** commits | 341 + 84 |
 | K0lin | 2026-06 | v5.1.1 · 2026-09 | 162 | GPL-3.0 | no trailers | 68 |
-| Ezeqielle | 2026-05 | v1.0.10 · 2026-09 | 40 | GPL-3.0 | 33 % of last 100 | 16 |
+| Ezeqielle | 2026-05 | v1.0.10 · 2026-09 | 40 | GPL-3.0 | 33 of last 100 | 16 |
 | 9p4 | 2022-01 | v4.0.0.4 · archived | 1,455 | GPL-3.0 | no trailers | none |
 
-*Written by AI* counts commits carrying a `Co-Authored-By: Claude` trailer — here Claude
-Opus 4.6 through 5. *Tests* counts unit + end-to-end cases. Only this one is mutation
-tested (70 %, floor 65) and scanned by CodeQL.
+*Written by AI* counts commits carrying a `Co-Authored-By: Claude` trailer: Claude Opus 5
+throughout here, Opus 4.6 to 5 in Ezeqielle's. *Tests* counts unit + end-to-end cases.
+Only this one is mutation tested (70 %, floor 65) and scanned by CodeQL.
 
 ### What that means for this one
 
 - **Youngest and least used** — one star, one household. The others have users who are
   not their authors.
-- **Almost all of it was written by an LLM**, Claude Opus 4.6 through 5: the code, the
-  tests, the threat model, this table. "No trailers" above means exactly that — not
-  that no AI was involved.
+- **Almost all of it was written by an LLM**, Claude Opus 5: the code, the tests, the
+  threat model, this table. "No trailers" above means exactly that — not that no AI was
+  involved.
 - **Nobody outside has read it.** CodeQL, the test matrix and mutation testing stand in
   for a reviewer and are not the same thing, and `docs/reviews/` was written by the model
   that wrote the code. Counting approving pull-request reviews would say little: 9p4 has
