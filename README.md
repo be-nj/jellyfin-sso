@@ -67,11 +67,11 @@ Against real software, not mocks. Every push runs:
 
 | | |
 |---|---|
-| **300 unit tests** | Token validation, permissions, lockout guards, markup, the served pages |
-| **79 end-to-end tests** | Throwaway Jellyfin container, fake provider, real browser |
+| **341 unit tests** | Token validation, permissions, lockout guards, markup, the served pages |
+| **84 end-to-end tests** | Throwaway Jellyfin container, fake provider, real browser |
 | **Three Jellyfin versions** | The same build against 12.0, 12.1 and 12.2 |
 | **9 real-provider logins** | Authentik, Keycloak and Authelia, through their own forms |
-| **Mutation testing** | Stryker breaks the code to see whether the tests notice: 72 %, floor 65 % |
+| **Mutation testing** | Stryker breaks the code to see whether the tests notice: 70 %, floor 65 % |
 | **CodeQL** | No open alerts |
 
 The provider guides are the configuration those containers get, and the screenshots come
