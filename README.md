@@ -71,7 +71,11 @@ and which test holds each claim: [threat model](docs/threat-model.md).
 ## Compared with the other plugins
 
 Four plugins do this job, and **your Jellyfin version decides two of them away**: this
-one and K0lin's are for Jellyfin 12, the other two for 10.11.
+one and K0lin's are for Jellyfin 12, the other two for 10.11 — though Ezeqielle's is on
+its way over
+([PR #28](https://github.com/Ezeqielle/jellyfin-plugin-oidc/pull/28), ten lines; what
+holds it is publishing both ABIs from one manifest rather than stranding everyone on
+10.11, not the code).
 
 The other three: [**K0lin**](https://github.com/K0lin/jellyfin-plugin-sso) (the active
 fork), [**Ezeqielle**](https://github.com/Ezeqielle/jellyfin-plugin-oidc),
