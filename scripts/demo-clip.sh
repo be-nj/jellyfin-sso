@@ -31,16 +31,21 @@ mp4() {
 }
 
 gif() {
-  local clip=$1 target=$2 width=$3 fps=$4
+  local clip=$1 target=$2 width=$3 fps=$4 speed=${5:-0.8}
   # A README GIF has to stay small enough that the page still loads on a phone: a
-  # reduced frame rate, the width it is actually displayed at, and a palette generated
-  # from the clip itself rather than the web-safe one, which turns Jellyfin's dark
-  # surfaces into bands.
+  # reduced frame rate, a slightly brisker run than the recording, the width it is
+  # actually displayed at, and a palette generated from the clip itself rather than the
+  # web-safe one, which turns Jellyfin's dark surfaces into bands.
+  #
+  # The speed is on the GIF alone. The MP4 beside it keeps the pace a person typed at,
+  # which is what somebody who clicks "sharper version" came to see.
   local palette
   palette="$(mktemp -t demo-palette-XXXXXX.png)"
 
-  local filters="fps=$fps,scale=$width:-2:flags=lanczos"
-  ffmpeg -y -loglevel error -i "$clip" -vf "$filters,palettegen=max_colors=64" "$palette"
+  local filters="setpts=$speed*PTS,fps=$fps,scale=$width:-2:flags=lanczos"
+  # 48 colours rather than 64: Jellyfin's dark chrome and one photographic backdrop do
+  # not need more, and it is worth 130 KB on the clip the README embeds.
+  ffmpeg -y -loglevel error -i "$clip" -vf "$filters,palettegen=max_colors=48" "$palette"
   ffmpeg -y -loglevel error -i "$clip" -i "$palette" \
     -lavfi "$filters[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=3" \
     "$target"
@@ -57,12 +62,12 @@ for provider in authentik keycloak authelia; do
 
   if [ "$provider" = authentik ]; then
     mp4 "$clip" "$out/login-flow.mp4"
-    gif "$clip" "$out/login-flow.gif" 760 8
+    gif "$clip" "$out/login-flow.gif" 720 5
   else
     # Half the width: these two stand side by side under the first one, and three
     # full-size GIFs would be more than a README should ask a phone to download.
     mp4 "$clip" "$out/login-flow-$provider.mp4"
-    gif "$clip" "$out/login-flow-$provider.gif" 440 10
+    gif "$clip" "$out/login-flow-$provider.gif" 440 7
   fi
 done
 
