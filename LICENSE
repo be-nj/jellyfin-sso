@@ -19,3 +19,18 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+A note about the built plugin, which this license does not change:
+
+The sources in this repository are MIT, and anybody may take them on those terms.
+The plugin that is built from them is a different matter. It inherits `BasePlugin<T>`
+and links `Jellyfin.Controller` and `Jellyfin.Model`, which Jellyfin publishes under
+`GPL-3.0-only`. The compiled `Jellyfin.Plugin.Sso.dll`, and the release zip that
+carries it, are therefore distributed under the GNU General Public License, version 3
+— the terms of the libraries they are built against. MIT grants everything the GPL
+needs granted, so the two sit together without conflict; the GPL is simply the stricter
+of the two, and it is the one that travels with the binary.
+
+In short: copy the code under MIT, pass the plugin on under GPLv3.

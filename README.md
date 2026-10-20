@@ -85,7 +85,8 @@ and lists more providers — worth a look if you need either.
 
 This one is a separate implementation, not a fork: 30 of its 1,092 significant lines also
 appear in 9p4's sources, all of them `using` directives, Jellyfin CSS classes and one-line
-properties. Hence MIT where the forks are GPL-3.0.
+properties. Hence MIT sources where the forks are GPL-3.0 — the built plugin is
+GPLv3 either way, see [License](#license).
 
 Different routes it takes:
 
@@ -190,4 +191,9 @@ Errors: [Troubleshooting](docs/troubleshooting.md). Locked out:
 
 ## License
 
-[MIT](LICENSE).
+The sources are [MIT](LICENSE).
+
+The built plugin is GPLv3. It links `Jellyfin.Controller` and `Jellyfin.Model`, which
+Jellyfin publishes under `GPL-3.0-only`, so the DLL in the release zip carries those
+terms — as every Jellyfin plugin's does, whatever its own sources say. Copy the code
+under MIT; pass the plugin on under GPLv3.
