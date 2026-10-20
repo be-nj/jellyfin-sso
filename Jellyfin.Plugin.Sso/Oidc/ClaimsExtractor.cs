@@ -8,7 +8,11 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Jellyfin.Plugin.Sso.Oidc;
 
-public sealed record OidcIdentity(string Sub, string PreferredUsername, IReadOnlyList<string> Groups);
+public sealed record OidcIdentity(
+    string Sub,
+    string PreferredUsername,
+    IReadOnlyList<string> Groups,
+    string? PictureUrl = null);
 
 public sealed class ClaimsExtractor
 {
@@ -31,16 +35,19 @@ public sealed class ClaimsExtractor
         string expectedNonce,
         CancellationToken ct = default)
     {
-        var (sub, preferredUsername, groups) = ValidateIdToken(
+        var (sub, preferredUsername, groups, picture) = ValidateIdToken(
             provider, disco.Issuer, OidcClientFactory.SigningKeysFrom(disco),
             idToken, expectedNonce);
+
+        var wantsPicture = Plugin.Instance?.Configuration.SyncProfilePictures == true;
 
         // Some providers — Authelia among them — keep the profile claims out of the ID
         // token, which left the JIT-created Jellyfin user named after the opaque subject.
         // Ask userinfo when the groups have to come from there anyway, or when the token
         // carried no name at all.
         var nameMissing = string.Equals(preferredUsername, sub, StringComparison.Ordinal);
-        if (provider.GroupsFromUserInfo || nameMissing)
+        var pictureMissing = wantsPicture && picture is null;
+        if (provider.GroupsFromUserInfo || nameMissing || pictureMissing)
         {
             var userInfo = await _factory.GetUserInfoAsync(disco, accessToken, ct).ConfigureAwait(false);
 
@@ -56,9 +63,16 @@ public sealed class ClaimsExtractor
                     ?? StringClaim(userInfo.Json, "name")
                     ?? preferredUsername;
             }
+
+            if (pictureMissing)
+            {
+                // Authentik and Authelia keep the picture out of the ID token; Keycloak
+                // sends it when the client asks for the profile scope.
+                picture = First(ExtractGroupsFromElement(userInfo.Json, PictureClaim(provider)));
+            }
         }
 
-        return new OidcIdentity(sub, preferredUsername, groups);
+        return new OidcIdentity(sub, preferredUsername, groups, picture);
     }
 
     /// <summary>
@@ -66,7 +80,7 @@ public sealed class ClaimsExtractor
     /// the plugin relies on. Internal so the validation rules can be tested without a
     /// live identity provider.
     /// </summary>
-    internal static (string Sub, string Username, List<string> Groups) ValidateIdToken(
+    internal static (string Sub, string Username, List<string> Groups, string? Picture) ValidateIdToken(
         ProviderConfig provider,
         string? issuer,
         IEnumerable<SecurityKey> signingKeys,
@@ -99,8 +113,19 @@ public sealed class ClaimsExtractor
             ?? principal.FindFirst("name")?.Value
             ?? sub;
 
-        return (sub, username, GroupsFromClaims(principal, provider.GroupsClaim));
+        // A picture is one string where groups are many, but both arrive the same way —
+        // as a claim, or as a string inside a nested one — so they are read by the same
+        // code and the picture takes the first thing that came back.
+        var picture = First(GroupsFromClaims(principal, PictureClaim(provider)));
+
+        return (sub, username, GroupsFromClaims(principal, provider.GroupsClaim), picture);
     }
+
+    private static string PictureClaim(ProviderConfig provider)
+        => string.IsNullOrWhiteSpace(provider.PictureClaim) ? "picture" : provider.PictureClaim;
+
+    private static string? First(List<string> values)
+        => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
 
     /// <summary>
     /// The groups a validated token carries under <paramref name="claim"/>.

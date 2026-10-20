@@ -42,7 +42,12 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
     private readonly ConcurrentDictionary<string, FakeUser> _accessTokens = new();
 
     private sealed record PendingCode(
-        string ClientId, string RedirectUri, string Nonce, string CodeChallenge, FakeUser User);
+        string ClientId,
+        string RedirectUri,
+        string Nonce,
+        string CodeChallenge,
+        FakeUser User,
+        string? PictureUrl);
 
     private FakeIdentityProvider(int port, TestCertificate certificate)
     {
@@ -85,6 +90,18 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
     /// fall back to the wide brand logo, which is all some providers offer.
     /// </summary>
     public bool ServeFavicon { get; set; } = true;
+
+    /// <summary>
+    /// The picture claim handed out with the next identity, or null for a provider that
+    /// publishes none. <see cref="AvatarUrl"/> is the one it actually serves.
+    /// </summary>
+    public string? NextPictureUrl { get; set; }
+
+    /// <summary>A picture this provider serves, reachable from the Jellyfin container.</summary>
+    public string AvatarUrl => $"{ContainerAuthority}/static/avatar.png";
+
+    /// <summary>How often the avatar was fetched, so a test can see a refetch.</summary>
+    public int AvatarsServed { get; private set; }
 
     /// <summary>
     /// When set, the next authorize call reports this OAuth error instead of issuing a
@@ -142,6 +159,12 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
 
         app.MapGet("/static/brand-logo.gif", () => Results.File(OnePixelGif(), "image/gif"));
 
+        app.MapGet("/static/avatar.png", () =>
+        {
+            AvatarsServed++;
+            return Results.File(OnePixelPng(), "image/png");
+        });
+
         app.MapGet("/jwks", () =>
         {
             var jwk = JsonWebKeyConverter.ConvertFromRSASecurityKey(_signingKey);
@@ -174,7 +197,8 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
             }
 
             var code = Guid.NewGuid().ToString("N");
-            _codes[code] = new PendingCode(clientId, redirectUri, nonce, codeChallenge, NextUser);
+            _codes[code] = new PendingCode(
+                clientId, redirectUri, nonce, codeChallenge, NextUser, NextPictureUrl);
             return Results.Redirect(
                 $"{redirectUri}{separator}code={Uri.EscapeDataString(code)}&state={Uri.EscapeDataString(state)}");
         });
@@ -255,6 +279,11 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
             new("nonce", pending.Nonce),
         };
         claims.AddRange(pending.User.Groups.Select(g => new Claim("groups", g)));
+
+        if (pending.PictureUrl is { Length: > 0 } picture)
+        {
+            claims.Add(new Claim("picture", picture));
+        }
 
         var now = DateTime.UtcNow;
         var token = new JwtSecurityToken(

@@ -75,6 +75,14 @@ public class PluginConfiguration : BasePluginConfiguration
     /// one address. Zero turns the limit off.
     /// </summary>
     public int LoginRequestsPerMinute { get; set; } = DefaultLoginRequestsPerMinute;
+
+    /// <summary>
+    /// Whether the picture the provider publishes becomes the Jellyfin profile picture,
+    /// refreshed at every login. Off by default: an avatar somebody chose here is theirs,
+    /// and this setting replaces it with the provider's. Users in
+    /// <see cref="SyncExcludedUserIds"/> keep whatever they have either way.
+    /// </summary>
+    public bool SyncProfilePictures { get; set; }
 }
 
 public class ProviderConfig
@@ -121,6 +129,13 @@ public class ProviderConfig
 
     /// <summary>When true, fetch groups from userinfo endpoint instead of the ID token.</summary>
     public bool GroupsFromUserInfo { get; set; }
+
+    /// <summary>
+    /// Claim holding the address of the person's picture. A path works here too, the same
+    /// way it does for <see cref="GroupsClaim"/>. Only read while profile picture sync is
+    /// on.
+    /// </summary>
+    public string PictureClaim { get; set; } = "picture";
 
     /// <summary>
     /// Whether the plugin accepts back-channel logout notifications from this provider at

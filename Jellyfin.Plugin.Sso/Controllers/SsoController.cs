@@ -21,6 +21,7 @@ public sealed class SsoController : ControllerBase
     private readonly ClaimsExtractor _claims;
     private readonly UserProvisioner _provisioner;
     private readonly PermissionSync _permissions;
+    private readonly ProfilePictureSync _pictures;
     private readonly SessionRevoker _revoker;
     private readonly EphemeralSecretStore _secrets;
     private readonly QuickConnectApprovalStore _approvals;
@@ -35,6 +36,7 @@ public sealed class SsoController : ControllerBase
         ClaimsExtractor claims,
         UserProvisioner provisioner,
         PermissionSync permissions,
+        ProfilePictureSync pictures,
         SessionRevoker revoker,
         EphemeralSecretStore secrets,
         QuickConnectApprovalStore approvals,
@@ -48,6 +50,7 @@ public sealed class SsoController : ControllerBase
         _claims = claims;
         _provisioner = provisioner;
         _permissions = permissions;
+        _pictures = pictures;
         _revoker = revoker;
         _secrets = secrets;
         _approvals = approvals;
@@ -389,6 +392,7 @@ public sealed class SsoController : ControllerBase
                 .ConfigureAwait(false);
 
             await _permissions.SyncAsync(userId, identity, ct).ConfigureAwait(false);
+            await _pictures.SyncAsync(userId, identity.PictureUrl, ct).ConfigureAwait(false);
 
             if (pending.QuickConnectCode is not null)
                 return AskToApproveQuickConnect(userId, username, pending.QuickConnectCode);
