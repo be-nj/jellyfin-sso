@@ -73,7 +73,7 @@ public sealed class PermissionSyncTests : IDisposable
                 EnableRemoteAccess = false,
                 MaxActiveSessions = 2,
                 EnableUserPreferenceAccess = false,
-                EnableContentDeletion = true,
+                LoginAttemptsBeforeLockout = 7,
             },
         });
 
@@ -86,7 +86,7 @@ public sealed class PermissionSyncTests : IDisposable
         Assert.False(policy.EnableRemoteAccess);
         Assert.Equal(2, policy.MaxActiveSessions);
         Assert.False(policy.EnableUserPreferenceAccess);
-        Assert.True(policy.EnableContentDeletion);
+        Assert.Equal(7, policy.LoginAttemptsBeforeLockout);
 
         // …while the fields the plugin does own are still written.
         Assert.Equal([MoviesId], policy.EnabledFolders);
@@ -128,6 +128,70 @@ public sealed class PermissionSyncTests : IDisposable
         Assert.True(policy.EnableLiveTvManagement);
         Assert.True(policy.EnableContentDownloading);
         Assert.Null(policy.MaxParentalRating);
+    }
+
+    [Fact]
+    public async Task Deletion_collections_subtitles_and_lyrics_come_from_the_groups()
+    {
+        _harness.Configuration.GroupMappings.Add(new GroupMappingConfig
+        {
+            Group = "librarians",
+            EnableCollectionManagement = true,
+            EnableSubtitleManagement = true,
+        });
+        _harness.Configuration.GroupMappings.Add(new GroupMappingConfig
+        {
+            Group = "karaoke",
+            EnableLyricManagement = true,
+        });
+
+        await _sync.SyncAsync(_userId, Identity("librarians", "karaoke"));
+
+        var policy = CapturedPolicy();
+        Assert.True(policy.EnableCollectionManagement);
+        Assert.True(policy.EnableSubtitleManagement);
+        Assert.True(policy.EnableLyricManagement);
+
+        // Nobody's group granted deletion, so nobody gets it.
+        Assert.False(policy.EnableContentDeletion);
+    }
+
+    [Fact]
+    public async Task A_group_that_no_longer_grants_deletion_takes_it_away_again()
+    {
+        var user = ExistingUser(admin: false);
+        _userManager.GetUserDto(user).Returns(new MediaBrowser.Model.Dto.UserDto
+        {
+            Policy = new UserPolicy
+            {
+                EnableContentDeletion = true,
+                EnableContentDeletionFromFolders = [MoviesId.ToString("N")],
+            },
+        });
+
+        Map("media", admin: false, MoviesId);
+
+        await _sync.SyncAsync(_userId, Identity("media"));
+
+        var policy = CapturedPolicy();
+        Assert.False(policy.EnableContentDeletion);
+        // A folder list left behind would keep granting in those folders what the flag
+        // just took away everywhere.
+        Assert.Empty(policy.EnableContentDeletionFromFolders);
+    }
+
+    [Fact]
+    public async Task An_admin_group_grants_deletion_and_the_management_rights_too()
+    {
+        Map("jellyfin-admins", true);
+
+        await _sync.SyncAsync(_userId, Identity("jellyfin-admins"));
+
+        var policy = CapturedPolicy();
+        Assert.True(policy.EnableContentDeletion);
+        Assert.True(policy.EnableCollectionManagement);
+        Assert.True(policy.EnableSubtitleManagement);
+        Assert.True(policy.EnableLyricManagement);
     }
 
     [Fact]

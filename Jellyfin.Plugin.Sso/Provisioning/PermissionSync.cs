@@ -85,7 +85,18 @@ public sealed class PermissionSync
         policy.EnableLiveTvAccess = isAdmin || matched.Any(m => m.EnableLiveTvAccess);
         policy.EnableLiveTvManagement = isAdmin || matched.Any(m => m.EnableLiveTvManagement);
         policy.EnableContentDownloading = isAdmin || matched.Any(m => m.EnableContentDownloading);
+        policy.EnableContentDeletion = isAdmin || matched.Any(m => m.EnableContentDeletion);
+        policy.EnableCollectionManagement = isAdmin || matched.Any(m => m.EnableCollectionManagement);
+        policy.EnableSubtitleManagement = isAdmin || matched.Any(m => m.EnableSubtitleManagement);
+        policy.EnableLyricManagement = isAdmin || matched.Any(m => m.EnableLyricManagement);
         policy.MaxParentalRating = isAdmin ? null : ResolveParentalRating(matched);
+
+        // A folder list left over from an earlier policy would keep granting deletion in
+        // those folders after the group stopped granting it at all.
+        if (!policy.EnableContentDeletion)
+        {
+            policy.EnableContentDeletionFromFolders = [];
+        }
 
         await _userManager.UpdatePolicyAsync(userId, policy).ConfigureAwait(false);
     }
