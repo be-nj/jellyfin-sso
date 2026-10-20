@@ -12,6 +12,15 @@ groups from userinfo endpoint*, *Accept back-channel logout*, *Paint the login b
 this provider's colour*, *Scopes*. The card prints the provider id, the redirect URI, the
 login URL and the back-channel logout URL.
 
+*Groups claim name* takes a nested path as well. The name is looked for as it stands
+first, so a claim really called `urn:zitadel:iam:org:project:roles` is still found; if no
+claim goes by that name, the dots are read as a path. `realm_access.roles` is where
+Keycloak keeps its roles when nothing has been mapped, and
+`resource_access.<client>.roles` is where Entra ID keeps a client's. A mapper at the
+provider that publishes a plain `groups` claim is still the tidier setup — the
+[Keycloak guide](keycloak.md) sets one up — but the path means a working claim no longer
+has to be moved before this plugin can see it.
+
 <a href="img/provider-card.png"><img src="img/provider-card.png" alt="The provider card in the plugin's configuration page" width="520"></a>
 
 Leave *Scopes* empty to request `openid profile email`. [Authelia](authelia.md) needs

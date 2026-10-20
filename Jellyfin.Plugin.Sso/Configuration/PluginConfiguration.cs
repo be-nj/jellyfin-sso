@@ -109,7 +109,14 @@ public class ProviderConfig
         return scopes.Count > 0 ? scopes : ["openid", "profile", "email"];
     }
 
-    /// <summary>Claim name for groups. Default "groups" works for Authentik + Authelia.</summary>
+    /// <summary>
+    /// Claim name for groups. Default "groups" works for Authentik + Authelia.
+    ///
+    /// A name with dots in it is first looked for as it stands — claim types such as
+    /// `urn:zitadel:iam:org:project:roles` are real — and then read as a path into a
+    /// nested claim, which reaches Keycloak's own `realm_access.roles` and Entra ID's
+    /// `resource_access.&lt;client&gt;.roles` without a mapper at the provider.
+    /// </summary>
     public string GroupsClaim { get; set; } = "groups";
 
     /// <summary>When true, fetch groups from userinfo endpoint instead of the ID token.</summary>

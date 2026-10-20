@@ -213,7 +213,7 @@ function buildProviderCard(p, i) {
         '</div>' +
         '<div class="inputContainer">' +
             '<input type="text" is="emby-input" class="sso-provider-groups-claim" ' +
-                'label="Groups claim name" placeholder="groups" ' +
+                'label="Groups claim name (a path like realm_access.roles works)" placeholder="groups" ' +
                 'value="' + escAttr(p.GroupsClaim || '') + '" />' +
         '</div>' +
         '<div class="checkboxContainer"><label>' +

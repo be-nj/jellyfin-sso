@@ -12,3 +12,10 @@
 
 Keycloak puts the groups in the ID token, so *Fetch groups from userinfo endpoint* stays
 off.
+
+Without the mapper from step 2, Keycloak still sends the realm roles — nested, as
+`realm_access.roles`. Typing that path into *Groups claim name* works, and so does
+`resource_access.<client-id>.roles` for a client's own roles. The mapper is still the
+better setup: realm roles carry Keycloak's own `default-roles-<realm>`, `offline_access`
+and `uma_authorization` alongside yours, and a group is what a household actually thinks
+in.
