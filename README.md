@@ -87,49 +87,47 @@ if asked, and map groups to libraries and Live TV. The rest, grouped — and rea
 knowing that a comparison written in one project's repository tends to list the things
 that project happened to build:
 
-#### Reach
+<table>
+<thead>
+<tr>
+<th align="left">&nbsp;</th>
+<th>This one</th>
+<th>K0lin</th>
+<th>Ezeqielle</th>
+<th>9p4</th>
+</tr>
+</thead>
+<tbody>
+<tr><th colspan="5" align="left">Reach</th></tr>
+<tr><td align="left">Jellyfin</td><td align="center"><strong>12</strong></td><td align="center"><strong>12</strong></td><td align="center">10.11</td><td align="center">10.11</td></tr>
+<tr><td align="left">SAML as well as OIDC</td><td align="center">○</td><td align="center">●</td><td align="center">○</td><td align="center">●</td></tr>
+<tr><td align="left">Admin page in other languages</td><td align="center">○</td><td align="center">●</td><td align="center">○</td><td align="center">○</td></tr>
+<tr><td align="left">A ready-made example stack to try</td><td align="center">○</td><td align="center">○</td><td align="center">●</td><td align="center">○</td></tr>
+<tr><th colspan="5" align="left">Accounts</th></tr>
+<tr><td align="left">Keyed by the provider's subject</td><td align="center">●</td><td align="center">◐</td><td align="center">○</td><td align="center">◐</td></tr>
+<tr><td align="left">Users link their own account</td><td align="center">●</td><td align="center">○</td><td align="center">○</td><td align="center">○</td></tr>
+<tr><td align="left">Refuse the login when no role matches</td><td align="center">○</td><td align="center">●</td><td align="center">◐</td><td align="center">●</td></tr>
+<tr><td align="left">Accounts exempt from the group sync</td><td align="center">●</td><td align="center">○</td><td align="center">○</td><td align="center">○</td></tr>
+<tr><td align="left">Last administrator never demoted</td><td align="center">●</td><td align="center">◐</td><td align="center">○</td><td align="center">○</td></tr>
+<tr><th colspan="5" align="left">What the groups grant</th></tr>
+<tr><td align="left">Downloads</td><td align="center">●</td><td align="center">●</td><td align="center">○</td><td align="center">○</td></tr>
+<tr><td align="left">Parental rating</td><td align="center">●</td><td align="center">○</td><td align="center">●</td><td align="center">○</td></tr>
+<tr><td align="left">Deletion, collections, subtitles, lyrics</td><td align="center">●</td><td align="center">○</td><td align="center">◐</td><td align="center">○</td></tr>
+<tr><td align="left">Transcoding, remote access</td><td align="center">○</td><td align="center">○</td><td align="center">●</td><td align="center">○</td></tr>
+<tr><td align="left">A fallback role, and a priority between them</td><td align="center">○</td><td align="center">○</td><td align="center">●</td><td align="center">○</td></tr>
+<tr><td align="left">Nested claim path (<code>realm_access.roles</code>)</td><td align="center">●</td><td align="center">○</td><td align="center">●</td><td align="center">○</td></tr>
+<tr><th colspan="5" align="left">Sessions, hardening, comfort</th></tr>
+<tr><td align="left">Single logout at the provider</td><td align="center">●</td><td align="center">○</td><td align="center">○</td><td align="center">○</td></tr>
+<tr><td align="left">Back-channel logout</td><td align="center">●</td><td align="center">○</td><td align="center">○</td><td align="center">○</td></tr>
+<tr><td align="left">Rate limit on the anonymous endpoints</td><td align="center">●</td><td align="center">○</td><td align="center">○</td><td align="center">○</td></tr>
+<tr><td align="left">An audit trail of its own</td><td align="center">○</td><td align="center">●</td><td align="center">○</td><td align="center">○</td></tr>
+<tr><td align="left">Quick Connect for phones and TVs</td><td align="center">●</td><td align="center">○</td><td align="center">●</td><td align="center">○</td></tr>
+<tr><td align="left">Login button placed for you</td><td align="center">●</td><td align="center">○</td><td align="center">●</td><td align="center">◐</td></tr>
+<tr><td align="left">Profile picture from the provider</td><td align="center">◐</td><td align="center">○</td><td align="center">●</td><td align="center">○</td></tr>
+</tbody>
+</table>
 
-| | This one | K0lin | Ezeqielle | 9p4 |
-|---|:---:|:---:|:---:|:---:|
-| **Jellyfin** | **12** | **12** | 10.11 | 10.11 |
-| SAML as well as OIDC | – | ✓ | – | ✓ |
-| Admin page in other languages | – | ✓ | – | – |
-| A ready-made example stack to try | – | – | ✓ | – |
-
-#### Accounts
-
-| | This one | K0lin | Ezeqielle | 9p4 |
-|---|:---:|:---:|:---:|:---:|
-| Keyed by the provider's subject | ✓ | ~ | – | ~ |
-| Users link their own account | ✓ | – | – | – |
-| Refuse the login when no role matches | – | ✓ | ~ | ✓ |
-| Accounts exempt from the group sync | ✓ | – | – | – |
-| Last administrator never demoted | ✓ | ~ | – | – |
-
-#### What the groups grant
-
-| | This one | K0lin | Ezeqielle | 9p4 |
-|---|:---:|:---:|:---:|:---:|
-| Downloads | ✓ | ✓ | – | – |
-| Parental rating | ✓ | – | ✓ | – |
-| Deletion, collections, subtitles, lyrics | ✓ | – | ~ | – |
-| Transcoding, remote access | – | – | ✓ | – |
-| A fallback role, and a priority between them | – | – | ✓ | – |
-| Nested claim path (`realm_access.roles`) | ✓ | – | ✓ | – |
-
-#### Sessions, hardening, comfort
-
-| | This one | K0lin | Ezeqielle | 9p4 |
-|---|:---:|:---:|:---:|:---:|
-| Single logout at the provider | ✓ | – | – | – |
-| Back-channel logout | ✓ | – | – | – |
-| Rate limit on the anonymous endpoints | ✓ | – | – | – |
-| An audit trail of its own | – | ✓ | – | – |
-| Quick Connect for phones and TVs | ✓ | – | ✓ | – |
-| Login button placed for you | ✓ | – | ✓ | ~ |
-| Profile picture from the provider | ~ | – | ✓ | – |
-
-✓ yes · ~ partly · – not found in its sources. Where it says `~`: K0lin and 9p4 match a
+● yes · ◐ partly · ○ not found in its sources. Where it says ◐: K0lin and 9p4 match a
 name claim against a link table an administrator keeps; K0lin's administrator guard is a
 setting you turn on; 9p4's button is a snippet you paste into the login disclaimer;
 Ezeqielle maps deletion, collections and subtitles but not lyrics, and can refuse
