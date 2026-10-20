@@ -175,7 +175,7 @@ public sealed class ProfilePictureSync : IDisposable
             }
         }
 
-        var path = Path.Combine(UserDirectory(user), "profile" + extension);
+        var path = PicturePath(user, extension);
 
         if (user.ProfileImage is not null)
         {
@@ -202,17 +202,32 @@ public sealed class ProfilePictureSync : IDisposable
     }
 
     /// <summary>
-    /// Jellyfin keeps a user's own files in a folder named after them. The name is taken
-    /// apart for its file-name part only: it reaches us from an identity provider, and a
-    /// name carrying separators must not be able to choose a folder.
+    /// Where the picture goes: Jellyfin keeps a user's own files in a folder named after
+    /// them. The name reaches us from an identity provider, so the finished path is
+    /// checked to be under the root it was built from, and a name that leaves it gets a
+    /// folder named after the user's id instead.
+    ///
+    /// Built with <see cref="Path.Join(string?, string?)"/> rather than
+    /// <c>Path.Combine</c>: Combine hands back its later argument whole when that
+    /// argument is rooted, so a path's safety would rest on remembering which of the two
+    /// discards what.
     /// </summary>
-    private string UserDirectory(User user)
+    internal string PicturePath(User user, string extension)
     {
-        var root = _serverConfiguration.ApplicationPaths.UserConfigurationDirectoryPath;
-        var safe = Path.GetFileName(user.Username);
-        return string.IsNullOrEmpty(safe) || safe is "." or ".."
-            ? Path.Combine(root, user.Id.ToString("N"))
-            : Path.Combine(root, safe);
+        var root = Path.GetFullPath(_serverConfiguration.ApplicationPaths.UserConfigurationDirectoryPath);
+        var file = "profile" + extension;
+        var own = Path.Join(root, user.Id.ToString("N"), file);
+
+        var name = Path.GetFileName(user.Username);
+        if (string.IsNullOrEmpty(name) || name is "." or "..")
+        {
+            return own;
+        }
+
+        var candidate = Path.GetFullPath(Path.Join(root, name, file));
+        return candidate.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            ? candidate
+            : own;
     }
 
     public void Dispose() => _http.Dispose();
