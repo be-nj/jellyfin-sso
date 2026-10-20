@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Text.Json;
 using Duende.IdentityModel.Client;
 using Jellyfin.Plugin.Sso.Configuration;
@@ -98,12 +99,74 @@ public sealed class ClaimsExtractor
             ?? principal.FindFirst("name")?.Value
             ?? sub;
 
-        var groups = principal.Claims
-            .Where(c => c.Type == provider.GroupsClaim)
+        return (sub, username, GroupsFromClaims(principal, provider.GroupsClaim));
+    }
+
+    /// <summary>
+    /// The groups a validated token carries under <paramref name="claim"/>.
+    ///
+    /// The whole configured name is tried as a claim type first, because claim types
+    /// legitimately contain dots — `urn:zitadel:iam:org:project:roles`, the
+    /// `http://schemas.microsoft.com/ws/2008/06/identity/claims/role` family — and splitting
+    /// those would break configurations that work today. Only when no claim goes by that
+    /// name is it read as a path into a nested JSON claim, which is where Keycloak keeps its
+    /// roles without a mapper (`realm_access.roles`) and where Entra ID keeps a client's
+    /// (`resource_access.&lt;client&gt;.roles`).
+    /// </summary>
+    internal static List<string> GroupsFromClaims(ClaimsPrincipal principal, string claim)
+    {
+        var exact = principal.Claims
+            .Where(c => c.Type == claim)
             .Select(c => c.Value)
             .ToList();
 
-        return (sub, username, groups);
+        if (exact.Count > 0 || !claim.Contains('.', StringComparison.Ordinal))
+        {
+            return exact;
+        }
+
+        // Longest head first, so a claim whose own name contains dots is still found
+        // before the name is split further.
+        foreach (var (head, tail) in SplitPoints(claim))
+        {
+            foreach (var carrier in principal.Claims.Where(c => c.Type == head))
+            {
+                var nested = GroupsFromJsonText(carrier.Value, tail);
+                if (nested.Count > 0)
+                {
+                    return nested;
+                }
+            }
+        }
+
+        return [];
+    }
+
+    /// <summary>
+    /// A nested claim arrives as the JSON text the provider put in the token. Anything that
+    /// is not JSON, or does not hold the rest of the path, grants nothing — like a token
+    /// without the claim at all.
+    /// </summary>
+    private static List<string> GroupsFromJsonText(string text, string path)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(text);
+            return GroupsAtPath(document.RootElement, path);
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>Every way of cutting a dotted path into a head and a tail, longest head first.</summary>
+    private static IEnumerable<(string Head, string Tail)> SplitPoints(string path)
+    {
+        for (var i = path.LastIndexOf('.'); i > 0; i = path.LastIndexOf('.', i - 1))
+        {
+            yield return (path[..i], path[(i + 1)..]);
+        }
     }
 
     /// <summary>
@@ -140,24 +203,54 @@ public sealed class ClaimsExtractor
     }
 
     private static List<string> ExtractGroupsFromElement(JsonElement root, string claimName)
+        => GroupsAtPath(root, claimName);
+
+    /// <summary>
+    /// The groups at <paramref name="path"/> in a JSON object. The whole path is tried as a
+    /// property name before it is read as a path, for the reason given on
+    /// <see cref="GroupsFromClaims"/>: a provider may well call a property
+    /// `urn:example:roles`.
+    /// </summary>
+    private static List<string> GroupsAtPath(JsonElement node, string path)
     {
         // Anything but an object has no properties to ask for, and asking anyway throws.
         // A provider that answers with an array, a string or a number grants nothing,
         // like one that answers without the claim.
-        if (root.ValueKind != JsonValueKind.Object)
+        if (node.ValueKind != JsonValueKind.Object)
             return [];
 
-        if (!root.TryGetProperty(claimName, out var el))
-            return [];
+        if (node.TryGetProperty(path, out var exact))
+            return Strings(exact);
 
-        if (el.ValueKind == JsonValueKind.Array)
-            return el.EnumerateArray()
+        foreach (var (head, tail) in SplitPoints(path))
+        {
+            if (node.TryGetProperty(head, out var child))
+            {
+                var nested = GroupsAtPath(child, tail);
+                if (nested.Count > 0)
+                {
+                    return nested;
+                }
+            }
+        }
+
+        return [];
+    }
+
+    /// <summary>
+    /// The group names a claim's value holds: an array of them, a single one as a string, or
+    /// — for anything else a provider might send — none.
+    /// </summary>
+    private static List<string> Strings(JsonElement value)
+    {
+        if (value.ValueKind == JsonValueKind.Array)
+            return value.EnumerateArray()
                 .Where(e => e.ValueKind == JsonValueKind.String)
                 .Select(e => e.GetString()!)
                 .ToList();
 
-        if (el.ValueKind == JsonValueKind.String)
-            return [el.GetString()!];
+        if (value.ValueKind == JsonValueKind.String)
+            return [value.GetString()!];
 
         return [];
     }
