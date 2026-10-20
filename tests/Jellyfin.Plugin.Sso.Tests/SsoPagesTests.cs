@@ -133,4 +133,18 @@ public sealed class SsoPagesTests
         Assert.Contains("\"name\":\"SSO\"", script, StringComparison.Ordinal);
         Assert.DoesNotContain("<!DOCTYPE", script, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void The_in_form_script_looks_for_the_login_page_and_nothing_else()
+    {
+        var script = SsoPages.LoginButtonScript(string.Empty, [Provider("p1", "Authentik")]);
+
+        Assert.Contains("'#loginPage, .loginPage'", script, StringComparison.Ordinal);
+
+        // What put a "Login with …" button at the bottom of the profile page: any page
+        // with a password field counted as the login page, and any form on it as the
+        // login form.
+        Assert.DoesNotContain("input[type=\"password\"]", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("document.querySelector('form')", script, StringComparison.Ordinal);
+    }
 }

@@ -35,23 +35,27 @@ internal static class SsoPages
             (function () {
               var buttons = {{json}};
 
-              function form() {
-                return document.querySelector('.loginForm')
-                  || document.querySelector('form.login')
-                  || document.querySelector('#loginPage form')
-                  || document.querySelector('form');
-              }
-
-              function onLoginPage() {
-                var hash = (location.hash || '').toLowerCase();
-                return hash.indexOf('login') !== -1
-                  || document.querySelector('input[type="password"]') !== null;
+              // jellyfin-web keeps every page it has visited in the document and hides
+              // the ones it is not showing, so "is there a login form" is the wrong
+              // question — the profile page has password fields of its own, and asking
+              // for any form there found the change-password one.
+              function loginPage() {
+                var pages = document.querySelectorAll('#loginPage, .loginPage');
+                for (var i = 0; i < pages.length; i++) {
+                  if (!pages[i].classList.contains('hide')) return pages[i];
+                }
+                return null;
               }
 
               function place() {
-                if (!onLoginPage() || document.querySelector('.sso-form-button')) return;
-                var target = form();
-                if (!target) return;
+                var page = loginPage();
+                // No login page, no button. A button that never appears is a far smaller
+                // failure than one that appears where somebody is already signed in.
+                if (!page || page.querySelector('.sso-form-button')) return;
+
+                var target = page.querySelector('.loginForm')
+                  || page.querySelector('form')
+                  || page;
 
                 buttons.forEach(function (button) {
                   var link = document.createElement('a');

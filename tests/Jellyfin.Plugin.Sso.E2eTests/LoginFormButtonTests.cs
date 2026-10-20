@@ -138,6 +138,45 @@ public sealed class LoginFormButtonTests : IAsyncLifetime
         Assert.DoesNotContain("login.html", page.Url);
     }
 
+    [Fact]
+    public async Task The_button_stays_off_the_pages_of_somebody_already_signed_in()
+    {
+        await EnableAsync();
+        _env.Idp.NextUser = new FakeUser("sub-profile", "profileuser", ["media"]);
+
+        await using var context = await _browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            BaseURL = _env.BaseUrl,
+            IgnoreHTTPSErrors = true,
+        });
+        var page = await context.NewPageAsync();
+        await page.GotoAsync("/web/index.html#/login.html");
+
+        var button = page.Locator("a.sso-form-button").First;
+        await button.WaitForAsync(new LocatorWaitForOptions
+        {
+            State = WaitForSelectorState.Visible,
+            Timeout = 30_000,
+        });
+        await button.ClickAsync();
+        await page.WaitForFunctionAsync(
+            "() => !!(window.ApiClient && window.ApiClient.accessToken())",
+            null,
+            new PageWaitForFunctionOptions { Timeout = 30_000 });
+
+        // The profile page carries password fields and a form of its own, which is
+        // exactly what the script used to take for a login form.
+        var userId = await page.EvaluateAsync<string>("() => window.ApiClient.getCurrentUserId()");
+        await page.GotoAsync($"/web/index.html#/userprofile?userId={userId}");
+        await page.Locator("input[type=password]").First.WaitForAsync(new LocatorWaitForOptions
+        {
+            State = WaitForSelectorState.Visible,
+            Timeout = 30_000,
+        });
+
+        Assert.Equal(0, await page.Locator("a.sso-form-button:visible").CountAsync());
+    }
+
     private Task EnableAsync()
         => _env.PatchConfigAsync(config =>
         {
