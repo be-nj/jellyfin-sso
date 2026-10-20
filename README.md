@@ -42,7 +42,7 @@ OpenID Connect single sign-on for Jellyfin — for households already running
 
 <div align="center">
 
-<img src="docs/img/login-flow.gif" alt="A login: Jellyfin's login page, the button, Authentik's form, the home screen" width="760">
+<img src="docs/img/login-flow.gif" alt="A login: Jellyfin's login page, the button, Authentik's form, the home screen" width="720">
 
 </div>
 
