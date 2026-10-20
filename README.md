@@ -80,30 +80,30 @@ one and K0lin's are for Jellyfin 12, the other two for 10.11.
 | OpenID Connect | ● | ● | ● | ● |
 | SAML | ○ | ● | ○ | ● |
 | Several providers at once | ● | ● | ● | ● |
-| Quick Connect, for phones and TVs | ● | ○ | ● | ○ |
-| A button on the login page | ● | ○ | ● | ◐ |
+| Quick Connect (phones, TVs) | ● | ○ | ● | ○ |
+| Login button on the page | ● | ○ | ● | ◐ |
 | *Accounts* | | | | |
-| Identified by the provider's subject | ● | ◐ | ○ | ◐ |
+| Keyed by the provider's subject | ● | ◐ | ○ | ◐ |
 | Created at first login | ● | ● | ● | ● |
-| An existing account linked on purpose | ● | ◐ | ○ | ◐ |
-| Users can link their own account | ● | ○ | ○ | ○ |
+| Existing account linked on purpose | ● | ◐ | ○ | ◐ |
+| Users link their own account | ● | ○ | ○ | ○ |
 | *What the groups decide* | | | | |
 | Libraries | ● | ● | ● | ● |
 | Live TV | ● | ● | ● | ● |
 | Downloads | ● | ● | ○ | ○ |
-| Deleting, collections, subtitles, lyrics | ● | ○ | ◐ | ○ |
+| Deletion, collections, subtitles, lyrics | ● | ○ | ◐ | ○ |
 | Parental rating | ● | ○ | ● | ○ |
-| The last administrator is never demoted | ● | ◐ | ○ | ○ |
-| Accounts kept out of the sync | ● | ○ | ○ | ○ |
+| Last administrator never demoted | ● | ◐ | ○ | ○ |
+| Accounts exempt from the sync | ● | ○ | ○ | ○ |
 | *Claims* | | | | |
-| ID token checked against the provider's keys | ● | ● | ● | ● |
-| A nested claim path (`realm_access.roles`) | ● | ○ | ● | ○ |
-| Groups from the userinfo endpoint | ● | ● | ● | ● |
+| ID token checked against the JWKS | ● | ● | ● | ● |
+| Nested claim path (`realm_access.roles`) | ● | ○ | ● | ○ |
+| Groups from userinfo | ● | ● | ● | ● |
 | *Sessions* | | | | |
-| Signing out ends the provider's session | ● | ○ | ○ | ○ |
+| Single logout at the provider | ● | ○ | ○ | ○ |
 | Back-channel logout | ● | ○ | ○ | ○ |
 | *The rest* | | | | |
-| Rate limit on the anonymous endpoints | ● | ○ | ○ | ○ |
+| Rate limit on anonymous endpoints | ● | ○ | ○ | ○ |
 | Profile picture from the provider | ◐ | ○ | ● | ○ |
 
 ● has it · ◐ partly, optionally, or by hand · ○ not found in its sources
@@ -118,24 +118,24 @@ picture here is off until you switch it on.
 Not a feature question, and not a ranking — the same handful of numbers, taken the
 same way for each of the four, this one included.
 
-| | **This one** | K0lin | Ezeqielle | 9p4 |
-|---|---|---|---|---|
-| First commit | 2026-09-17 | 2026-06-12 | 2026-05-12 | 2022-01-10 |
-| Latest release | v1.12.14 (2026-10-20) | v5.1.1 (2026-09-09) | v1.0.10 (2026-09-10) | v4.0.0.4 (2026-03-20), archived |
-| Stars | 1 | 162 | 40 | 1,455 |
-| Licence | MIT sources, GPLv3 binary | GPL-3.0 | GPL-3.0 | GPL-3.0 |
-| Commits carrying an AI trailer | **100 of 108** (Claude Opus 4.6–5) | none | 33 of the last 100 (Claude Opus 4.6–5) | none |
-| Automated tests | 341 unit, 84 end-to-end, 9 real-provider logins | 68 test cases | 16 test cases | none in the repository |
-| Mutation testing | 70 %, floor 65 % | — | — | — |
-| Static analysis | CodeQL, no open alerts | — | — | — |
+| | Since | Latest | ★ | Licence | Written by AI | Tests |
+|---|---|---|---:|---|---|---|
+| **This one** | 2026-09 | v1.12.14 · 2026-10 | 1 | MIT → GPLv3 | **93 %** of commits | 341 + 84 |
+| K0lin | 2026-06 | v5.1.1 · 2026-09 | 162 | GPL-3.0 | no trailers | 68 |
+| Ezeqielle | 2026-05 | v1.0.10 · 2026-09 | 40 | GPL-3.0 | 33 % of last 100 | 16 |
+| 9p4 | 2022-01 | v4.0.0.4 · archived | 1,455 | GPL-3.0 | no trailers | none |
+
+*Written by AI* counts commits carrying a `Co-Authored-By: Claude` trailer — here Claude
+Opus 4.6 through 5. *Tests* counts unit + end-to-end cases. Only this one is mutation
+tested (70 %, floor 65) and scanned by CodeQL.
 
 ### What that means for this one
 
 - **Youngest and least used** — one star, one household. The others have users who are
   not their authors.
 - **Almost all of it was written by an LLM**, Claude Opus 4.6 through 5: the code, the
-  tests, the threat model, this table. "None" in that row means no trailer, not
-  necessarily no AI.
+  tests, the threat model, this table. "No trailers" above means exactly that — not
+  that no AI was involved.
 - **Nobody outside has read it.** CodeQL, the test matrix and mutation testing stand in
   for a reviewer and are not the same thing, and `docs/reviews/` was written by the model
   that wrote the code. Counting approving pull-request reviews would say little: 9p4 has
