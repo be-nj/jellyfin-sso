@@ -185,17 +185,21 @@ public static class LoginButtonMarkup
     public static string Splice(string? disclaimer, string block)
         => SpliceBetween(disclaimer, block, Start, End);
 
-    private static string SpliceBetween(string? text, string block, string Start, string End)
+    /// <summary>
+    /// The fences are passed in rather than read from the class, because the same splice
+    /// serves the disclaimer's HTML comments and the stylesheet's CSS comments.
+    /// </summary>
+    private static string SpliceBetween(string? text, string block, string opening, string closing)
     {
         var existing = text ?? string.Empty;
 
-        var start = existing.IndexOf(Start, StringComparison.Ordinal);
-        var end = existing.IndexOf(End, StringComparison.Ordinal);
+        var start = existing.IndexOf(opening, StringComparison.Ordinal);
+        var end = existing.IndexOf(closing, StringComparison.Ordinal);
 
         if (start >= 0 && end > start)
         {
             var before = existing[..start];
-            var after = existing[(end + End.Length)..];
+            var after = existing[(end + closing.Length)..];
             return (before + block + after).Trim();
         }
 
