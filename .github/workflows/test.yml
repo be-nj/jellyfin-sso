@@ -65,6 +65,8 @@ jobs:
 
   # The review document claims that every finding ended in a commit or an issue. That
   # claim rots the moment one of them is rewritten or deleted, so it is checked.
+  # Not gated on `changes`: it checks a claim the review documents make, which is exactly
+  # what a documentation-only change can break, and it takes a dozen seconds.
   audit:
     runs-on: ubuntu-latest
     steps:

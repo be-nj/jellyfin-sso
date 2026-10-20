@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Prints `code=true` when a change touches anything a test could fail on, `code=false`
-# when it is Markdown and nothing else. Written for GITHUB_OUTPUT; run it by hand with a
-# base revision to see what CI would decide.
+# when it is documentation and nothing else. Written for GITHUB_OUTPUT; run it by hand
+# with a base revision to see what CI would decide.
 #
-# Markdown is the only thing treated as harmless. Images, the manifest, scripts and the
-# workflows themselves all count as code, because each of them has broken a build here
-# before.
+# Documentation is prose, anything under docs/ including its images, and the script that
+# turns a recording into the clips in docs/img — `make demo` produces those by hand and
+# no CI job runs it. Everything else counts as code: the manifest, the other scripts, the
+# workflows themselves, because each of them has broken a build here before.
 set -euo pipefail
 
 base="${1:-}"
@@ -27,7 +28,7 @@ fi
 
 while IFS= read -r file; do
   case "$file" in
-    *.md | LICENSE) ;;
+    *.md | LICENSE | docs/* | scripts/demo-clip.sh) ;;
     *)
       echo "code=true"
       exit 0
