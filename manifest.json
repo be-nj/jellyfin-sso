@@ -9,6 +9,14 @@
     "imageUrl": "https://jf.be-nj.net/docs/img/icon.png",
     "versions": [
       {
+        "version": "1.12.14.0",
+        "changelog": "See the release notes for v1.12.14.",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/be-nj/jellyfin-sso/releases/download/v1.12.14/jellyfin-sso_1.12.14.0.zip",
+        "checksum": "303ca0988b92685c4ddff64d5400e7bf",
+        "timestamp": "2026-10-20T21:20:41Z"
+      },
+      {
         "version": "1.12.13.0",
         "changelog": "See the release notes for v1.12.13.",
         "targetAbi": "12.0.0.0",
