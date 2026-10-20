@@ -83,6 +83,12 @@ Most alternatives are forks of the archived
 [K0lin's](https://github.com/K0lin/jellyfin-plugin-sso) is the most active, supports SAML
 and lists more providers — worth a look if you need either.
 
+**On Jellyfin 10.11, use [Ezeqielle/jellyfin-plugin-oidc](https://github.com/Ezeqielle/jellyfin-plugin-oidc)
+instead.** This plugin targets Jellyfin 12 and will not install on 10.11; that one targets
+10.11 and will not install on 12. It maps roles to libraries and permissions much as this
+one maps groups, and it syncs a profile picture from the provider, which this one does
+not.
+
 This one is a separate implementation, not a fork: 30 of its 1,092 significant lines also
 appear in 9p4's sources, all of them `using` directives, Jellyfin CSS classes and one-line
 properties. Hence MIT sources where the forks are GPL-3.0 — the built plugin is
