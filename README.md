@@ -77,35 +77,60 @@ The other three: [**K0lin**](https://github.com/K0lin/jellyfin-plugin-sso) (the 
 fork), [**Ezeqielle**](https://github.com/Ezeqielle/jellyfin-plugin-oidc),
 [**9p4**](https://github.com/9p4/jellyfin-plugin-sso) (the original, archived).
 
-**All four** sign in over OpenID Connect, take several providers at once, create the
-account at first login, check the ID token against the provider's keys, read groups from
-userinfo if asked, and map groups to libraries and Live TV. Where they differ:
+All four sign in over OpenID Connect, take several providers at once, create the account
+at first login, check the ID token against the provider's keys, read groups from userinfo
+if asked, and map groups to libraries and Live TV. The rest, grouped — and read it
+knowing that a comparison written in one project's repository tends to list the things
+that project happened to build:
+
+#### Reach
 
 | | This one | K0lin | Ezeqielle | 9p4 |
 |---|:---:|:---:|:---:|:---:|
 | **Jellyfin** | **12** | **12** | 10.11 | 10.11 |
 | SAML as well as OIDC | – | ✓ | – | ✓ |
-| Account keyed by the provider's subject | ✓ | ~ | – | ~ |
+| Admin page in other languages | – | ✓ | – | – |
+| A ready-made example stack to try | – | – | ✓ | – |
+
+#### Accounts
+
+| | This one | K0lin | Ezeqielle | 9p4 |
+|---|:---:|:---:|:---:|:---:|
+| Keyed by the provider's subject | ✓ | ~ | – | ~ |
 | Users link their own account | ✓ | – | – | – |
-| Last administrator never demoted | ✓ | ~ | – | – |
+| Refuse the login when no role matches | – | ✓ | ~ | ✓ |
 | Accounts exempt from the group sync | ✓ | – | – | – |
-| Downloads from the groups | ✓ | ✓ | – | – |
-| Parental rating from the groups | ✓ | – | ✓ | – |
+| Last administrator never demoted | ✓ | ~ | – | – |
+
+#### What the groups grant
+
+| | This one | K0lin | Ezeqielle | 9p4 |
+|---|:---:|:---:|:---:|:---:|
+| Downloads | ✓ | ✓ | – | – |
+| Parental rating | ✓ | – | ✓ | – |
 | Deletion, collections, subtitles, lyrics | ✓ | – | ~ | – |
+| Transcoding, remote access | – | – | ✓ | – |
+| A fallback role, and a priority between them | – | – | ✓ | – |
 | Nested claim path (`realm_access.roles`) | ✓ | – | ✓ | – |
+
+#### Sessions, hardening, comfort
+
+| | This one | K0lin | Ezeqielle | 9p4 |
+|---|:---:|:---:|:---:|:---:|
 | Single logout at the provider | ✓ | – | – | – |
 | Back-channel logout | ✓ | – | – | – |
 | Rate limit on the anonymous endpoints | ✓ | – | – | – |
+| An audit trail of its own | – | ✓ | – | – |
 | Quick Connect for phones and TVs | ✓ | – | ✓ | – |
 | Login button placed for you | ✓ | – | ✓ | ~ |
 | Profile picture from the provider | ~ | – | ✓ | – |
 
-✓ yes · ~ partly · – not found in its sources
-
-Where it says `~`: K0lin and 9p4 match a name claim against a link table an administrator
-keeps; K0lin's administrator guard is a setting you turn on; 9p4's login button is a
-snippet you paste into the login disclaimer; Ezeqielle maps deletion, collections and
-subtitles but not lyrics; the picture here is off until you switch it on.
+✓ yes · ~ partly · – not found in its sources. Where it says `~`: K0lin and 9p4 match a
+name claim against a link table an administrator keeps; K0lin's administrator guard is a
+setting you turn on; 9p4's button is a snippet you paste into the login disclaimer;
+Ezeqielle maps deletion, collections and subtitles but not lyrics, and can refuse
+accounts it did not create rather than refusing by role; the picture here is off until
+you switch it on.
 
 ### Where they come from
 
