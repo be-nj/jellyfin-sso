@@ -73,7 +73,17 @@ A public client with PKCE is the default and covers most setups.
 ## Group Mappings
 
 One card per group: *Group name*, *Libraries*, **Admin (all libraries)**, *Live TV
-access*, *Live TV management*, *Downloads*, *Max parental rating* (empty = no limit).
+access*, *Live TV management*, *Downloads*, *Delete media*, *Manage collections*,
+*Manage subtitles*, *Manage lyrics*, *Max parental rating* (empty = no limit).
+
+*Delete media* is the one to leave off unless it is meant: a deletion from the Jellyfin
+client removes the file, not a database row. A group that stops granting it also loses
+any per-folder deletion rights that were set by hand, since a folder list left behind
+would keep granting what the switch just took away.
+
+Playback, transcoding and remuxing are not on the card. Every SSO user may play media —
+that is what the login is for — and *Remote access* is Jellyfin's own, left where the
+administrator set it.
 
 <a href="img/group-mapping.png"><img src="img/group-mapping.png" alt="A group mapping with its libraries and permissions" width="520"></a>
 

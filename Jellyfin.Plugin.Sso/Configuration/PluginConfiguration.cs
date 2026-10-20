@@ -163,6 +163,22 @@ public class GroupMappingConfig
     public bool EnableContentDownloading { get; set; }
 
     /// <summary>
+    /// Whether this group may delete media from the server. Off by default, and worth
+    /// leaving off for everybody who is not an administrator: a deletion here removes the
+    /// file, not a database row.
+    /// </summary>
+    public bool EnableContentDeletion { get; set; }
+
+    /// <summary>Whether this group may create and edit collections.</summary>
+    public bool EnableCollectionManagement { get; set; }
+
+    /// <summary>Whether this group may download and edit subtitles.</summary>
+    public bool EnableSubtitleManagement { get; set; }
+
+    /// <summary>Whether this group may download and edit lyrics.</summary>
+    public bool EnableLyricManagement { get; set; }
+
+    /// <summary>
     /// Highest parental rating this group may watch. Null means no limit; a user in
     /// several groups gets the most permissive of them.
     /// </summary>

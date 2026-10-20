@@ -24,8 +24,8 @@ OpenID Connect single sign-on for Jellyfin — for households already running
 [Authelia](docs/authelia.md).
 
 - **Sign in through your provider.** PKCE public client, no secret stored.
-- **Groups decide access** — libraries, Live TV, downloads, parental rating, admin —
-  reapplied on every login.
+- **Groups decide access** — libraries, Live TV, downloads, deletion, collections,
+  subtitles, lyrics, parental rating, admin — reapplied on every login.
 - **Accounts created at first login**, existing ones [linked explicitly](docs/linking.md).
 - **Phones and TVs** via Jellyfin's [Quick Connect](docs/clients.md).
 - **Several providers at once**, each with its own login button — plain, or painted in

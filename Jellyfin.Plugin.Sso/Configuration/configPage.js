@@ -406,6 +406,10 @@ function buildRow(view, m, i) {
                 permission('sso-livetv-cb', 'Live TV access', m.EnableLiveTvAccess) +
                 permission('sso-livetv-mgmt-cb', 'Live TV management', m.EnableLiveTvManagement) +
                 permission('sso-download-cb', 'Downloads', m.EnableContentDownloading) +
+                permission('sso-delete-cb', 'Delete media', m.EnableContentDeletion) +
+                permission('sso-collections-cb', 'Manage collections', m.EnableCollectionManagement) +
+                permission('sso-subtitles-cb', 'Manage subtitles', m.EnableSubtitleManagement) +
+                permission('sso-lyrics-cb', 'Manage lyrics', m.EnableLyricManagement) +
             '</div>' +
             '<div class="inputContainer sso-rating-field">' +
                 '<input type="number" is="emby-input" class="sso-rating-input" min="0" ' +
@@ -469,6 +473,10 @@ function collectMappings(view) {
             EnableLiveTvAccess: checked('.sso-livetv-cb'),
             EnableLiveTvManagement: checked('.sso-livetv-mgmt-cb'),
             EnableContentDownloading: checked('.sso-download-cb'),
+            EnableContentDeletion: checked('.sso-delete-cb'),
+            EnableCollectionManagement: checked('.sso-collections-cb'),
+            EnableSubtitleManagement: checked('.sso-subtitles-cb'),
+            EnableLyricManagement: checked('.sso-lyrics-cb'),
             MaxParentalRating: rating === '' ? null : parseInt(rating, 10),
         };
     }).filter(Boolean);

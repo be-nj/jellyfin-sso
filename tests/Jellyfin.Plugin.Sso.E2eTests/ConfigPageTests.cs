@@ -46,6 +46,7 @@ public sealed class ConfigPageTests : IAsyncLifetime
         // Jellyfin styles its checkboxes with an overlay, so the input itself is not
         // clickable in the ordinary sense.
         await card.Locator(".sso-livetv-cb").CheckAsync(new LocatorCheckOptions { Force = true });
+        await card.Locator(".sso-subtitles-cb").CheckAsync(new LocatorCheckOptions { Force = true });
         await card.Locator(".sso-rating-input").FillAsync("12");
 
         await page.ClickAsync("#Save");
@@ -53,7 +54,10 @@ public sealed class ConfigPageTests : IAsyncLifetime
         // Read it back through the API: the page is only trustworthy if this matches.
         var mapping = await WaitForMappingAsync("set-from-ui");
         Assert.True(mapping["EnableLiveTvAccess"]!.GetValue<bool>());
+        Assert.True(mapping["EnableSubtitleManagement"]!.GetValue<bool>());
         Assert.False(mapping["EnableContentDownloading"]!.GetValue<bool>());
+        // The one nobody ticked, and the one that must never be ticked by accident.
+        Assert.False(mapping["EnableContentDeletion"]!.GetValue<bool>());
         Assert.Equal(12, mapping["MaxParentalRating"]!.GetValue<int>());
     }
 
