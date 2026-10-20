@@ -85,35 +85,58 @@ and K0lin's target Jellyfin 12, the other two target 10.11, and a plugin does no
 across that line.
 
 | | **This one** | [K0lin](https://github.com/K0lin/jellyfin-plugin-sso) | [Ezeqielle](https://github.com/Ezeqielle/jellyfin-plugin-oidc) | [9p4](https://github.com/9p4/jellyfin-plugin-sso) |
-|---|---|---|---|---|
-| Jellyfin | 12 | 12 | 10.11 | 10.11 |
-| Protocols | OIDC | OIDC + **SAML** | OIDC | OIDC + SAML |
-| Several providers at once | yes | yes | yes | yes |
-| Account identified by | `(provider, sub)`, linked explicitly | a name claim, with a link table and a fallback to the Jellyfin username | the `preferred_username` claim | a name claim |
-| Groups decide libraries and permissions | yes | yes | yes | yes |
-| Nested claim path (`realm_access.roles`) | yes | — | yes | — |
-| Last administrator protected | yes | opt-in (*preserve admin*) | — | — |
-| Quick Connect for phones and TVs | yes | — | yes | — |
-| Single logout (ends the provider's session) | yes | — | — | — |
-| Back-channel logout | yes | — | — | — |
-| Rate limit on the anonymous endpoints | yes | — | — | — |
-| Profile picture from the provider | opt-in | — | yes | — |
-| Login button | injected, with the provider's own mark | a separate branding plugin | injected | a snippet you paste into the login disclaimer |
+|---|:---:|:---:|:---:|:---:|
+| **Jellyfin** | 12 | 12 | 10.11 | 10.11 |
+| *Signing in* | | | | |
+| OpenID Connect | ● | ● | ● | ● |
+| SAML | ○ | ● | ○ | ● |
+| Several providers at once | ● | ● | ● | ● |
+| Quick Connect, for phones and TVs | ● | ○ | ● | ○ |
+| A button on the login page | ● | ○ | ● | ◐ |
+| *Accounts* | | | | |
+| Identified by the provider's subject | ● | ◐ | ○ | ◐ |
+| Created at first login | ● | ● | ● | ● |
+| An existing account linked on purpose | ● | ◐ | ○ | ◐ |
+| Users can link their own account | ● | ○ | ○ | ○ |
+| *What the groups decide* | | | | |
+| Libraries | ● | ● | ● | ● |
+| Live TV | ● | ● | ● | ● |
+| Downloads | ● | ● | ○ | ○ |
+| Deleting, collections, subtitles, lyrics | ● | ○ | ◐ | ○ |
+| Parental rating | ● | ○ | ● | ○ |
+| The last administrator is never demoted | ● | ◐ | ○ | ○ |
+| Accounts kept out of the sync | ● | ○ | ○ | ○ |
+| *Claims* | | | | |
+| ID token checked against the provider's keys | ● | ● | ● | ● |
+| A nested claim path (`realm_access.roles`) | ● | ○ | ● | ○ |
+| Groups from the userinfo endpoint | ● | ● | ● | ● |
+| *Sessions* | | | | |
+| Signing out ends the provider's session | ● | ○ | ○ | ○ |
+| Back-channel logout | ● | ○ | ○ | ○ |
+| *The rest* | | | | |
+| Rate limit on the anonymous endpoints | ● | ○ | ○ | ○ |
+| Profile picture from the provider | ◐ | ○ | ● | ○ |
 
-A dash means "not found in its sources", not "refused to build it".
+● has it · ◐ partly, optionally, or by hand · ○ not found in its sources
+
+Where this table says ◐: K0lin's and 9p4's accounts are matched by a name claim with a
+table of links beside it, which an administrator keeps rather than a user; 9p4's login
+button is a snippet you paste into Jellyfin's login disclaimer; K0lin's administrator
+guard is a setting you turn on; Ezeqielle maps deletion, collections and subtitles but
+not lyrics; and the profile picture here is off until you switch it on.
 
 ### Where they come from
 
-Worth knowing before trusting any of them with your login — this one included.
+Not a feature question, and not a ranking — the same handful of numbers, taken the
+same way for each of the four, this one included.
 
 | | **This one** | K0lin | Ezeqielle | 9p4 |
 |---|---|---|---|---|
 | First commit | 2026-09-17 | 2026-06-12 | 2026-05-12 | 2022-01-10 |
-| Latest release | v1.12.13 (2026-10-19) | v5.1.1 (2026-09-09) | v1.0.10 (2026-09-10) | v4.0.0.4 (2026-03-20), archived |
+| Latest release | v1.12.14 (2026-10-20) | v5.1.1 (2026-09-09) | v1.0.10 (2026-09-10) | v4.0.0.4 (2026-03-20), archived |
 | Stars | 1 | 162 | 40 | 1,455 |
 | Licence | MIT sources, GPLv3 binary | GPL-3.0 | GPL-3.0 | GPL-3.0 |
 | Commits carrying an AI trailer | **100 of 108** (Claude Opus 4.6–5) | none | 33 of the last 100 (Claude Opus 4.6–5) | none |
-| Merged pull requests with an approving review | **0 of 37** | 2 of 50 | 4 of 22 | 0 of 56 |
 | Automated tests | 341 unit, 84 end-to-end, 9 real-provider logins | 68 test cases | 16 test cases | none in the repository |
 | Mutation testing | 70 %, floor 65 % | — | — | — |
 | Static analysis | CodeQL, no open alerts | — | — | — |
@@ -126,13 +149,15 @@ Worth knowing before trusting any of them with your login — this one included.
   Code, on a maintainer's prompting. The tests, the threat model and this table too. An
   AI trailer only appears where a tool wrote one, so "none" in that row means no trailer,
   not necessarily no AI.
-- **No one outside has reviewed it.** Not one of the merged pull requests carries an
-  approving review from a second person, and the
+- **No one outside has reviewed it.** No second person has read this code, and the
   [review documents](docs/reviews/) in this repository were written by the same model
-  that wrote the code. CodeQL, the test matrix and mutation testing are what stand in for
-  a reviewer, and they are not the same thing. The
+  that wrote it. CodeQL, the test matrix and mutation testing are what stand in for a
+  reviewer, and they are not the same thing. The
   [threat model](docs/threat-model.md) exists so that what the plugin assumes is at least
-  written down where somebody can disagree with it.
+  written down where somebody can disagree with it. (Counting approving reviews on pull
+  requests would be the obvious measure, and it is a bad one: 9p4's plugin has none
+  either across 56 merged requests. It measures who holds the push rights, not who read
+  the code.)
 - **No SAML, and fewer providers documented.** Authentik, Keycloak and Authelia are set
   up and tested here; anything else is untried.
 
