@@ -12,6 +12,9 @@ groups from userinfo endpoint*, *Accept back-channel logout*, *Paint the login b
 this provider's colour*, *Scopes*. The card prints the provider id, the redirect URI, the
 login URL and the back-channel logout URL.
 
+*Picture claim name* (default `picture`) is only read while profile pictures are switched
+on, below, and takes a path the same way the groups claim does.
+
 *Groups claim name* takes a nested path as well. The name is looked for as it stands
 first, so a claim really called `urn:zitadel:iam:org:project:roles` is still found; if no
 claim goes by that name, the dots are read as a path. `realm_access.roles` is where
@@ -78,6 +81,20 @@ A public client with PKCE is the default and covers most setups.
   raised applies to whoever is being turned away right now. Jellyfin's login page, the
   button and its mark are never counted: they have to keep working for everybody else
   while one caller is being refused.
+
+### Profile pictures
+
+*Take the profile picture from the provider* is off by default. Switched on, the picture
+the provider publishes becomes the Jellyfin profile picture at every login, replacing one
+somebody chose in Jellyfin — so turn it on only where the provider is where the household
+keeps its photos. Users in the exclusion list keep their own picture either way.
+
+The address comes out of the token, which means the server fetches whatever it points at.
+Only absolute `http`/`https` addresses are fetched, at most 2 MB, and only JPEG, PNG, GIF
+and WebP; anything else is logged and ignored. A picture that does not arrive never fails
+a login. The same picture is fetched again at the next login — the provider is the one who
+knows whether it changed — but only written when its bytes differ, so the clients' image
+tags stay put.
 
 ## Group Mappings
 

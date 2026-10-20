@@ -19,7 +19,7 @@ public sealed class IdTokenValidationTests : IDisposable
         GroupsClaim = "groups",
     };
 
-    private (string Sub, string Username, List<string> Groups) Validate(
+    private (string Sub, string Username, List<string> Groups, string? Picture) Validate(
         string idToken, string expectedNonce = "test-nonce", SecurityKey? key = null)
         => ClaimsExtractor.ValidateIdToken(
             _provider,
@@ -33,7 +33,7 @@ public sealed class IdTokenValidationTests : IDisposable
     {
         var token = _idp.Mint(sub: "ben", preferredUsername: "ben", groups: ["media", "admins"]);
 
-        var (sub, username, groups) = Validate(token);
+        var (sub, username, groups, _) = Validate(token);
 
         Assert.Equal("ben", sub);
         Assert.Equal("ben", username);
@@ -116,7 +116,7 @@ public sealed class IdTokenValidationTests : IDisposable
     {
         var token = _idp.Mint(sub: "90b1e0f2", preferredUsername: null);
 
-        var (sub, username, _) = Validate(token);
+        var (sub, username, _, _) = Validate(token);
 
         Assert.Equal("90b1e0f2", sub);
         Assert.Equal("90b1e0f2", username);
@@ -127,7 +127,7 @@ public sealed class IdTokenValidationTests : IDisposable
     {
         var token = _idp.Mint(sub: "90b1e0f2", preferredUsername: null, name: "Ben Beckmann");
 
-        var (_, username, _) = Validate(token);
+        var (_, username, _, _) = Validate(token);
 
         Assert.Equal("Ben Beckmann", username);
     }
@@ -137,7 +137,7 @@ public sealed class IdTokenValidationTests : IDisposable
     {
         var token = _idp.Mint(sub: "90b1e0f2", preferredUsername: "ben", name: "Ben Beckmann");
 
-        var (_, username, _) = Validate(token);
+        var (_, username, _, _) = Validate(token);
 
         Assert.Equal("ben", username);
     }
@@ -149,7 +149,7 @@ public sealed class IdTokenValidationTests : IDisposable
         // otherwise an IdP-side rename would silently grant library access.
         var token = _idp.Mint(groups: ["admins"], groupsClaim: "roles");
 
-        var (_, _, groups) = Validate(token);
+        var (_, _, groups, _) = Validate(token);
 
         Assert.Empty(groups);
     }
@@ -160,7 +160,7 @@ public sealed class IdTokenValidationTests : IDisposable
         _provider.GroupsClaim = "jellyfin_roles";
         var token = _idp.Mint(groups: ["media"], groupsClaim: "jellyfin_roles");
 
-        var (_, _, groups) = Validate(token);
+        var (_, _, groups, _) = Validate(token);
 
         Assert.Equal(["media"], groups);
     }

@@ -215,6 +215,18 @@
                 An identity already linked to another account is refused.
               </div>
             </div>
+            <div class="checkboxContainer">
+              <label>
+                <input id="SyncProfilePictures" type="checkbox" is="emby-checkbox" />
+                <span>Take the profile picture from the provider</span>
+              </label>
+              <div class="fieldDescription">
+                The picture the provider publishes becomes the Jellyfin profile picture, at
+                every login. A picture somebody chose in Jellyfin is replaced by it, so leave
+                this off unless the provider is where the household keeps its photos. Users
+                excluded from group sync below keep their own picture either way.
+              </div>
+            </div>
             <div class="inputContainer">
               <label class="inputLabel" for="LoginRequestsPerMinute">
                 Login requests per minute, per address

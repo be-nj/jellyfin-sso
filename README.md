@@ -28,6 +28,8 @@ OpenID Connect single sign-on for Jellyfin — for households already running
   subtitles, lyrics, parental rating, admin — reapplied on every login.
 - **Accounts created at first login**, existing ones [linked explicitly](docs/linking.md).
 - **Phones and TVs** via Jellyfin's [Quick Connect](docs/clients.md).
+- **Profile pictures from the provider**, if you want them — off by default, because an
+  avatar somebody chose here is theirs.
 - **Several providers at once**, each with its own login button — plain, or painted in
   the provider's colour.
 - **Optional single logout** that ends the provider's session too, and **back-channel
@@ -86,8 +88,7 @@ and lists more providers — worth a look if you need either.
 **On Jellyfin 10.11, use [Ezeqielle/jellyfin-plugin-oidc](https://github.com/Ezeqielle/jellyfin-plugin-oidc)
 instead.** This plugin targets Jellyfin 12 and will not install on 10.11; that one targets
 10.11 and will not install on 12. It maps roles to libraries and permissions much as this
-one maps groups, and it syncs a profile picture from the provider, which this one does
-not.
+one maps groups.
 
 This one is a separate implementation, not a fork: 30 of its 1,092 significant lines also
 appear in 9p4's sources, all of them `using` directives, Jellyfin CSS classes and one-line

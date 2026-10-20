@@ -76,6 +76,7 @@ function load(view) {
         setChk(view, 'UseProviderLogos', _config.UseProviderLogos !== false);
         setChk(view, 'InjectLoginButtonIntoForm', !!_config.InjectLoginButtonIntoForm);
         setChk(view, 'AllowSelfServiceLinking', !!_config.AllowSelfServiceLinking);
+        setChk(view, 'SyncProfilePictures', !!_config.SyncProfilePictures);
         // A saved 0 means off and has to survive the round trip, so only a missing
         // value falls back to the default.
         setVal(view, 'LoginRequestsPerMinute',
@@ -148,6 +149,7 @@ function save(view) {
         UseProviderLogos: getChk(view, 'UseProviderLogos'),
         InjectLoginButtonIntoForm: getChk(view, 'InjectLoginButtonIntoForm'),
         AllowSelfServiceLinking: getChk(view, 'AllowSelfServiceLinking'),
+        SyncProfilePictures: getChk(view, 'SyncProfilePictures'),
         LoginRequestsPerMinute: rateLimit(view),
         SyncExcludedUserIds: collectExcluded(view),
     };
@@ -215,6 +217,11 @@ function buildProviderCard(p, i) {
             '<input type="text" is="emby-input" class="sso-provider-groups-claim" ' +
                 'label="Groups claim name (a path like realm_access.roles works)" placeholder="groups" ' +
                 'value="' + escAttr(p.GroupsClaim || '') + '" />' +
+        '</div>' +
+        '<div class="inputContainer">' +
+            '<input type="text" is="emby-input" class="sso-provider-picture-claim" ' +
+                'label="Picture claim name" placeholder="picture" ' +
+                'value="' + escAttr(p.PictureClaim || '') + '" />' +
         '</div>' +
         '<div class="checkboxContainer"><label>' +
             '<input type="checkbox" is="emby-checkbox" class="sso-provider-userinfo"' +
@@ -334,6 +341,7 @@ function collectProviders(view) {
             ConfidentialSecretRef: previous.ConfidentialSecretRef || null,
             Scopes: val('.sso-provider-scopes').split(/\s+/).filter(Boolean),
             GroupsClaim: val('.sso-provider-groups-claim') || 'groups',
+            PictureClaim: val('.sso-provider-picture-claim') || 'picture',
             GroupsFromUserInfo: card.querySelector('.sso-provider-userinfo').checked,
             BrandedLoginButton: card.querySelector('.sso-provider-branded').checked,
             AcceptBackChannelLogout: card.querySelector('.sso-provider-backchannel').checked,
