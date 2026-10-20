@@ -46,20 +46,11 @@ OpenID Connect single sign-on for Jellyfin — for households already running
 
 </div>
 
-Not a mock-up: the clip is a test run. A throwaway Jellyfin, a real Authentik in a
-container, and the button this plugin adds — recorded by `make demo`, which fails if any
-step of the login does not happen. [Sharper version](docs/img/login-flow.mp4).
-
-The same login through the other two supported providers, recorded the same way:
-
-<div align="center">
-
-| Keycloak | Authelia |
-|---|---|
-| <img src="docs/img/login-flow-keycloak.gif" alt="The same login through Keycloak's own form" width="380"> | <img src="docs/img/login-flow-authelia.gif" alt="The same login through Authelia's own form" width="380"> |
-| [Sharper version](docs/img/login-flow-keycloak.mp4) | [Sharper version](docs/img/login-flow-authelia.mp4) |
-
-</div>
+Not a mock-up — a test run with a real Authentik in a container, recorded by `make demo`,
+which fails if any step of the login does not happen.
+[Sharper](docs/img/login-flow.mp4) · the same login through
+**[Keycloak](docs/img/login-flow-keycloak.gif)** ([mp4](docs/img/login-flow-keycloak.mp4))
+and **[Authelia](docs/img/login-flow-authelia.gif)** ([mp4](docs/img/login-flow-authelia.mp4)).
 
 ## How it is tested
 
@@ -74,15 +65,13 @@ Against real software, not mocks. Every push runs:
 | **Mutation testing** | Stryker breaks the code to see whether the tests notice: 70 %, floor 65 % |
 | **CodeQL** | No open alerts |
 
-The provider guides are the configuration those containers get, and the screenshots come
-from the running plugin. What the plugin trusts, and which test holds each claim:
-[threat model](docs/threat-model.md).
+The provider guides are the configuration those containers get. What the plugin trusts,
+and which test holds each claim: [threat model](docs/threat-model.md).
 
 ## Compared with the other plugins
 
-Four plugins do this job. **Which Jellyfin you run decides two of them away**: this one
-and K0lin's target Jellyfin 12, the other two target 10.11, and a plugin does not install
-across that line.
+Four plugins do this job, and **your Jellyfin version decides two of them away**: this
+one and K0lin's are for Jellyfin 12, the other two for 10.11.
 
 | | **This one** | [K0lin](https://github.com/K0lin/jellyfin-plugin-sso) | [Ezeqielle](https://github.com/Ezeqielle/jellyfin-plugin-oidc) | [9p4](https://github.com/9p4/jellyfin-plugin-sso) |
 |---|:---:|:---:|:---:|:---:|
@@ -119,11 +108,10 @@ across that line.
 
 ● has it · ◐ partly, optionally, or by hand · ○ not found in its sources
 
-Where this table says ◐: K0lin's and 9p4's accounts are matched by a name claim with a
-table of links beside it, which an administrator keeps rather than a user; 9p4's login
-button is a snippet you paste into Jellyfin's login disclaimer; K0lin's administrator
-guard is a setting you turn on; Ezeqielle maps deletion, collections and subtitles but
-not lyrics; and the profile picture here is off until you switch it on.
+◐ in detail: K0lin and 9p4 match a name claim against a link table an administrator keeps;
+9p4's button is a snippet you paste into the login disclaimer; K0lin's administrator guard
+is a setting; Ezeqielle maps deletion, collections and subtitles but not lyrics; the
+picture here is off until you switch it on.
 
 ### Where they come from
 
@@ -143,46 +131,23 @@ same way for each of the four, this one included.
 
 ### What that means for this one
 
-- **It is the youngest and the least used.** One star, one household running it. The
-  others have been installed by people who are not their authors; this one has not.
-- **Almost all of it was written by an LLM** — Claude Opus 4.6 through 5, through Claude
-  Code, on a maintainer's prompting. The tests, the threat model and this table too. An
-  AI trailer only appears where a tool wrote one, so "none" in that row means no trailer,
-  not necessarily no AI.
-- **No one outside has reviewed it.** No second person has read this code, and the
-  [review documents](docs/reviews/) in this repository were written by the same model
-  that wrote it. CodeQL, the test matrix and mutation testing are what stand in for a
-  reviewer, and they are not the same thing. The
-  [threat model](docs/threat-model.md) exists so that what the plugin assumes is at least
-  written down where somebody can disagree with it. (Counting approving reviews on pull
-  requests would be the obvious measure, and it is a bad one: 9p4's plugin has none
-  either across 56 merged requests. It measures who holds the push rights, not who read
-  the code.)
-- **No SAML, and fewer providers documented.** Authentik, Keycloak and Authelia are set
-  up and tested here; anything else is untried.
+- **Youngest and least used** — one star, one household. The others have users who are
+  not their authors.
+- **Almost all of it was written by an LLM**, Claude Opus 4.6 through 5: the code, the
+  tests, the threat model, this table. "None" in that row means no trailer, not
+  necessarily no AI.
+- **Nobody outside has read it.** CodeQL, the test matrix and mutation testing stand in
+  for a reviewer and are not the same thing, and `docs/reviews/` was written by the model
+  that wrote the code. Counting approving pull-request reviews would say little: 9p4 has
+  none either across 56, which measures push rights rather than reading.
+- **No SAML**, and only Authentik, Keycloak and Authelia are set up and tested.
 
-If any of that is disqualifying — and it reasonably might be — K0lin's is the active fork
-on Jellyfin 12.
+If that is disqualifying — it reasonably might be — K0lin's is the active fork on
+Jellyfin 12.
 
-This one is a separate implementation, not a fork: 30 of its 1,092 significant lines also
-appear in 9p4's sources, all of them `using` directives, Jellyfin CSS classes and one-line
-properties. Hence MIT sources where the forks are GPL-3.0 — the built plugin is
-GPLv3 either way, see [License](#license).
-
-Different routes it takes:
-
-- **Identity is keyed by `(provider, sub)`, never by username**, so an account cannot be
-  reached by registering the right name at the provider. Accounts that existed before SSO
-  are [linked explicitly](docs/linking.md).
-- **The last administrator is never demoted**, and individual users can be excluded from
-  sync, so a mistyped group name is recoverable.
-- **No client secret in the configuration file.** PKCE by default; a confidential client
-  reads its secret from the environment or a file at login.
-- **The supported Jellyfin range is measured** — every push runs the end-to-end suite
-  against 12.0, 12.1 and 12.2.
-- **Self-service linking, several providers at once, RP-initiated logout** and Quick
-  Connect for TVs.
-- **OIDC only.** SAML is out of scope here; if you need it, K0lin's fork has it.
+Not a fork, by the way: 30 of this plugin's 1,092 significant lines also appear in 9p4's
+sources, all `using` directives, Jellyfin CSS classes and one-line properties. Hence MIT
+sources where the forks are GPL-3.0 ([the binary is GPLv3 either way](#license)).
 
 ## Install
 
