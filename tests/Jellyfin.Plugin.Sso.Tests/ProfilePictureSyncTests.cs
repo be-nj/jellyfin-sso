@@ -183,6 +183,39 @@ public sealed class ProfilePictureSyncTests : IDisposable
             "profile.jpg", _userManager.GetUserById(_userId)!.ProfileImage!.Path, StringComparison.Ordinal);
     }
 
+    // ─── Where it writes ──────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("ben")]
+    [InlineData("../../etc/cron.d")]
+    [InlineData("/etc/cron.d")]
+    [InlineData("..")]
+    [InlineData(".")]
+    public void The_picture_is_written_under_Jellyfins_own_user_folder(string username)
+    {
+        var user = new User(
+            username,
+            "Emby.Server.Implementations.Library.DefaultAuthenticationProvider",
+            "Emby.Server.Implementations.Library.DefaultPasswordResetProvider");
+
+        var path = Sync().PicturePath(user, ".png");
+
+        Assert.StartsWith(Path.GetFullPath(_root) + Path.DirectorySeparatorChar, path, StringComparison.Ordinal);
+        Assert.EndsWith("profile.png", path, StringComparison.Ordinal);
+        Assert.DoesNotContain("..", path, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_name_that_cannot_be_a_folder_falls_back_to_the_users_id()
+    {
+        var user = new User(
+            "/",
+            "Emby.Server.Implementations.Library.DefaultAuthenticationProvider",
+            "Emby.Server.Implementations.Library.DefaultPasswordResetProvider");
+
+        Assert.Contains(user.Id.ToString("N"), Sync().PicturePath(user, ".jpg"), StringComparison.Ordinal);
+    }
+
     public void Dispose()
     {
         _harness.Dispose();
