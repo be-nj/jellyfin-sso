@@ -129,13 +129,16 @@ public sealed class ClaimsExtractor
         // before the name is split further.
         foreach (var (head, tail) in SplitPoints(claim))
         {
-            foreach (var carrier in principal.Claims.Where(c => c.Type == head))
+            // Select is lazy, so a token carrying the claim twice is only parsed until one
+            // of them holds the rest of the path.
+            var nested = principal.Claims
+                .Where(c => c.Type == head)
+                .Select(c => GroupsFromJsonText(c.Value, tail))
+                .FirstOrDefault(groups => groups.Count > 0);
+
+            if (nested is not null)
             {
-                var nested = GroupsFromJsonText(carrier.Value, tail);
-                if (nested.Count > 0)
-                {
-                    return nested;
-                }
+                return nested;
             }
         }
 
