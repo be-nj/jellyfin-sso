@@ -237,3 +237,4 @@ The built plugin is GPLv3. It links `Jellyfin.Controller` and `Jellyfin.Model`, 
 Jellyfin publishes under `GPL-3.0-only`, so the DLL in the release zip carries those
 terms — as every Jellyfin plugin's does, whatever its own sources say. Copy the code
 under MIT; pass the plugin on under GPLv3.
+x
