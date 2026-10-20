@@ -73,45 +73,39 @@ and which test holds each claim: [threat model](docs/threat-model.md).
 Four plugins do this job, and **your Jellyfin version decides two of them away**: this
 one and K0lin's are for Jellyfin 12, the other two for 10.11.
 
-| | **This one** | [K0lin](https://github.com/K0lin/jellyfin-plugin-sso) | [Ezeqielle](https://github.com/Ezeqielle/jellyfin-plugin-oidc) | [9p4](https://github.com/9p4/jellyfin-plugin-sso) |
+The other three: [**K0lin**](https://github.com/K0lin/jellyfin-plugin-sso) (the active
+fork), [**Ezeqielle**](https://github.com/Ezeqielle/jellyfin-plugin-oidc),
+[**9p4**](https://github.com/9p4/jellyfin-plugin-sso) (the original, archived).
+
+**All four** sign in over OpenID Connect, take several providers at once, create the
+account at first login, check the ID token against the provider's keys, read groups from
+userinfo if asked, and map groups to libraries and Live TV. Where they differ:
+
+| | This one | K0lin | Ezeqielle | 9p4 |
 |---|:---:|:---:|:---:|:---:|
-| **Jellyfin** | 12 | 12 | 10.11 | 10.11 |
-| *Signing in* | | | | |
-| OpenID Connect | ● | ● | ● | ● |
-| SAML | ○ | ● | ○ | ● |
-| Several providers at once | ● | ● | ● | ● |
-| Quick Connect (phones, TVs) | ● | ○ | ● | ○ |
-| Login button on the page | ● | ○ | ● | ◐ |
-| *Accounts* | | | | |
-| Keyed by the provider's subject | ● | ◐ | ○ | ◐ |
-| Created at first login | ● | ● | ● | ● |
-| Existing account linked on purpose | ● | ◐ | ○ | ◐ |
-| Users link their own account | ● | ○ | ○ | ○ |
-| *What the groups decide* | | | | |
-| Libraries | ● | ● | ● | ● |
-| Live TV | ● | ● | ● | ● |
-| Downloads | ● | ● | ○ | ○ |
-| Deletion, collections, subtitles, lyrics | ● | ○ | ◐ | ○ |
-| Parental rating | ● | ○ | ● | ○ |
-| Last administrator never demoted | ● | ◐ | ○ | ○ |
-| Accounts exempt from the sync | ● | ○ | ○ | ○ |
-| *Claims* | | | | |
-| ID token checked against the JWKS | ● | ● | ● | ● |
-| Nested claim path (`realm_access.roles`) | ● | ○ | ● | ○ |
-| Groups from userinfo | ● | ● | ● | ● |
-| *Sessions* | | | | |
-| Single logout at the provider | ● | ○ | ○ | ○ |
-| Back-channel logout | ● | ○ | ○ | ○ |
-| *The rest* | | | | |
-| Rate limit on anonymous endpoints | ● | ○ | ○ | ○ |
-| Profile picture from the provider | ◐ | ○ | ● | ○ |
+| **Jellyfin** | **12** | **12** | 10.11 | 10.11 |
+| SAML as well as OIDC | – | ✓ | – | ✓ |
+| Account keyed by the provider's subject | ✓ | ~ | – | ~ |
+| Users link their own account | ✓ | – | – | – |
+| Last administrator never demoted | ✓ | ~ | – | – |
+| Accounts exempt from the group sync | ✓ | – | – | – |
+| Downloads from the groups | ✓ | ✓ | – | – |
+| Parental rating from the groups | ✓ | – | ✓ | – |
+| Deletion, collections, subtitles, lyrics | ✓ | – | ~ | – |
+| Nested claim path (`realm_access.roles`) | ✓ | – | ✓ | – |
+| Single logout at the provider | ✓ | – | – | – |
+| Back-channel logout | ✓ | – | – | – |
+| Rate limit on the anonymous endpoints | ✓ | – | – | – |
+| Quick Connect for phones and TVs | ✓ | – | ✓ | – |
+| Login button placed for you | ✓ | – | ✓ | ~ |
+| Profile picture from the provider | ~ | – | ✓ | – |
 
-● has it · ◐ partly, optionally, or by hand · ○ not found in its sources
+✓ yes · ~ partly · – not found in its sources
 
-◐ in detail: K0lin and 9p4 match a name claim against a link table an administrator keeps;
-9p4's button is a snippet you paste into the login disclaimer; K0lin's administrator guard
-is a setting; Ezeqielle maps deletion, collections and subtitles but not lyrics; the
-picture here is off until you switch it on.
+Where it says `~`: K0lin and 9p4 match a name claim against a link table an administrator
+keeps; K0lin's administrator guard is a setting you turn on; 9p4's login button is a
+snippet you paste into the login disclaimer; Ezeqielle maps deletion, collections and
+subtitles but not lyrics; the picture here is off until you switch it on.
 
 ### Where they come from
 
