@@ -80,15 +80,64 @@ from the running plugin. What the plugin trusts, and which test holds each claim
 
 ## Compared with the other plugins
 
-Most alternatives are forks of the archived
-[9p4/jellyfin-plugin-sso](https://github.com/9p4/jellyfin-plugin-sso).
-[K0lin's](https://github.com/K0lin/jellyfin-plugin-sso) is the most active, supports SAML
-and lists more providers — worth a look if you need either.
+Four plugins do this job. **Which Jellyfin you run decides two of them away**: this one
+and K0lin's target Jellyfin 12, the other two target 10.11, and a plugin does not install
+across that line.
 
-**On Jellyfin 10.11, use [Ezeqielle/jellyfin-plugin-oidc](https://github.com/Ezeqielle/jellyfin-plugin-oidc)
-instead.** This plugin targets Jellyfin 12 and will not install on 10.11; that one targets
-10.11 and will not install on 12. It maps roles to libraries and permissions much as this
-one maps groups.
+| | **This one** | [K0lin](https://github.com/K0lin/jellyfin-plugin-sso) | [Ezeqielle](https://github.com/Ezeqielle/jellyfin-plugin-oidc) | [9p4](https://github.com/9p4/jellyfin-plugin-sso) |
+|---|---|---|---|---|
+| Jellyfin | 12 | 12 | 10.11 | 10.11 |
+| Protocols | OIDC | OIDC + **SAML** | OIDC | OIDC + SAML |
+| Several providers at once | yes | yes | yes | yes |
+| Account identified by | `(provider, sub)`, linked explicitly | a name claim, with a link table and a fallback to the Jellyfin username | the `preferred_username` claim | a name claim |
+| Groups decide libraries and permissions | yes | yes | yes | yes |
+| Nested claim path (`realm_access.roles`) | yes | — | yes | — |
+| Last administrator protected | yes | opt-in (*preserve admin*) | — | — |
+| Quick Connect for phones and TVs | yes | — | yes | — |
+| Single logout (ends the provider's session) | yes | — | — | — |
+| Back-channel logout | yes | — | — | — |
+| Rate limit on the anonymous endpoints | yes | — | — | — |
+| Profile picture from the provider | opt-in | — | yes | — |
+| Login button | injected, with the provider's own mark | a separate branding plugin | injected | a snippet you paste into the login disclaimer |
+
+A dash means "not found in its sources", not "refused to build it".
+
+### Where they come from
+
+Worth knowing before trusting any of them with your login — this one included.
+
+| | **This one** | K0lin | Ezeqielle | 9p4 |
+|---|---|---|---|---|
+| First commit | 2026-09-17 | 2026-06-12 | 2026-05-12 | 2022-01-10 |
+| Latest release | v1.12.13 (2026-10-19) | v5.1.1 (2026-09-09) | v1.0.10 (2026-09-10) | v4.0.0.4 (2026-03-20), archived |
+| Stars | 1 | 162 | 40 | 1,455 |
+| Licence | MIT sources, GPLv3 binary | GPL-3.0 | GPL-3.0 | GPL-3.0 |
+| Commits carrying an AI trailer | **100 of 108** (Claude Opus 4.6–5) | none | 33 of the last 100 (Claude Opus 4.6–5) | none |
+| Merged pull requests with an approving review | **0 of 37** | 2 of 50 | 4 of 22 | 0 of 56 |
+| Automated tests | 341 unit, 84 end-to-end, 9 real-provider logins | 68 test cases | 16 test cases | none in the repository |
+| Mutation testing | 70 %, floor 65 % | — | — | — |
+| Static analysis | CodeQL, no open alerts | — | — | — |
+
+### What that means for this one
+
+- **It is the youngest and the least used.** One star, one household running it. The
+  others have been installed by people who are not their authors; this one has not.
+- **Almost all of it was written by an LLM** — Claude Opus 4.6 through 5, through Claude
+  Code, on a maintainer's prompting. The tests, the threat model and this table too. An
+  AI trailer only appears where a tool wrote one, so "none" in that row means no trailer,
+  not necessarily no AI.
+- **No one outside has reviewed it.** Not one of the merged pull requests carries an
+  approving review from a second person, and the
+  [review documents](docs/reviews/) in this repository were written by the same model
+  that wrote the code. CodeQL, the test matrix and mutation testing are what stand in for
+  a reviewer, and they are not the same thing. The
+  [threat model](docs/threat-model.md) exists so that what the plugin assumes is at least
+  written down where somebody can disagree with it.
+- **No SAML, and fewer providers documented.** Authentik, Keycloak and Authelia are set
+  up and tested here; anything else is untried.
+
+If any of that is disqualifying — and it reasonably might be — K0lin's is the active fork
+on Jellyfin 12.
 
 This one is a separate implementation, not a fork: 30 of its 1,092 significant lines also
 appear in 9p4's sources, all of them `using` directives, Jellyfin CSS classes and one-line
