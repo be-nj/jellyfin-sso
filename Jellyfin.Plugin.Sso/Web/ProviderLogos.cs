@@ -98,22 +98,12 @@ public sealed partial class ProviderLogos : IDisposable
         {
             using var document = JsonDocument.Parse(brand);
 
-            // Anything but an object has no properties to ask for, and asking anyway throws.
-            if (document.RootElement.ValueKind == JsonValueKind.Object)
+            foreach (var logoUri in BrandLogos(document.RootElement, origin))
             {
-                foreach (var field in BrandFields)
+                var branded = await ImageAsync(logoUri, ct).ConfigureAwait(false);
+                if (branded is not null)
                 {
-                    if (document.RootElement.TryGetProperty(field, out var value)
-                        && value.ValueKind == JsonValueKind.String
-                        && value.GetString() is { Length: > 0 } path
-                        && Uri.TryCreate(origin, path, out var logoUri))
-                    {
-                        var branded = await ImageAsync(logoUri, ct).ConfigureAwait(false);
-                        if (branded is not null)
-                        {
-                            return branded;
-                        }
-                    }
+                    return branded;
                 }
             }
         }
@@ -133,6 +123,26 @@ public sealed partial class ProviderLogos : IDisposable
 
         return await ImageAsync(new Uri(origin, "/favicon.ico"), ct).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// The brand images <paramref name="brand"/> actually points at, in the order of
+    /// <see cref="BrandFields"/>. A field that is missing, is not text, is empty, or does
+    /// not read as an address is not a logo, so it never reaches the caller.
+    /// </summary>
+    private static IEnumerable<Uri> BrandLogos(JsonElement brand, Uri origin)
+        // Anything but an object has no properties to ask for, and asking anyway throws.
+        => brand.ValueKind != JsonValueKind.Object
+            ? []
+            : BrandFields.Select(field => BrandLogo(brand, origin, field)).OfType<Uri>();
+
+    /// <summary>The address <paramref name="field"/> holds, or null if it holds no usable one.</summary>
+    private static Uri? BrandLogo(JsonElement brand, Uri origin, string field)
+        => brand.TryGetProperty(field, out var value)
+            && value.ValueKind == JsonValueKind.String
+            && value.GetString() is { Length: > 0 } path
+            && Uri.TryCreate(origin, path, out var logoUri)
+                ? logoUri
+                : null;
 
     private async Task<string?> TextAsync(Uri uri, CancellationToken ct)
     {
