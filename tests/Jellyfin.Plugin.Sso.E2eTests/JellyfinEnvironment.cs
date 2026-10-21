@@ -375,6 +375,47 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
         return payload["AccessToken"]!.GetValue<string>();
     }
 
+    /// <summary>
+    /// The two libraries the demo needs beside the existing Kids one, each with a cover so
+    /// the home screen shows something other than a grey tile. Idempotent: a second call
+    /// returns the libraries the first one made.
+    /// </summary>
+    public async Task<(string Parents, string Kids, string Family)> AddDemoLibrariesAsync()
+    {
+        var existing = JsonNode.Parse(await _admin.GetStringAsync("/Library/VirtualFolders"))!.AsArray();
+
+        async Task<string> EnsureAsync(string name, string folder, string cover)
+        {
+            var found = existing.FirstOrDefault(f => f!["Name"]!.GetValue<string>() == name);
+            var id = found is not null
+                ? found["ItemId"]!.GetValue<string>()
+                : await CreateLibraryAsync(name, "movies", $"/media/{folder}");
+
+            await SetLibraryCoverAsync(id, cover);
+            return id;
+        }
+
+        return (
+            await EnsureAsync("Parents", "parents", "parents"),
+            await EnsureAsync("Kids", "kids", "kids"),
+            await EnsureAsync("Family", "family", "family"));
+    }
+
+    /// <summary>
+    /// Uploads one of the covers under tests/fixtures as a library's primary image.
+    /// Jellyfin takes the image base64-encoded, with the media type as the content type.
+    /// </summary>
+    private async Task SetLibraryCoverAsync(string libraryId, string cover)
+    {
+        var path = Path.Combine(RepoRoot(), "tests", "fixtures", "library-covers", $"{cover}.jpg");
+        var content = new StringContent(
+            Convert.ToBase64String(await File.ReadAllBytesAsync(path)));
+        content.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
+
+        var response = await _admin.PostAsync($"/Items/{libraryId}/Images/Primary", content);
+        response.EnsureSuccessStatusCode();
+    }
+
     private async Task<string> CreateLibraryAsync(string name, string collectionType, string path)
     {
         var url = $"/Library/VirtualFolders?name={Uri.EscapeDataString(name)}"
@@ -425,11 +466,15 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
         return target;
     }
 
-    /// <summary>Two library folders with a placeholder file each; no real media needed.</summary>
+    /// <summary>
+    /// A folder per library with a placeholder file each; no real media needed. `parents`
+    /// and `family` exist for the recorded demo, which shows two accounts seeing different
+    /// shelves — see <see cref="AddDemoLibrariesAsync"/>.
+    /// </summary>
     private static string CreateMediaTree(string repoRoot)
     {
         var root = Path.Combine(repoRoot, "tests", "runs", "e2e", "media");
-        foreach (var library in new[] { "movies", "kids" })
+        foreach (var library in new[] { "movies", "kids", "parents", "family" })
         {
             var dir = Path.Combine(root, library);
             Directory.CreateDirectory(dir);

@@ -34,6 +34,13 @@ internal interface IRealIdentityProvider : IAsyncDisposable
     RealIdentityUser AdminUser { get; }
 
     /// <summary>
+    /// A second ordinary user, in a different group. Only the recorded demo uses it: two
+    /// accounts signing in one after the other is what shows that the groups decide the
+    /// shelves, where one account only shows that a login works.
+    /// </summary>
+    RealIdentityUser KidUser { get; }
+
+    /// <summary>
     /// The address the browser should use for Jellyfin, when the provider is picky about
     /// the redirect URI. Null means the environment's own base URL is fine.
     /// </summary>

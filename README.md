@@ -42,12 +42,13 @@ OpenID Connect single sign-on for Jellyfin — for households already running
 
 <div align="center">
 
-<img src="docs/img/login-flow.gif" alt="A login: Jellyfin's login page, the button, Authentik's form, the home screen" width="720">
+<img src="docs/img/login-flow.gif" alt="Two logins: Jellyfin's login page, the button, Authentik's form, a home screen with Parents and Family — then a sign-out and a second account that sees Kids and Family instead" width="720">
 
 </div>
 
-Not a mock-up — a test run with a real Authentik in a container, recorded by `make demo`,
-which fails if any step of the login does not happen.
+Two accounts on one server: the first opens Parents and Family, the second Kids and
+Family. Not a mock-up — a test run against a real Authentik in a container, recorded by
+`make demo`, which fails if any step of either login does not happen.
 [Sharper](docs/img/login-flow.mp4) · the same login through
 **[Keycloak](docs/img/login-flow-keycloak.gif)** ([mp4](docs/img/login-flow-keycloak.mp4))
 and **[Authelia](docs/img/login-flow-authelia.gif)** ([mp4](docs/img/login-flow-authelia.mp4)).
