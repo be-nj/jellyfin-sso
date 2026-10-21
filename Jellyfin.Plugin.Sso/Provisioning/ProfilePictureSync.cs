@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Jellyfin.Database.Implementations.Entities;
+using Jellyfin.Plugin.Sso.Web;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Providers;
@@ -18,23 +19,13 @@ namespace Jellyfin.Plugin.Sso.Provisioning;
 /// Jellyfin itself serves. A picture that does not arrive is never worth failing a login
 /// over — every path here ends in "leave the account as it was".
 /// </summary>
-public sealed class ProfilePictureSync : IDisposable
+public sealed class ProfilePictureSync
 {
     /// <summary>An avatar. Anything larger is not what we came for.</summary>
     internal const int MaxBytes = 2 * 1024 * 1024;
 
-    /// <summary>What Jellyfin's own image pipeline reads, and nothing else.</summary>
-    private static readonly Dictionary<string, string> Extensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["image/jpeg"] = ".jpg",
-        ["image/jpg"] = ".jpg",
-        ["image/png"] = ".png",
-        ["image/gif"] = ".gif",
-        ["image/webp"] = ".webp",
-    };
-
     /// <summary>
-    /// What was last written for a user, as address plus the hash of the bytes. Kept in
+    /// The hash of what was last written for a user. Kept in
     /// memory rather than in the configuration file: the point is to skip the download on
     /// the second login, not to remember it across restarts, and the configuration is not
     /// a place to accumulate one entry per account.
@@ -44,41 +35,21 @@ public sealed class ProfilePictureSync : IDisposable
     private readonly IUserManager _userManager;
     private readonly IProviderManager _providerManager;
     private readonly IServerConfigurationManager _serverConfiguration;
+    private readonly RemoteImages _images;
     private readonly ILogger<ProfilePictureSync> _logger;
-    private readonly HttpClient _http;
 
     public ProfilePictureSync(
         IUserManager userManager,
         IProviderManager providerManager,
         IServerConfigurationManager serverConfiguration,
+        RemoteImages images,
         ILogger<ProfilePictureSync> logger)
-        : this(userManager, providerManager, serverConfiguration, logger, handler: null)
-    {
-    }
-
-    /// <summary>Takes a handler so the fetching rules can be tested without a server.</summary>
-    internal ProfilePictureSync(
-        IUserManager userManager,
-        IProviderManager providerManager,
-        IServerConfigurationManager serverConfiguration,
-        ILogger<ProfilePictureSync> logger,
-        HttpMessageHandler? handler)
     {
         _userManager = userManager;
         _providerManager = providerManager;
         _serverConfiguration = serverConfiguration;
+        _images = images;
         _logger = logger;
-        // Three redirects, not the fifty a default HttpClient follows: the address comes
-        // from a token, and a chain of redirects is the cheapest way to turn one allowed
-        // address into a walk around somebody's network.
-        handler ??= new SocketsHttpHandler
-        {
-            AllowAutoRedirect = true,
-            MaxAutomaticRedirections = 3,
-            ConnectTimeout = TimeSpan.FromSeconds(5),
-        };
-
-        _http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
     }
 
     /// <summary>
@@ -101,7 +72,7 @@ public sealed class ProfilePictureSync : IDisposable
             return;
         }
 
-        if (!Fetchable(pictureUrl, out var uri))
+        if (!RemoteImages.Fetchable(pictureUrl, out var uri))
         {
             return;
         }
@@ -127,29 +98,6 @@ public sealed class ProfilePictureSync : IDisposable
         }
     }
 
-    /// <summary>
-    /// Only absolute http(s) addresses are fetched. A `file://` or `data:` picture claim
-    /// would otherwise have the server read its own disk on behalf of whoever can set
-    /// that claim.
-    /// </summary>
-    internal static bool Fetchable(string? pictureUrl, out Uri uri)
-    {
-        uri = null!;
-        if (string.IsNullOrWhiteSpace(pictureUrl)
-            || !Uri.TryCreate(pictureUrl, UriKind.Absolute, out var parsed))
-        {
-            return false;
-        }
-
-        if (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps)
-        {
-            return false;
-        }
-
-        uri = parsed;
-        return true;
-    }
-
     private async Task ApplyAsync(Guid userId, Uri uri, CancellationToken ct)
     {
         var user = _userManager.GetUserById(userId);
@@ -158,35 +106,20 @@ public sealed class ProfilePictureSync : IDisposable
             return;
         }
 
-        // Headers first, body after the headers have been judged. Reading the response
-        // whole — the default — means a host that answers with an endless chunked body
-        // is buffered in full before anything looks at its size, and a chunked response
-        // carries no Content-Length for the cap to read anyway.
-        using var response = await _http
-            .GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ct)
-            .ConfigureAwait(false);
-        var mediaType = response.Content.Headers.ContentType?.MediaType;
-
-        if (!response.IsSuccessStatusCode
-            || mediaType is null
-            || !Extensions.TryGetValue(mediaType, out var extension)
-            || response.Content.Headers.ContentLength > MaxBytes)
-        {
-            _logger.LogDebug(
-                "SSO: the picture at {Url} is not one this plugin will use ({Status}, {Type}).",
-                uri, (int)response.StatusCode, mediaType ?? "no content type");
-            return;
-        }
-
-        var bytes = await ReadCappedAsync(response, ct).ConfigureAwait(false);
-        if (bytes is null || bytes.Length == 0)
+        var picture = await _images.GetAsync(uri, MaxBytes, ct).ConfigureAwait(false);
+        if (picture is null)
         {
             return;
         }
 
-        // Providers hand out the same picture at the same address on every login. Writing
-        // it again would churn the image cache and the tag the clients use for it.
-        var stamp = $"{uri}|{Convert.ToHexString(SHA256.HashData(bytes))}";
+        var bytes = picture.Bytes;
+        var extension = RemoteImages.ExtensionFor(picture.ContentType)!;
+
+        // Providers hand out the same picture on every login. Writing it again would
+        // churn the image cache and the tag the clients hold. The bytes decide that, not
+        // the address: a provider that moves its avatars to a new host has not changed
+        // anybody's picture.
+        var stamp = Convert.ToHexString(SHA256.HashData(bytes));
         lock (_applied)
         {
             if (_applied.TryGetValue(userId, out var last)
@@ -204,7 +137,7 @@ public sealed class ProfilePictureSync : IDisposable
         // then fails — and the write is the step most likely to.
         using (var source = new MemoryStream(bytes))
         {
-            await _providerManager.SaveImage(source, mediaType, path).ConfigureAwait(false);
+            await _providerManager.SaveImage(source, picture.ContentType, path).ConfigureAwait(false);
         }
 
         if (user.ProfileImage is not null && user.ProfileImage.Path != path)
@@ -223,31 +156,6 @@ public sealed class ProfilePictureSync : IDisposable
         _logger.LogInformation(
             "SSO: profile picture for user {Id} taken from the provider ({Bytes} bytes).",
             userId, bytes.Length);
-    }
-
-    /// <summary>
-    /// The body, or null when it turns out to be larger than an avatar has any business
-    /// being. Counted while it is read, because what a response says about its length —
-    /// or declines to say — is the sender's choice.
-    /// </summary>
-    private static async Task<byte[]?> ReadCappedAsync(HttpResponseMessage response, CancellationToken ct)
-    {
-        await using var body = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-        using var buffer = new MemoryStream();
-
-        var chunk = new byte[64 * 1024];
-        int read;
-        while ((read = await body.ReadAsync(chunk, ct).ConfigureAwait(false)) > 0)
-        {
-            if (buffer.Length + read > MaxBytes)
-            {
-                return null;
-            }
-
-            buffer.Write(chunk, 0, read);
-        }
-
-        return buffer.ToArray();
     }
 
     /// <summary>
@@ -280,6 +188,4 @@ public sealed class ProfilePictureSync : IDisposable
         var candidate = Path.GetFullPath(Path.Join(root, name, file));
         return candidate.StartsWith(inside, StringComparison.Ordinal) ? candidate : own;
     }
-
-    public void Dispose() => _http.Dispose();
 }

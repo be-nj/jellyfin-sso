@@ -90,8 +90,9 @@ somebody chose in Jellyfin — so turn it on only where the provider is where th
 keeps its photos. Users in the exclusion list keep their own picture either way.
 
 The address comes out of the token, which means the server fetches whatever it points at.
-Only absolute `http`/`https` addresses are fetched, at most 2 MB, and only JPEG, PNG, GIF
-and WebP; anything else is logged and ignored. A picture that does not arrive never fails
+Only absolute `http`/`https` addresses are fetched, three redirects at most, 2 MB at most,
+and only JPEG, PNG, GIF and WebP; anything else — an SVG, an HTML error page, a body that
+keeps coming — is logged and ignored. A picture that does not arrive never fails
 a login. The same picture is fetched again at the next login — the provider is the one who
 knows whether it changed — but only written when its bytes differ, so the clients' image
 tags stay put.

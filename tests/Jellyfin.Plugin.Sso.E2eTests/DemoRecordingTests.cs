@@ -118,7 +118,11 @@ public sealed class DemoRecordingTests : IAsyncLifetime
         // And again as somebody else, to the same server and a different shelf.
         await StartTheLoginAsync(page);
         await SignInForTheRecordingAsync(page, _idp.KidUser);
-        await Beat(page, 2_400);
+
+        // The clip ends here, and this is the frame it exists for: a different person, a
+        // different shelf, same server. Long enough to read, and the GIF runs faster than
+        // the recording, so it is shorter than it looks.
+        await Beat(page, 6_000);
 
         var kidPolicy = await _env.UserPolicyAsync(_idp.KidUser.Username);
         Assert.Equal(2, kidPolicy["EnabledFolders"]!.AsArray().Count);

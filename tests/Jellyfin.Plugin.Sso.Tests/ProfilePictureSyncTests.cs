@@ -1,6 +1,7 @@
 using System.Net;
 using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Plugin.Sso.Provisioning;
+using Jellyfin.Plugin.Sso.Web;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Library;
@@ -44,7 +45,11 @@ public sealed class ProfilePictureSyncTests : IDisposable
         var serverConfiguration = Substitute.For<IServerConfigurationManager>();
         serverConfiguration.ApplicationPaths.Returns(paths);
 
-        return new ProfilePictureSync(_userManager, _providerManager, serverConfiguration, _log, _handler);
+        var images = new RemoteImages(
+            new RecordingLogger<RemoteImages>(), _handler, TimeSpan.FromSeconds(5));
+
+        return new ProfilePictureSync(
+            _userManager, _providerManager, serverConfiguration, images, _log);
     }
 
     private Task<int> SavedImages()
@@ -52,19 +57,6 @@ public sealed class ProfilePictureSyncTests : IDisposable
             .Count(c => c.GetMethodInfo().Name == nameof(IProviderManager.SaveImage)));
 
     // ─── What it will fetch at all ────────────────────────────────────────────
-
-    [Theory]
-    [InlineData("https://idp.example.com/avatar.png", true)]
-    [InlineData("http://idp.example.com/avatar.png", true)]
-    // A picture claim is a string somebody else chose. These would have the server read
-    // its own disk, or its own metadata service, on their behalf.
-    [InlineData("file:///etc/shadow", false)]
-    [InlineData("data:image/png;base64,iVBORw0KGgo=", false)]
-    [InlineData("/avatars/ben.png", false)]
-    [InlineData("", false)]
-    [InlineData(null, false)]
-    public void Only_an_absolute_http_address_is_fetched(string? url, bool expected)
-        => Assert.Equal(expected, ProfilePictureSync.Fetchable(url, out _));
 
     [Fact]
     public async Task Nothing_happens_while_the_setting_is_off()
@@ -89,8 +81,6 @@ public sealed class ProfilePictureSyncTests : IDisposable
         Assert.Equal(0, _handler.Requests);
     }
 
-    // ─── What comes back ──────────────────────────────────────────────────────
-
     [Fact]
     public async Task A_picture_the_provider_serves_becomes_the_profile_picture()
     {
@@ -104,50 +94,6 @@ public sealed class ProfilePictureSyncTests : IDisposable
         Assert.EndsWith("profile.png", user.ProfileImage!.Path, StringComparison.Ordinal);
         Assert.Contains("ben", user.ProfileImage.Path, StringComparison.Ordinal);
         await _userManager.Received(1).UpdateUserAsync(user);
-    }
-
-    [Theory]
-    [InlineData("text/html")]
-    [InlineData("image/svg+xml")]
-    [InlineData("application/octet-stream")]
-    public async Task Anything_that_is_not_an_image_Jellyfin_reads_is_left_alone(string type)
-    {
-        _handler.Respond(HttpStatusCode.OK, type, Png);
-
-        await Sync().SyncAsync(_userId, "https://idp.example.com/avatar");
-
-        Assert.Equal(0, await SavedImages());
-    }
-
-    [Fact]
-    public async Task A_picture_too_large_to_be_an_avatar_is_left_alone()
-    {
-        _handler.Respond(HttpStatusCode.OK, "image/png", new byte[ProfilePictureSync.MaxBytes + 1]);
-
-        await Sync().SyncAsync(_userId, "https://idp.example.com/huge.png");
-
-        Assert.Equal(0, await SavedImages());
-    }
-
-    [Fact]
-    public async Task A_body_that_never_says_how_long_it_is_is_still_capped()
-    {
-        // The cap used to be read off Content-Length, which a chunked response does not
-        // send — and the body was buffered whole before anything looked at it.
-        _handler.RespondChunked("image/png", ProfilePictureSync.MaxBytes * 8);
-
-        await Sync().SyncAsync(_userId, "https://idp.example.com/endless.png");
-
-        Assert.Equal(0, await SavedImages());
-
-        // The point is not only that it was refused: it must be refused part-way, rather
-        // than after the whole thing has been pulled into memory. The exact figure is the
-        // test double's business — HTTP machinery reads ahead — so this asks for a
-        // fraction of the body, not for the cap to the byte.
-        Assert.True(
-            _handler.BytesDelivered < ProfilePictureSync.MaxBytes * 4,
-            $"Read {_handler.BytesDelivered} bytes of a {ProfilePictureSync.MaxBytes * 8} "
-            + "byte body before giving up.");
     }
 
     [Fact]
@@ -196,10 +142,12 @@ public sealed class ProfilePictureSyncTests : IDisposable
     {
         _handler.Throw(new HttpRequestException("no route to host"));
 
+        // No throw, nothing written, and the account keeps whatever it had. What the
+        // fetch itself refuses is RemoteImagesTests' business.
         await Sync().SyncAsync(_userId, "https://idp.example.com/avatar.png");
 
         Assert.Equal(0, await SavedImages());
-        Assert.Contains(_log.Warnings, w => w.Contains("profile picture", StringComparison.Ordinal));
+        Assert.Null(_userManager.GetUserById(_userId)!.ProfileImage);
     }
 
     // ─── Doing it twice ───────────────────────────────────────────────────────

@@ -75,6 +75,13 @@ UI: a table where each row maps one group (free-text + autocomplete from **Seen 
 to a multiselect of libraries (referenced by stable GUID, shown by friendly name) plus an
 admin toggle.
 
+**Remote Images** (1.12.15):
+The single place the plugin fetches a picture from an address it did not choose — the
+provider's logo for the login button, and the profile picture from a claim. The rules for
+doing that safely live there once: `http(s)` only, three redirects, an allow-list of image
+types, a byte count kept while reading, a short timeout, and no exception but the caller's
+own cancellation. Both callers had their own copy before, and the copies had drifted.
+
 **Profile Picture Sync** (1.12.14, off by default):
 The `picture` claim — configurable per provider, a dotted path like the groups claim —
 is fetched after the permission sync and written through Jellyfin's own image pipeline.

@@ -446,24 +446,28 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
     }
 
     /// <summary>
-    /// Gives a library the poster of the film in it. Jellyfin leaves a library tile as a
-    /// grey film strip until somebody picks a picture, and a shelf called Parents means
-    /// more with Die Hard on it.
+    /// Gives a library a picture from the film inside it. A library tile is a wide
+    /// rectangle and a film poster is a tall one, so the poster arrives cropped through
+    /// the middle — Toy Story becomes a patch of sky. The film's backdrop is already the
+    /// right shape; the poster is the fallback for a film that has none.
     /// </summary>
     private async Task UseFilmPosterAsLibraryCoverAsync(string libraryId)
     {
         var items = JsonNode.Parse(await _admin.GetStringAsync(
-            $"/Items?parentId={libraryId}&recursive=true&includeItemTypes=Movie"))!;
+            $"/Items?parentId={libraryId}&recursive=true&includeItemTypes=Movie&fields=BackdropImageTags"))!;
         var film = items["Items"]!.AsArray().FirstOrDefault();
         if (film is null)
         {
             return;
         }
 
-        var poster = await _admin.GetByteArrayAsync(
-            $"/Items/{film["Id"]!.GetValue<string>()}/Images/Primary");
+        var id = film["Id"]!.GetValue<string>();
+        var hasBackdrop = film["BackdropImageTags"]?.AsArray().Count > 0;
 
-        var content = new StringContent(Convert.ToBase64String(poster));
+        var picture = await _admin.GetByteArrayAsync(
+            hasBackdrop ? $"/Items/{id}/Images/Backdrop/0" : $"/Items/{id}/Images/Primary");
+
+        var content = new StringContent(Convert.ToBase64String(picture));
         content.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
         var response = await _admin.PostAsync($"/Items/{libraryId}/Images/Primary", content);
         response.EnsureSuccessStatusCode();
