@@ -66,6 +66,25 @@ nothing else, which `scripts/changed-code.sh` decides. The jobs still run and st
 report; they skip their own expensive steps. Anything that cannot be read as a change —
 a force push, a new branch, a filter that fell over — counts as code and runs everything.
 
+Every one of those runs pins its containers — the Jellyfin tag follows the pinned
+`Jellyfin.Controller`, and the three providers are pinned next to the `TestImages.Resolve`
+calls that name them. That is on purpose: a provider shipping a breaking release on a
+Tuesday must not turn that week's pull requests into a mystery. The price is that the
+suite only proves the plugin worked with the versions it was written against.
+
+So the pins are lifted once a week. The `Upstream` workflow runs the same tests against
+the newest Jellyfin image and the newest Authentik, Keycloak and Authelia, on Monday at
+05:00 UTC and on demand, and nothing in it is a required check. A failure opens an issue —
+or comments on the one already open — with a link to the run, whose job summary lists the
+digest of every image it pulled, because "the latest Keycloak broke it" is only useful
+with the bytes named. The issue is not closed automatically: it is closed by whoever
+established what changed, the same as any other finding here. The same thing locally:
+
+```bash
+E2E_KEYCLOAK_IMAGE=quay.io/keycloak/keycloak:latest \
+  make e2e E2E_FILTER='--filter "Category=RealIdp"'
+```
+
 ### Cutting a release
 
 ```bash
