@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using System.Text.Json.Nodes;
 using Microsoft.Playwright;
 
@@ -73,39 +74,60 @@ public sealed class DemoRecordingTests : IAsyncLifetime
 
         Directory.CreateDirectory(_profile);
 
-        await _env.PatchConfigAsync(config => config["Providers"] = new JsonArray
+        var (parents, kids, family) = await _env.AddDemoLibrariesAsync();
+
+        await _env.PatchConfigAsync(config =>
         {
-            new JsonObject
+            config["Providers"] = new JsonArray
             {
-                ["Id"] = ProviderId,
-                ["Name"] = _idp.Name,
-                ["Enabled"] = true,
-                ["Authority"] = _idp.Authority,
-                ["ClientId"] = _idp.ClientId,
-                ["Scopes"] = new JsonArray(_idp.Scopes.Select(s => (JsonNode)s!).ToArray()),
-                ["GroupsClaim"] = _idp.GroupsClaim,
-                ["GroupsFromUserInfo"] = _idp.GroupsFromUserInfo,
-            },
+                new JsonObject
+                {
+                    ["Id"] = ProviderId,
+                    ["Name"] = _idp.Name,
+                    ["Enabled"] = true,
+                    ["Authority"] = _idp.Authority,
+                    ["ClientId"] = _idp.ClientId,
+                    ["Scopes"] = new JsonArray(_idp.Scopes.Select(s => (JsonNode)s!).ToArray()),
+                    ["GroupsClaim"] = _idp.GroupsClaim,
+                    ["GroupsFromUserInfo"] = _idp.GroupsFromUserInfo,
+                },
+            };
+
+            // Jellyfin's own logout drops its token and leaves the provider's session
+            // alone, so the second login would walk straight back in as the first user.
+            // This is the setting that ends both, and the clip is the demonstration.
+                // The point of the clip: one group opens Parents and Family, the other Kids
+            // and Family, and the same server looks different to each of them.
+            config["GroupMappings"] = new JsonArray
+            {
+                Mapping(_idp.MemberUser.Groups[0], parents, family),
+                Mapping(_idp.KidUser.Groups[0], kids, family),
+            };
         });
 
         var run = await WalkToTheProviderAsync();
         var page = run.Page;
 
-        await _idp.SignInForTheRecordingAsync(page, _idp.MemberUser);
-
-        // Back in the web client, signed in: the libraries of the user's group are there.
-        await page.WaitForURLAsync(
-            url => url.StartsWith(ServerBaseUrl(), StringComparison.Ordinal)
-                && !url.Contains("login.html", StringComparison.Ordinal),
-            new PageWaitForURLOptions { Timeout = 60_000 });
-        await page.WaitForSelectorAsync(
-            ".homeSectionsContainer, .itemsContainer, .sectionTitle",
-            new PageWaitForSelectorOptions { Timeout = 60_000 });
-        await Beat(page, 3_000);
+        await SignInForTheRecordingAsync(page, _idp.MemberUser);
+        await Beat(page, 2_400);
 
         // The session is real, not a screen that merely looks signed in.
-        var policy = await _env.UserPolicyAsync(_idp.MemberUser.Username);
-        Assert.False(policy["IsAdministrator"]!.GetValue<bool>());
+        var parentPolicy = await _env.UserPolicyAsync(_idp.MemberUser.Username);
+        Assert.False(parentPolicy["IsAdministrator"]!.GetValue<bool>());
+        Assert.Equal(2, parentPolicy["EnabledFolders"]!.AsArray().Count);
+
+        await SignOutForTheRecordingAsync(run);
+
+        // And again as somebody else, to the same server and a different shelf.
+        await StartTheLoginAsync(page);
+        await SignInForTheRecordingAsync(page, _idp.KidUser);
+        await Beat(page, 2_400);
+
+        var kidPolicy = await _env.UserPolicyAsync(_idp.KidUser.Username);
+        Assert.Equal(2, kidPolicy["EnabledFolders"]!.AsArray().Count);
+        Assert.NotEqual(
+            parentPolicy["EnabledFolders"]!.ToJsonString(),
+            kidPolicy["EnabledFolders"]!.ToJsonString());
 
         // The recording is written when the context closes, and a persistent context takes
         // the browser down with it — so ask for the file's name first and copy it after,
@@ -122,6 +144,97 @@ public sealed class DemoRecordingTests : IAsyncLifetime
             run.FormAfter < TimeSpan.FromSeconds(15),
             $"The provider's login form took {run.FormAfter.TotalSeconds:F1}s to appear, "
             + "which is too slow to watch.");
+    }
+
+    private static JsonNode Mapping(string group, params string[] libraries) => new JsonObject
+    {
+        ["Group"] = group,
+        ["LibraryIds"] = new JsonArray(libraries.Select(id => (JsonNode)id!).ToArray()),
+        ["IsAdministrator"] = false,
+    };
+
+    /// <summary>
+    /// This provider's own form, then the wait for the web client to come back signed in.
+    /// </summary>
+    private async Task SignInForTheRecordingAsync(IPage page, RealIdentityUser user)
+    {
+        await _idp.SignInForTheRecordingAsync(page, user);
+
+        await page.WaitForURLAsync(
+            url => url.StartsWith(ServerBaseUrl(), StringComparison.Ordinal)
+                && !url.Contains("/login", StringComparison.Ordinal),
+            new PageWaitForURLOptions { Timeout = 60_000 });
+        await page.WaitForSelectorAsync(
+            ".homeSectionsContainer, .itemsContainer, .sectionTitle",
+            new PageWaitForSelectorOptions { Timeout = 60_000 });
+    }
+
+    /// <summary>
+    /// Signs out the way a viewer would: the menu at the top left, then Sign Out in the
+    /// drawer. Jellyfin's own route, so the clip shows the plugin inside the web client
+    /// rather than a URL somebody had to know.
+    ///
+    /// Both selectors ask for the visible one. jellyfin-web keeps the login page's own
+    /// header and drawer in the document after the login, measuring nothing, and they come
+    /// first — clicking those waits for something that will never be clickable.
+    /// </summary>
+    private async Task SignOutForTheRecordingAsync(Walk run)
+    {
+        var page = run.Page;
+        await Beat(page, 600);
+        await page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "User Menu" })
+            .ClickAsync();
+        await Beat(page, 900);
+
+        var signOut = page.Locator("[role=menu] [role=menuitem], .MuiMenuItem-root").Filter(
+            new LocatorFilterOptions { HasTextRegex = SignOutText() });
+        if (await signOut.CountAsync() == 0)
+        {
+            var items = await page.Locator("[role=menu] [role=menuitem], .MuiMenuItem-root")
+                .AllInnerTextsAsync();
+            Assert.Fail($"No sign-out entry in the user menu. Entries: {string.Join(" | ", items)}");
+        }
+
+        await signOut.First.ClickAsync();
+
+        // Jellyfin 12 routes to #/login; older clients used #/login.html.
+        await page.WaitForURLAsync(
+            url => url.Contains("/login", StringComparison.Ordinal),
+            new PageWaitForURLOptions { Timeout = 30_000 });
+        await Beat(page, 700);
+
+        // Jellyfin has forgotten this session. The provider has not: without an
+        // id_token_hint it asks rather than acts, so the next login would walk straight
+        // back in as the same person (issue #84). The clip shows the next person at their
+        // own browser, which is what the cookies are cleared for — and what two people in
+        // a household actually are.
+        await run.Context.ClearCookiesAsync();
+        await Beat(page, 600);
+    }
+
+    /// <summary>
+    /// What the entry is called. Jellyfin 12's web client is a React application and its
+    /// wording has moved before; matching both spellings costs nothing.
+    /// </summary>
+    private static Regex SignOutText() => new("sign ?out|log ?out", RegexOptions.IgnoreCase);
+
+    /// <summary>The plugin's button on the login page, and the wait for the provider.</summary>
+    private async Task StartTheLoginAsync(IPage page)
+    {
+        var button = page.Locator("button.sso-login-button");
+        await button.WaitForAsync(new LocatorWaitForOptions
+        {
+            State = WaitForSelectorState.Visible,
+            Timeout = 30_000,
+        });
+        await Beat(page, 900);
+        await button.ClickAsync();
+
+        await page.Locator(_idp.LoginFormSelector).WaitForAsync(new LocatorWaitForOptions
+        {
+            State = WaitForSelectorState.Visible,
+            Timeout = 60_000,
+        });
     }
 
     private Task<IRealIdentityProvider> StartAsync(string provider) => provider switch
@@ -208,7 +321,7 @@ public sealed class DemoRecordingTests : IAsyncLifetime
             null,
             new PageWaitForFunctionOptions { Timeout = 30_000 });
 
-        await Beat(page, 2_500);
+        await Beat(page, 1_600);
 
         // One action, one click. Hovering the button first reads better on a live screen,
         // but the recording decorates every pointer action with a ring, so a hover and a

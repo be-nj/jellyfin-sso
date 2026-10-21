@@ -51,6 +51,8 @@ internal sealed class AutheliaProvider : IRealIdentityProvider
 
     public RealIdentityUser AdminUser { get; } = new("authelia-admin", ["jellyfin-admins"]);
 
+    public RealIdentityUser KidUser { get; } = new("authelia-kid", ["kids"]);
+
     public static async Task<AutheliaProvider> StartAsync(
         TestCertificate certificate, string workDirectory, string serverBaseUrl, string providerId)
     {
@@ -93,15 +95,15 @@ internal sealed class AutheliaProvider : IRealIdentityProvider
     /// <summary>One form with both fields, typed rather than filled.</summary>
     public async Task SignInForTheRecordingAsync(IPage page, RealIdentityUser user)
     {
-        await page.WaitForTimeoutAsync(1_200);
+        await page.WaitForTimeoutAsync(800);
         await page.Locator("#username-textfield").PressSequentiallyAsync(
-            user.Username, new LocatorPressSequentiallyOptions { Delay = 90 });
-        await page.WaitForTimeoutAsync(400);
+            user.Username, new LocatorPressSequentiallyOptions { Delay = 55 });
+        await page.WaitForTimeoutAsync(300);
 
         // The password belongs to a container that is thrown away with the test run.
         await page.Locator("#password-textfield").PressSequentiallyAsync(
-            Password, new LocatorPressSequentiallyOptions { Delay = 70 });
-        await page.WaitForTimeoutAsync(500);
+            Password, new LocatorPressSequentiallyOptions { Delay = 45 });
+        await page.WaitForTimeoutAsync(350);
         await page.ClickAsync("#sign-in-button");
     }
 
@@ -150,6 +152,13 @@ internal sealed class AutheliaProvider : IRealIdentityProvider
             email: 'admin@example.com'
             groups:
               - 'jellyfin-admins'
+          authelia-kid:
+            disabled: false
+            displayname: 'Authelia Kid'
+            password: '{passwordHash}'
+            email: 'kid@example.com'
+            groups:
+              - 'kids'
         """;
 
     private static string ConfigurationYaml(string authority, string redirectUri, string signingKeyPem)

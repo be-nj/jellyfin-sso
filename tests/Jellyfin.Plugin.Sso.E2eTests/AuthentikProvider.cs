@@ -64,6 +64,8 @@ internal sealed class AuthentikProvider : IRealIdentityProvider
 
     public RealIdentityUser AdminUser { get; } = new("authentik-admin", ["jellyfin-admins"]);
 
+    public RealIdentityUser KidUser { get; } = new("authentik-kid", ["kids"]);
+
     public static async Task<AuthentikProvider> StartAsync(
         TestCertificate certificate, string workDirectory, string redirectUri)
     {
@@ -171,10 +173,10 @@ internal sealed class AuthentikProvider : IRealIdentityProvider
     public async Task SignInForTheRecordingAsync(IPage page, RealIdentityUser user)
     {
         var username = page.Locator("input[name='uidField']");
-        await page.WaitForTimeoutAsync(1_200);
+        await page.WaitForTimeoutAsync(800);
         await username.PressSequentiallyAsync(
-            user.Username, new LocatorPressSequentiallyOptions { Delay = 90 });
-        await page.WaitForTimeoutAsync(500);
+            user.Username, new LocatorPressSequentiallyOptions { Delay = 55 });
+        await page.WaitForTimeoutAsync(350);
         await page.ClickAsync("button[type='submit']");
 
         await username.WaitForAsync(new LocatorWaitForOptions
@@ -194,8 +196,8 @@ internal sealed class AuthentikProvider : IRealIdentityProvider
         // The field masks it, and it belongs to a container that is thrown away with the
         // test run — so the recording can show it being typed like any other password.
         await password.PressSequentiallyAsync(
-            Password, new LocatorPressSequentiallyOptions { Delay = 70 });
-        await page.WaitForTimeoutAsync(400);
+            Password, new LocatorPressSequentiallyOptions { Delay = 45 });
+        await page.WaitForTimeoutAsync(300);
         await page.ClickAsync("button[type='submit']");
     }
 
@@ -256,12 +258,12 @@ internal sealed class AuthentikProvider : IRealIdentityProvider
         await WaitUntilReadyAsync(api);
 
         var groups = new Dictionary<string, string>();
-        foreach (var group in new[] { "media", "jellyfin-admins" })
+        foreach (var group in new[] { "media", "jellyfin-admins", "kids" })
         {
             groups[group] = await PostAsync(api, "core/groups/", new JsonObject { ["name"] = group });
         }
 
-        foreach (var user in new[] { MemberUser, AdminUser })
+        foreach (var user in new[] { MemberUser, AdminUser, KidUser })
         {
             var userPk = await PostAsync(api, "core/users/", new JsonObject
             {

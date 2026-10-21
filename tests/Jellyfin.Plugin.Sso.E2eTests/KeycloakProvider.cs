@@ -46,6 +46,8 @@ internal sealed class KeycloakProvider : IRealIdentityProvider
 
     public RealIdentityUser AdminUser { get; } = new("kc-admin", ["jellyfin-admins"]);
 
+    public RealIdentityUser KidUser { get; } = new("kc-kid", ["kids"]);
+
     public static async Task<KeycloakProvider> StartAsync(TestCertificate certificate, string workDirectory)
     {
         var port = TestCertificate.FreePort();
@@ -89,15 +91,15 @@ internal sealed class KeycloakProvider : IRealIdentityProvider
     /// <summary>One form with both fields, typed rather than filled.</summary>
     public async Task SignInForTheRecordingAsync(IPage page, RealIdentityUser user)
     {
-        await page.WaitForTimeoutAsync(1_200);
+        await page.WaitForTimeoutAsync(800);
         await page.Locator("#username").PressSequentiallyAsync(
-            user.Username, new LocatorPressSequentiallyOptions { Delay = 90 });
-        await page.WaitForTimeoutAsync(400);
+            user.Username, new LocatorPressSequentiallyOptions { Delay = 55 });
+        await page.WaitForTimeoutAsync(300);
 
         // The password belongs to a container that is thrown away with the test run.
         await page.Locator("#password").PressSequentiallyAsync(
-            Password, new LocatorPressSequentiallyOptions { Delay = 70 });
-        await page.WaitForTimeoutAsync(500);
+            Password, new LocatorPressSequentiallyOptions { Delay = 45 });
+        await page.WaitForTimeoutAsync(350);
         await page.ClickAsync("#kc-login");
     }
 
@@ -117,6 +119,7 @@ internal sealed class KeycloakProvider : IRealIdentityProvider
         {
             new JsonObject { ["name"] = "media" },
             new JsonObject { ["name"] = "jellyfin-admins" },
+            new JsonObject { ["name"] = "kids" },
         },
         ["clients"] = new JsonArray
         {
@@ -158,6 +161,7 @@ internal sealed class KeycloakProvider : IRealIdentityProvider
         {
             User("kc-member", "media"),
             User("kc-admin", "jellyfin-admins"),
+            User("kc-kid", "kids"),
         },
     };
 
