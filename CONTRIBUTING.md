@@ -45,7 +45,7 @@ and that the plugin copes with providers nobody here controls. These tests carry
 make e2e E2E_FILTER='--filter "Category=RealIdp"'
 ```
 
-Both found real bugs the fake provider could not: Keycloak rejects an unknown `groups`
+Both found real bugs the scripted provider could not: Keycloak rejects an unknown `groups`
 scope, and Authelia keeps the profile claims out of the ID token, which used to leave the
 new Jellyfin user named after the opaque subject.
 
