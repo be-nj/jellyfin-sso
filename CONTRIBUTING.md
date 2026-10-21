@@ -60,7 +60,11 @@ failed browser runs land in `tests/runs/playwright/`.
 `make e2e` runs inside the .NET SDK image (no local SDK needed) and talks to the host's
 Docker daemon; it needs Docker and about 1 GB for the Jellyfin image.
 
-Both suites run on every push and pull request, and again before a release is published.
+Both suites run on every push and pull request, and again before a release is published —
+except when a change is Markdown, something under `docs/`, or `scripts/demo-clip.sh` and
+nothing else, which `scripts/changed-code.sh` decides. The jobs still run and still
+report; they skip their own expensive steps. Anything that cannot be read as a change —
+a force push, a new branch, a filter that fell over — counts as code and runs everything.
 
 ### Cutting a release
 

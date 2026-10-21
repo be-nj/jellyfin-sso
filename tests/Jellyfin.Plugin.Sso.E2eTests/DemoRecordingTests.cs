@@ -93,10 +93,7 @@ public sealed class DemoRecordingTests : IAsyncLifetime
                 },
             };
 
-            // Jellyfin's own logout drops its token and leaves the provider's session
-            // alone, so the second login would walk straight back in as the first user.
-            // This is the setting that ends both, and the clip is the demonstration.
-                // The point of the clip: one group opens Parents and Family, the other Kids
+            // The point of the clip: one group opens Parents and Family, the other Kids
             // and Family, and the same server looks different to each of them.
             config["GroupMappings"] = new JsonArray
             {
@@ -170,13 +167,14 @@ public sealed class DemoRecordingTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Signs out the way a viewer would: the menu at the top left, then Sign Out in the
-    /// drawer. Jellyfin's own route, so the clip shows the plugin inside the web client
-    /// rather than a URL somebody had to know.
+    /// Signs out the way a viewer would: the avatar at the top right, then Sign Out.
+    /// Jellyfin's own route, so the clip shows the plugin inside the web client rather
+    /// than a URL somebody had to know.
     ///
-    /// Both selectors ask for the visible one. jellyfin-web keeps the login page's own
-    /// header and drawer in the document after the login, measuring nothing, and they come
-    /// first — clicking those waits for something that will never be clickable.
+    /// By accessible name, not by class. Jellyfin 12's web client is a React application
+    /// whose top bar is built from Material components, and the previous client's
+    /// `.skinHeader` and `.mainDrawerButton` are still in the document at zero size —
+    /// which is what every class-based selector found first.
     /// </summary>
     private async Task SignOutForTheRecordingAsync(Walk run)
     {

@@ -47,9 +47,22 @@ public sealed class ClaimsExtractor
         // carried no name at all.
         var nameMissing = string.Equals(preferredUsername, sub, StringComparison.Ordinal);
         var pictureMissing = wantsPicture && picture is null;
-        if (provider.GroupsFromUserInfo || nameMissing || pictureMissing)
+
+        // Groups and a name are worth failing a login over — without them the account is
+        // wrong. A picture is not: a provider whose userinfo endpoint is absent or broken
+        // signed people in before this feature existed and has to keep doing so.
+        var required = provider.GroupsFromUserInfo || nameMissing;
+        if (required || pictureMissing)
         {
-            var userInfo = await _factory.GetUserInfoAsync(disco, accessToken, ct).ConfigureAwait(false);
+            UserInfoResponse userInfo;
+            try
+            {
+                userInfo = await _factory.GetUserInfoAsync(disco, accessToken, ct).ConfigureAwait(false);
+            }
+            catch (Exception) when (!required)
+            {
+                return new OidcIdentity(sub, preferredUsername, groups, picture);
+            }
 
             if (provider.GroupsFromUserInfo)
             {
@@ -182,8 +195,12 @@ public sealed class ClaimsExtractor
             using var document = JsonDocument.Parse(text);
             return GroupsAtPath(document.RootElement, path);
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException
+            or ArgumentException)
         {
+            // Not JSON, or text that cannot even be turned into UTF-8 — a lone surrogate
+            // throws InvalidOperationException rather than JsonException. Either way the
+            // claim grants nothing, which is what a claim nobody can read should do.
             return [];
         }
     }

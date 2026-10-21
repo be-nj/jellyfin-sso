@@ -7,7 +7,12 @@
 # turns a recording into the clips in docs/img — `make demo` produces those by hand and
 # no CI job runs it. Everything else counts as code: the manifest, the other scripts, the
 # workflows themselves, because each of them has broken a build here before.
-set -euo pipefail
+set -uo pipefail
+
+# Every way out of this script that is not a deliberate decision prints code=true. The
+# tests running when they need not is a wasted ten minutes; the tests not running when
+# they should is a release nobody checked.
+trap 'echo "code=true"' ERR
 
 base="${1:-}"
 
@@ -19,7 +24,12 @@ if [[ -z "$base" || "$base" == 0000000000000000000000000000000000000000 ]] \
   exit 0
 fi
 
-files=$(git diff --name-only "$base" HEAD)
+# What this change touched, not what the base branch has done since. Diffing against a
+# pull request's base tip shows commits that landed on main after the branch started —
+# as reversals — and one of those is enough to call a documentation change code.
+merge_base=$(git merge-base "$base" HEAD 2>/dev/null || echo "$base")
+
+files=$(git diff --name-only "$merge_base" HEAD)
 
 if [[ -z "$files" ]]; then
   echo "code=false"

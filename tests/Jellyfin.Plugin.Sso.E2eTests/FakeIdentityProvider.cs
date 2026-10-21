@@ -104,6 +104,12 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
     public int AvatarsServed { get; private set; }
 
     /// <summary>
+    /// When true the userinfo endpoint answers with a server error, the way a provider
+    /// that has one in its discovery document but cannot serve it does.
+    /// </summary>
+    public bool UserInfoFails { get; set; }
+
+    /// <summary>
     /// When set, the next authorize call reports this OAuth error instead of issuing a
     /// code — what a provider does when the user cancels or the client is misconfigured.
     /// </summary>
@@ -251,6 +257,11 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
 
         app.MapGet("/userinfo", (HttpRequest request) =>
         {
+            if (UserInfoFails)
+            {
+                return Results.StatusCode(StatusCodes.Status500InternalServerError);
+            }
+
             var header = request.Headers.Authorization.ToString();
             var token = header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
                 ? header["Bearer ".Length..]

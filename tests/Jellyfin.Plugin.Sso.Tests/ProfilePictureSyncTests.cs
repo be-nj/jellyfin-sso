@@ -130,6 +130,44 @@ public sealed class ProfilePictureSyncTests : IDisposable
     }
 
     [Fact]
+    public async Task A_body_that_never_says_how_long_it_is_is_still_capped()
+    {
+        // The cap used to be read off Content-Length, which a chunked response does not
+        // send — and the body was buffered whole before anything looked at it.
+        _handler.RespondChunked("image/png", ProfilePictureSync.MaxBytes * 8);
+
+        await Sync().SyncAsync(_userId, "https://idp.example.com/endless.png");
+
+        Assert.Equal(0, await SavedImages());
+
+        // The point is not only that it was refused: it must be refused part-way, rather
+        // than after the whole thing has been pulled into memory. The exact figure is the
+        // test double's business — HTTP machinery reads ahead — so this asks for a
+        // fraction of the body, not for the cap to the byte.
+        Assert.True(
+            _handler.BytesDelivered < ProfilePictureSync.MaxBytes * 4,
+            $"Read {_handler.BytesDelivered} bytes of a {ProfilePictureSync.MaxBytes * 8} "
+            + "byte body before giving up.");
+    }
+
+    [Fact]
+    public async Task A_picture_that_fails_to_be_written_leaves_the_old_one_alone()
+    {
+        var user = _userManager.GetUserById(_userId)!;
+        user.ProfileImage = new ImageInfo("/old/profile.png");
+        _handler.Respond(HttpStatusCode.OK, "image/png", Png);
+        _providerManager
+            .When(p => p.SaveImage(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>()))
+            .Throw(new IOException("disk full"));
+
+        await Sync().SyncAsync(_userId, "https://idp.example.com/avatar.png");
+
+        // Not cleared, not repointed at a file that was never written.
+        await _userManager.DidNotReceiveWithAnyArgs().ClearProfileImageAsync(default!);
+        Assert.Equal("/old/profile.png", user.ProfileImage!.Path);
+    }
+
+    [Fact]
     public async Task A_provider_that_answers_with_an_error_changes_nothing()
     {
         _handler.Respond(HttpStatusCode.NotFound, "image/png", []);
@@ -137,6 +175,20 @@ public sealed class ProfilePictureSyncTests : IDisposable
         await Sync().SyncAsync(_userId, "https://idp.example.com/gone.png");
 
         Assert.Equal(0, await SavedImages());
+    }
+
+    [Fact]
+    public async Task Jellyfins_own_image_pipeline_throwing_does_not_fail_the_login()
+    {
+        _handler.Respond(HttpStatusCode.OK, "image/png", Png);
+        _providerManager
+            .When(p => p.SaveImage(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>()))
+            .Throw(new ArgumentException("not an image this server will take"));
+
+        // No throw: the account keeps the picture it had and the login carries on.
+        await Sync().SyncAsync(_userId, "https://idp.example.com/avatar.png");
+
+        Assert.Contains(_log.Warnings, w => w.Contains("profile picture", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -222,12 +274,43 @@ public sealed class ProfilePictureSyncTests : IDisposable
         Directory.Delete(_root, recursive: true);
     }
 
+    /// <summary>
+    /// A body that reports how much of it was read, so a test can tell "refused it" from
+    /// "read all of it and then refused it".
+    /// </summary>
+    private sealed class CountingStream : MemoryStream
+    {
+        private readonly Action<int> _counted;
+
+        public CountingStream(byte[] bytes, Action<int> counted)
+            : base(bytes)
+        {
+            _counted = counted;
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var read = base.Read(buffer, offset, count);
+            _counted(read);
+            return read;
+        }
+
+        public override ValueTask<int> ReadAsync(
+            Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            var read = base.Read(buffer.Span);
+            _counted(read);
+            return ValueTask.FromResult(read);
+        }
+    }
+
     /// <summary>A provider's answer, without a provider.</summary>
     private sealed class Handler : HttpMessageHandler
     {
         private HttpStatusCode _status = HttpStatusCode.OK;
         private string _type = "image/png";
         private byte[] _body = [];
+        private bool _chunked;
         private Exception? _throw;
 
         public int Requests { get; private set; }
@@ -242,6 +325,19 @@ public sealed class ProfilePictureSyncTests : IDisposable
 
         public void Throw(Exception ex) => _throw = ex;
 
+        /// <summary>A body with no declared length, as a chunked response has.</summary>
+        public void RespondChunked(string contentType, int bytes)
+        {
+            _status = HttpStatusCode.OK;
+            _type = contentType;
+            _body = new byte[bytes];
+            _chunked = true;
+            _throw = null;
+        }
+
+        /// <summary>How much of the body the client actually pulled.</summary>
+        public long BytesDelivered { get; private set; }
+
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -253,8 +349,17 @@ public sealed class ProfilePictureSyncTests : IDisposable
 
             var response = new HttpResponseMessage(_status)
             {
-                Content = new ByteArrayContent(_body),
+                Content = _chunked
+                    ? new StreamContent(new CountingStream(_body, n => BytesDelivered += n))
+                    : new ByteArrayContent(_body),
             };
+
+            if (_chunked)
+            {
+                // StreamContent over a MemoryStream still knows its length; a real
+                // chunked reply does not, and that is the case under test.
+                response.Content.Headers.ContentLength = null;
+            }
             response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(_type);
             return Task.FromResult(response);
         }
