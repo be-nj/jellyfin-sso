@@ -60,18 +60,23 @@ Against real software, not mocks. Every push runs:
 | | |
 |---|---|
 | **354 unit tests** | Token validation, permissions, lockout guards, markup, the served pages |
-| **85 end-to-end tests** | Throwaway Jellyfin container, a scripted OIDC provider, real browser |
+| **85 end-to-end tests** | Throwaway Jellyfin container, an OIDC provider built for the suite, real browser |
 | **Three Jellyfin versions** | The same build against 12.0, 12.1 and 12.2 |
 | **9 real-provider logins** | Authentik, Keycloak and Authelia, through their own forms |
 | **Mutation testing** | Stryker breaks the code to see whether the tests notice: 70 %, floor 65 % |
 | **CodeQL** | No open alerts |
 | **Weekly upstream run** | The same tests again, against the newest Jellyfin and the newest Authentik, Keycloak and Authelia |
 
-The scripted provider is a provider, not a stub: discovery, JWKS, authorization code
-with PKCE, token and userinfo endpoints, RSA-signed tokens, HTTPS with a real
-certificate. What it leaves out is the login form — `/authorize` redirects straight back
-with a code for whichever identity the test asked for, so a test can say who logs in
-next. The forms are what the nine real-provider logins are for.
+That provider is a provider, not a stub: discovery document, JWKS, authorization code
+with PKCE, token and userinfo endpoints, RSA-signed tokens, HTTPS with a certificate the
+container has to trust. Everything the plugin touches is the real protocol — a wrong
+signature fails there exactly as it fails against Keycloak. Two things it does not have:
+it is this repository's own code rather than somebody else's product, and it never
+authenticates anybody. There is no login form and no user directory; `/authorize`
+redirects straight back with a code for whichever identity the test named, which is what
+keeps 85 tests fast and deterministic. Logging in for real — a form, a password, a
+provider nobody here controls — is what the nine real-provider logins do, in containers
+running Authentik, Keycloak and Authelia. The clips above are those containers too.
 
 The provider guides are the configuration those containers get. What the plugin trusts,
 and which test holds each claim: [threat model](docs/threat-model.md).

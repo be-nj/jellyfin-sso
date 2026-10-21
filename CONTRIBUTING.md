@@ -31,9 +31,11 @@ make e2e
 
 A throwaway Jellyfin container is started from the image matching the pinned
 `Jellyfin.Controller` version, with the **release ZIP** installed as a plugin — so the
-artifact users download is the one under test. Alongside it runs a fake OIDC provider (a
-small ASP.NET host in the test process, serving HTTPS with a self-signed certificate the
-container is made to trust), and the browser hop is driven by Playwright.
+artifact users download is the one under test. Alongside it runs an OIDC provider written
+for this suite (a small ASP.NET host in the test process, serving HTTPS with a self-signed
+certificate the container is made to trust) — real discovery, JWKS, PKCE code exchange and
+RSA-signed tokens, with no login form, because the test says who logs in next instead of
+typing it. The browser hop is driven by Playwright.
 
 One tier up, the suite starts **real identity providers** in containers — Keycloak from a
 realm file and Authelia from a generated config — and signs in through their own login
