@@ -65,6 +65,7 @@ Against real software, not mocks. Every push runs:
 | **9 real-provider logins** | Authentik, Keycloak and Authelia, through their own forms |
 | **Mutation testing** | Stryker breaks the code to see whether the tests notice: 70 %, floor 65 % |
 | **CodeQL** | No open alerts |
+| **Weekly upstream run** | The same tests again, against the newest Jellyfin and the newest Authentik, Keycloak and Authelia |
 
 The scripted provider is a provider, not a stub: discovery, JWKS, authorization code
 with PKCE, token and userinfo endpoints, RSA-signed tokens, HTTPS with a real

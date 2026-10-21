@@ -26,7 +26,9 @@ internal sealed class AuthentikProvider : IRealIdentityProvider
 {
     // Authentik publishes no immutable minor tags on ghcr beyond "stable"; the real-idp
     // job is separate so an upstream change here does not read as a plugin regression.
-    private const string Image = "ghcr.io/goauthentik/server:2026.8.4";
+    private static readonly string Image =
+        TestImages.Resolve("E2E_AUTHENTIK_IMAGE", "ghcr.io/goauthentik/server:2026.8.4");
+
     /// <summary>
     /// Also typed into the form by the demo recording, so it is internal rather than
     /// private. It belongs to a container that lives for the length of one test run.

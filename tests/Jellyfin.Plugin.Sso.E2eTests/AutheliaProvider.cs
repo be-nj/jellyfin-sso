@@ -14,7 +14,9 @@ namespace Jellyfin.Plugin.Sso.E2eTests;
 /// </summary>
 internal sealed class AutheliaProvider : IRealIdentityProvider
 {
-    private const string Image = "ghcr.io/authelia/authelia:4.39";
+    private static readonly string Image =
+        TestImages.Resolve("E2E_AUTHELIA_IMAGE", "ghcr.io/authelia/authelia:4.39");
+
     private const string Password = "authelia-test-password";
     private const string Secret = "insecure-e2e-secret-at-least-32-chars";
 

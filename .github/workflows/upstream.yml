@@ -1,0 +1,122 @@
+name: Upstream
+
+# The same tests the pull requests run, against the newest Jellyfin and the newest
+# Authentik, Keycloak and Authelia, once a week.
+#
+# Every other run in this repository pins its containers, and should: a provider that
+# ships a breaking release on a Tuesday must not turn that week's pull requests into a
+# mystery. The cost of pinning is that the suite only ever proves the plugin worked with
+# the versions it was written against, and the first person to discover that Keycloak
+# changed something underneath it would otherwise be whoever upgraded their Keycloak.
+#
+# So the pin is lifted here, on a schedule, where a failure is this plugin's problem to
+# look at before a user hits it — and where it cannot block anybody's merge, because
+# nothing in this file is a required check.
+on:
+  schedule:
+    # Monday, after the mutation run at 04:00 and before the scorecard at 06:00.
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # The compatibility matrix in Tests covers 12.0, 12.1 and 12.2 — the servers this
+  # release claims. This one is whatever Jellyfin published most recently, which is the
+  # version a new installation gets.
+  jellyfin:
+    name: Newest Jellyfin
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+
+      - name: Run the e2e suite against the latest server image
+        env:
+          E2E_JELLYFIN_TAG: latest
+        run: >
+          dotnet test tests/Jellyfin.Plugin.Sso.E2eTests -c Release --logger trx
+          --filter "Category!=RealIdp&Category!=Screenshots&Category!=Demo"
+
+      - name: Record what ran
+        if: always()
+        run: scripts/upstream-images.sh >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: upstream-jellyfin
+          path: |
+            tests/runs/dotnet/results/
+            tests/runs/playwright/*.png
+            tests/runs/playwright/*.html
+          if-no-files-found: ignore
+
+  # The three providers at their current release. Authentik is configured through its API
+  # and Keycloak through a realm import, so this also catches a provider changing the
+  # shape of its own configuration, not only the login flow.
+  providers:
+    name: Newest providers
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+
+      - name: Run the suite against the latest Authentik, Keycloak and Authelia
+        env:
+          E2E_AUTHENTIK_IMAGE: ghcr.io/goauthentik/server:latest
+          E2E_KEYCLOAK_IMAGE: quay.io/keycloak/keycloak:latest
+          E2E_AUTHELIA_IMAGE: ghcr.io/authelia/authelia:latest
+        run: >
+          dotnet test tests/Jellyfin.Plugin.Sso.E2eTests -c Release --logger trx
+          --filter "Category=RealIdp"
+
+      - name: Record what ran
+        if: always()
+        run: scripts/upstream-images.sh >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: upstream-providers
+          path: |
+            tests/runs/dotnet/results/
+            tests/runs/playwright/*.png
+            tests/runs/playwright/*.html
+          if-no-files-found: ignore
+
+  # A scheduled run nobody watches is a run nobody has. A failure opens an issue, or adds
+  # a comment to the one that is already open, so the break is in the same place as every
+  # other finding in this repository. It is deliberately not closed automatically: the
+  # issue is closed by whoever worked out what changed, with the cause written down.
+  report:
+    name: Say so
+    needs: [jellyfin, providers]
+    if: always() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Open or update the upstream issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JELLYFIN_RESULT: ${{ needs.jellyfin.result }}
+          PROVIDERS_RESULT: ${{ needs.providers.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: scripts/upstream-report.sh

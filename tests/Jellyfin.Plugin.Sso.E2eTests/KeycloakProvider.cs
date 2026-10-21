@@ -17,6 +17,9 @@ internal sealed class KeycloakProvider : IRealIdentityProvider
     private const string Realm = "jellyfin";
     private const string Password = "keycloak-test-password";
 
+    private static readonly string Image =
+        TestImages.Resolve("E2E_KEYCLOAK_IMAGE", "quay.io/keycloak/keycloak:26.5");
+
     private readonly IContainer _container;
 
     private KeycloakProvider(IContainer container, int port)
@@ -57,7 +60,7 @@ internal sealed class KeycloakProvider : IRealIdentityProvider
             Path.Combine(importDirectory, "realm.json"),
             RealmJson().ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 
-        var container = new ContainerBuilder("quay.io/keycloak/keycloak:26.5")
+        var container = new ContainerBuilder(Image)
             .WithPortBinding(port, 8443)
             .WithBindMount(importDirectory, "/opt/keycloak/data/import", AccessMode.ReadOnly)
             .WithBindMount(certificate.CertificatePath, "/etc/keycloak-tls/tls.crt", AccessMode.ReadOnly)
