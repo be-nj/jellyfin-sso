@@ -24,9 +24,7 @@ public sealed partial class ProviderLogos : IDisposable
     /// <summary>An icon is small. Anything larger is not what we came for.</summary>
     private const int MaxBytes = 256 * 1024;
 
-    public sealed record Logo(byte[] Bytes, string ContentType);
-
-    private sealed record Entry(Logo? Logo, DateTimeOffset Expiry);
+    private sealed record Entry(RemoteImage? Logo, DateTimeOffset Expiry);
 
     [GeneratedRegex(@"<link[^>]+rel=[""']?[^""'>]*icon[^""'>]*[""']?[^>]*>", RegexOptions.IgnoreCase)]
     private static partial Regex IconLink { get; }
@@ -36,11 +34,15 @@ public sealed partial class ProviderLogos : IDisposable
 
     private readonly ConcurrentDictionary<string, Entry> _cache = new();
     private readonly HttpClient _http;
+    private readonly RemoteImages _images;
     private readonly ILogger<ProviderLogos> _logger;
 
-    public ProviderLogos(ILogger<ProviderLogos> logger)
+    public ProviderLogos(RemoteImages images, ILogger<ProviderLogos> logger)
     {
+        // Text only — the brand document and the login page. Pictures go through
+        // RemoteImages, which is where the rules for fetching one live.
         _http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        _images = images;
         _logger = logger;
     }
 
@@ -48,7 +50,7 @@ public sealed partial class ProviderLogos : IDisposable
     /// The provider's own logo, or null when it has none the plugin can find. Never
     /// throws: a login page without the right picture is a small thing.
     /// </summary>
-    public async Task<Logo?> GetAsync(ProviderConfig provider, CancellationToken ct = default)
+    public async Task<RemoteImage?> GetAsync(ProviderConfig provider, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(provider.Authority)
             || !Uri.TryCreate(provider.Authority, UriKind.Absolute, out var authority))
@@ -62,7 +64,7 @@ public sealed partial class ProviderLogos : IDisposable
             return cached.Logo;
         }
 
-        Logo? logo = null;
+        RemoteImage? logo = null;
         try
         {
             logo = await FindAsync(authority, ct).ConfigureAwait(false);
@@ -87,7 +89,7 @@ public sealed partial class ProviderLogos : IDisposable
     private static readonly string[] BrandFields = ["branding_favicon", "branding_logo"];
 
     /// <summary>Three places a provider keeps its logo, in order of how specific they are.</summary>
-    private async Task<Logo?> FindAsync(Uri authority, CancellationToken ct)
+    private async Task<RemoteImage?> FindAsync(Uri authority, CancellationToken ct)
     {
         var origin = new Uri(authority.GetLeftPart(UriPartial.Authority));
 
@@ -155,22 +157,8 @@ public sealed partial class ProviderLogos : IDisposable
         return await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
     }
 
-    private async Task<Logo?> ImageAsync(Uri uri, CancellationToken ct)
-    {
-        using var response = await _http.GetAsync(uri, ct).ConfigureAwait(false);
-        var type = response.Content.Headers.ContentType?.MediaType;
-
-        if (!response.IsSuccessStatusCode
-            || type is null
-            || !type.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
-            || response.Content.Headers.ContentLength > MaxBytes)
-        {
-            return null;
-        }
-
-        var bytes = await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
-        return bytes.Length is > 0 and <= MaxBytes ? new Logo(bytes, type) : null;
-    }
+    private Task<RemoteImage?> ImageAsync(Uri uri, CancellationToken ct)
+        => _images.GetAsync(uri, MaxBytes, ct);
 
     public void Dispose() => _http.Dispose();
 }
