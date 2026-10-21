@@ -90,6 +90,31 @@ public sealed class ProfilePictureTests : IAsyncLifetime
         Assert.Null(user!["PrimaryImageTag"]?.GetValue<string>());
     }
 
+    [Fact]
+    public async Task A_provider_that_cannot_serve_userinfo_still_signs_people_in()
+    {
+        await EnableAsync();
+        // No picture in the ID token, so the plugin asks userinfo for one — and this
+        // provider cannot answer. Before the feature existed this login worked; it has
+        // to keep working.
+        _env.Idp.NextPictureUrl = null;
+        _env.Idp.UserInfoFails = true;
+
+        try
+        {
+            var login = await _env.StartWebLoginAsync(new FakeUser("sub-nouserinfo", "nouserinfouser", ["media"]));
+            Assert.True(login.Succeeded, login.Body);
+
+            var user = await _env.FindUserAsync("nouserinfouser");
+            Assert.NotNull(user);
+            Assert.Null(user!["PrimaryImageTag"]?.GetValue<string>());
+        }
+        finally
+        {
+            _env.Idp.UserInfoFails = false;
+        }
+    }
+
     private Task EnableAsync()
         => _env.PatchConfigAsync(config => config["SyncProfilePictures"] = true);
 }

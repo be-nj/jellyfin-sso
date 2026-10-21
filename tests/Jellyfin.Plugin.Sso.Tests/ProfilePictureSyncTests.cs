@@ -140,6 +140,20 @@ public sealed class ProfilePictureSyncTests : IDisposable
     }
 
     [Fact]
+    public async Task Jellyfins_own_image_pipeline_throwing_does_not_fail_the_login()
+    {
+        _handler.Respond(HttpStatusCode.OK, "image/png", Png);
+        _providerManager
+            .When(p => p.SaveImage(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>()))
+            .Throw(new ArgumentException("not an image this server will take"));
+
+        // No throw: the account keeps the picture it had and the login carries on.
+        await Sync().SyncAsync(_userId, "https://idp.example.com/avatar.png");
+
+        Assert.Contains(_log.Warnings, w => w.Contains("profile picture", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task A_provider_that_cannot_be_reached_does_not_fail_the_login()
     {
         _handler.Throw(new HttpRequestException("no route to host"));

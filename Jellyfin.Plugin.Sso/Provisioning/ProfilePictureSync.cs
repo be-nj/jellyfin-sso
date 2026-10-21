@@ -68,9 +68,17 @@ public sealed class ProfilePictureSync : IDisposable
         _providerManager = providerManager;
         _serverConfiguration = serverConfiguration;
         _logger = logger;
-        _http = handler is null
-            ? new HttpClient { Timeout = TimeSpan.FromSeconds(10) }
-            : new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
+        // Three redirects, not the fifty a default HttpClient follows: the address comes
+        // from a token, and a chain of redirects is the cheapest way to turn one allowed
+        // address into a walk around somebody's network.
+        handler ??= new SocketsHttpHandler
+        {
+            AllowAutoRedirect = true,
+            MaxAutomaticRedirections = 3,
+            ConnectTimeout = TimeSpan.FromSeconds(5),
+        };
+
+        _http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
     }
 
     /// <summary>
@@ -102,10 +110,12 @@ public sealed class ProfilePictureSync : IDisposable
         {
             await ApplyAsync(userId, uri, ct).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException
-            or IOException or UnauthorizedAccessException or InvalidOperationException)
+        catch (Exception ex)
         {
-            // A login that worked must not fail because a picture did not arrive.
+            // Every exception, deliberately. The promise this feature makes is that a
+            // login which worked is not undone by a picture, and the list this used to
+            // name covered the fetch but not Jellyfin's own image pipeline, which is
+            // free to throw whatever it likes at a file it does not care for.
             _logger.LogWarning(
                 ex, "SSO: could not apply the profile picture for user {Id}; leaving it as it was.", userId);
         }
