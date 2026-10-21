@@ -27,6 +27,10 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<ProfilePictureSync>();
         serviceCollection.AddSingleton<SessionRevoker>();
         serviceCollection.AddSingleton<LoginBranding>();
+
+        // One fetcher for every picture whose address came from somewhere else: the
+        // provider's logo and the profile picture both go through it.
+        serviceCollection.AddSingleton<RemoteImages>();
         serviceCollection.AddSingleton<ProviderLogos>();
         serviceCollection.AddScoped<IAuthenticationProvider, SsoAuthenticationProvider>();
 
