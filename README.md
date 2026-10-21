@@ -59,7 +59,7 @@ Against real software, not mocks. Every push runs:
 
 | | |
 |---|---|
-| **345 unit tests** | Token validation, permissions, lockout guards, markup, the served pages |
+| **354 unit tests** | Token validation, permissions, lockout guards, markup, the served pages |
 | **85 end-to-end tests** | Throwaway Jellyfin container, fake provider, real browser |
 | **Three Jellyfin versions** | The same build against 12.0, 12.1 and 12.2 |
 | **9 real-provider logins** | Authentik, Keycloak and Authelia, through their own forms |
