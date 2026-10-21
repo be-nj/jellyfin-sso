@@ -384,21 +384,124 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
     {
         var existing = JsonNode.Parse(await _admin.GetStringAsync("/Library/VirtualFolders"))!.AsArray();
 
-        async Task<string> EnsureAsync(string name, string folder, string cover)
+        async Task<string> EnsureAsync(string name, string folder)
         {
             var found = existing.FirstOrDefault(f => f!["Name"]!.GetValue<string>() == name);
-            var id = found is not null
-                ? found["ItemId"]!.GetValue<string>()
-                : await CreateLibraryAsync(name, "movies", $"/media/{folder}");
+            if (found is null)
+            {
+                return await CreateLibraryAsync(name, "movies", $"/media/{folder}", internetProviders: true);
+            }
 
-            await SetLibraryCoverAsync(id, cover);
+            // The library was made for the ordinary tests, which keep the internet out of
+            // their way. The demo wants the posters.
+            var id = found["ItemId"]!.GetValue<string>();
+            await AllowInternetProvidersAsync(id, name, $"/media/{folder}");
             return id;
         }
 
-        return (
-            await EnsureAsync("Parents", "parents", "parents"),
-            await EnsureAsync("Kids", "kids", "kids"),
-            await EnsureAsync("Family", "family", "family"));
+        var libraries = (
+            Parents: await EnsureAsync("Parents", "parents"),
+            Kids: await EnsureAsync("Kids", "kids"),
+            Family: await EnsureAsync("Family", "family"));
+
+        await FetchArtworkAsync([libraries.Parents, libraries.Kids, libraries.Family]);
+        return libraries;
+    }
+
+    /// <summary>
+    /// Scans the demo libraries and waits until each film has a picture, which is
+    /// Jellyfin asking TMDB on its own account. Falls back to the covers drawn in
+    /// tests/fixtures when the artwork does not arrive — a demo without a network should
+    /// still look like a media server rather than three grey rectangles.
+    /// </summary>
+    private async Task FetchArtworkAsync(string[] libraryIds)
+    {
+        foreach (var id in libraryIds)
+        {
+            await _admin.PostAsync(
+                $"/Items/{id}/Refresh?metadataRefreshMode=FullRefresh&imageRefreshMode=FullRefresh"
+                + "&replaceAllMetadata=true&replaceAllImages=true",
+                content: null);
+        }
+
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(90);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            await Task.Delay(3_000);
+            if (await AllFilmsHavePicturesAsync(libraryIds))
+            {
+                foreach (var id in libraryIds)
+                {
+                    await UseFilmPosterAsLibraryCoverAsync(id);
+                }
+
+                return;
+            }
+        }
+
+        foreach (var (id, cover) in libraryIds.Zip(new[] { "parents", "kids", "family" }))
+        {
+            await SetLibraryCoverAsync(id, cover);
+        }
+    }
+
+    /// <summary>
+    /// Gives a library the poster of the film in it. Jellyfin leaves a library tile as a
+    /// grey film strip until somebody picks a picture, and a shelf called Parents means
+    /// more with Die Hard on it.
+    /// </summary>
+    private async Task UseFilmPosterAsLibraryCoverAsync(string libraryId)
+    {
+        var items = JsonNode.Parse(await _admin.GetStringAsync(
+            $"/Items?parentId={libraryId}&recursive=true&includeItemTypes=Movie"))!;
+        var film = items["Items"]!.AsArray().FirstOrDefault();
+        if (film is null)
+        {
+            return;
+        }
+
+        var poster = await _admin.GetByteArrayAsync(
+            $"/Items/{film["Id"]!.GetValue<string>()}/Images/Primary");
+
+        var content = new StringContent(Convert.ToBase64String(poster));
+        content.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
+        var response = await _admin.PostAsync($"/Items/{libraryId}/Images/Primary", content);
+        response.EnsureSuccessStatusCode();
+    }
+
+    private async Task<bool> AllFilmsHavePicturesAsync(string[] libraryIds)
+    {
+        foreach (var id in libraryIds)
+        {
+            var items = JsonNode.Parse(await _admin.GetStringAsync(
+                $"/Items?parentId={id}&recursive=true&includeItemTypes=Movie&fields=PrimaryImageAspectRatio"))!;
+            var films = items["Items"]!.AsArray();
+
+            if (films.Count == 0
+                || films.Any(f => f!["ImageTags"]?["Primary"] is null))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>Turns the metadata providers on for a library that was made without them.</summary>
+    private async Task AllowInternetProvidersAsync(string libraryId, string name, string path)
+    {
+        var response = await _admin.PostAsJsonAsync("/Library/VirtualFolders/LibraryOptions", new
+        {
+            Id = libraryId,
+            LibraryOptions = new
+            {
+                Enabled = true,
+                EnableRealtimeMonitor = false,
+                EnableInternetProviders = true,
+                PathInfos = new[] { new { Path = path } },
+            },
+        });
+        response.EnsureSuccessStatusCode();
     }
 
     /// <summary>
@@ -416,7 +519,8 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
         response.EnsureSuccessStatusCode();
     }
 
-    private async Task<string> CreateLibraryAsync(string name, string collectionType, string path)
+    private async Task<string> CreateLibraryAsync(
+        string name, string collectionType, string path, bool internetProviders = false)
     {
         var url = $"/Library/VirtualFolders?name={Uri.EscapeDataString(name)}"
             + $"&collectionType={collectionType}&paths={Uri.EscapeDataString(path)}&refreshLibrary=false";
@@ -427,7 +531,9 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
             {
                 Enabled = true,
                 EnableRealtimeMonitor = false,
-                EnableInternetProviders = false,
+                // Off for the ordinary tests: they must not depend on somebody else's
+                // service being up. The demo turns it on, because it wants the posters.
+                EnableInternetProviders = internetProviders,
                 PathInfos = new[] { new { Path = path } },
             },
         });
@@ -466,10 +572,19 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
         return target;
     }
 
+    /// <summary>One film per demo library, named so Jellyfin can identify it.</summary>
+    private static readonly (string Library, string Film)[] DemoFilms =
+    [
+        ("parents", "Die Hard (1988)"),
+        ("kids", "Toy Story (1995)"),
+        ("family", "Home Alone (1990)"),
+    ];
+
     /// <summary>
-    /// A folder per library with a placeholder file each; no real media needed. `parents`
-    /// and `family` exist for the recorded demo, which shows two accounts seeing different
-    /// shelves — see <see cref="AddDemoLibrariesAsync"/>.
+    /// A folder per library with a placeholder file each; no real media needed for the
+    /// tests. The three the demo uses also get a film-shaped folder with a one-second
+    /// black video in it, because Jellyfin only looks a title up — and only fetches a
+    /// poster for it — once there is something it recognises as a film.
     /// </summary>
     private static string CreateMediaTree(string repoRoot)
     {
@@ -479,6 +594,14 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
             var dir = Path.Combine(root, library);
             Directory.CreateDirectory(dir);
             File.WriteAllText(Path.Combine(dir, "placeholder.txt"), "e2e");
+        }
+
+        var blank = Path.Combine(repoRoot, "tests", "fixtures", "media", "blank.mp4");
+        foreach (var (library, film) in DemoFilms)
+        {
+            var dir = Path.Combine(root, library, film);
+            Directory.CreateDirectory(dir);
+            File.Copy(blank, Path.Combine(dir, film + ".mp4"), overwrite: true);
         }
 
         return root;

@@ -85,15 +85,21 @@ public sealed class PermissionSync
         policy.EnableLiveTvAccess = isAdmin || matched.Any(m => m.EnableLiveTvAccess);
         policy.EnableLiveTvManagement = isAdmin || matched.Any(m => m.EnableLiveTvManagement);
         policy.EnableContentDownloading = isAdmin || matched.Any(m => m.EnableContentDownloading);
-        policy.EnableContentDeletion = isAdmin || matched.Any(m => m.EnableContentDeletion);
+        // Deletion is the one that removes files, so an administrator does not get it
+        // handed to them here — Jellyfin's own screen decides that, and an operator who
+        // left it off meant it. A group that grants it still grants it to anybody.
+        var deletedBefore = policy.EnableContentDeletion;
+        policy.EnableContentDeletion = matched.Any(m => m.EnableContentDeletion);
         policy.EnableCollectionManagement = isAdmin || matched.Any(m => m.EnableCollectionManagement);
         policy.EnableSubtitleManagement = isAdmin || matched.Any(m => m.EnableSubtitleManagement);
         policy.EnableLyricManagement = isAdmin || matched.Any(m => m.EnableLyricManagement);
         policy.MaxParentalRating = isAdmin ? null : ResolveParentalRating(matched);
 
-        // A folder list left over from an earlier policy would keep granting deletion in
-        // those folders after the group stopped granting it at all.
-        if (!policy.EnableContentDeletion)
+        // Only when this sync is the thing that took deletion away: a folder list left
+        // behind would keep granting in those folders exactly what the switch just
+        // removed everywhere. A user who never had deletion keeps whatever an
+        // administrator put in that list, because the plugin does not own it.
+        if (deletedBefore && !policy.EnableContentDeletion)
         {
             policy.EnableContentDeletionFromFolders = [];
         }

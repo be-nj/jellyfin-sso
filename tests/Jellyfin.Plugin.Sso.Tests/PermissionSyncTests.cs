@@ -181,17 +181,42 @@ public sealed class PermissionSyncTests : IDisposable
     }
 
     [Fact]
-    public async Task An_admin_group_grants_deletion_and_the_management_rights_too()
+    public async Task An_admin_group_grants_the_management_rights_but_not_deletion()
     {
         Map("jellyfin-admins", true);
 
         await _sync.SyncAsync(_userId, Identity("jellyfin-admins"));
 
         var policy = CapturedPolicy();
-        Assert.True(policy.EnableContentDeletion);
         Assert.True(policy.EnableCollectionManagement);
         Assert.True(policy.EnableSubtitleManagement);
         Assert.True(policy.EnableLyricManagement);
+
+        // Deletion removes files. Being an administrator in the groups does not hand it
+        // out: Jellyfin's own user screen owns that, and an operator who left it off
+        // meant it. A group that ticks "delete media" still grants it to anybody.
+        Assert.False(policy.EnableContentDeletion);
+    }
+
+    [Fact]
+    public async Task A_folder_level_deletion_list_survives_a_user_who_never_had_deletion()
+    {
+        var user = ExistingUser(admin: false);
+        _userManager.GetUserDto(user).Returns(new MediaBrowser.Model.Dto.UserDto
+        {
+            Policy = new UserPolicy
+            {
+                EnableContentDeletion = false,
+                EnableContentDeletionFromFolders = [MoviesId.ToString("N")],
+            },
+        });
+
+        Map("media", admin: false, MoviesId);
+
+        await _sync.SyncAsync(_userId, Identity("media"));
+
+        // The plugin took nothing away here, so it leaves the list an administrator set.
+        Assert.Equal([MoviesId.ToString("N")], CapturedPolicy().EnableContentDeletionFromFolders);
     }
 
     [Fact]

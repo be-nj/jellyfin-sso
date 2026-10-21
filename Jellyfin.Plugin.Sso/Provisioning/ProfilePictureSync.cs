@@ -110,9 +110,15 @@ public sealed class ProfilePictureSync : IDisposable
         {
             await ApplyAsync(userId, uri, ct).ConfigureAwait(false);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // The request went away. That is not a picture failing; saying so in the log
+            // every time somebody closes a tab would be noise.
+            throw;
+        }
         catch (Exception ex)
         {
-            // Every exception, deliberately. The promise this feature makes is that a
+            // Every other exception, deliberately. The promise this feature makes is that a
             // login which worked is not undone by a picture, and the list this used to
             // name covered the fetch but not Jellyfin's own image pipeline, which is
             // free to throw whatever it likes at a file it does not care for.
@@ -152,7 +158,13 @@ public sealed class ProfilePictureSync : IDisposable
             return;
         }
 
-        using var response = await _http.GetAsync(uri, ct).ConfigureAwait(false);
+        // Headers first, body after the headers have been judged. Reading the response
+        // whole — the default — means a host that answers with an endless chunked body
+        // is buffered in full before anything looks at its size, and a chunked response
+        // carries no Content-Length for the cap to read anyway.
+        using var response = await _http
+            .GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ct)
+            .ConfigureAwait(false);
         var mediaType = response.Content.Headers.ContentType?.MediaType;
 
         if (!response.IsSuccessStatusCode
@@ -166,8 +178,8 @@ public sealed class ProfilePictureSync : IDisposable
             return;
         }
 
-        var bytes = await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
-        if (bytes.Length == 0 || bytes.Length > MaxBytes)
+        var bytes = await ReadCappedAsync(response, ct).ConfigureAwait(false);
+        if (bytes is null || bytes.Length == 0)
         {
             return;
         }
@@ -187,18 +199,20 @@ public sealed class ProfilePictureSync : IDisposable
 
         var path = PicturePath(user, extension);
 
-        if (user.ProfileImage is not null)
-        {
-            await _userManager.ClearProfileImageAsync(user).ConfigureAwait(false);
-        }
-
-        user.ProfileImage = new ImageInfo(path);
-
+        // Write the file first. Clearing the old picture and pointing the account at a
+        // path before anything is there leaves the account worse than it was if the write
+        // then fails — and the write is the step most likely to.
         using (var source = new MemoryStream(bytes))
         {
             await _providerManager.SaveImage(source, mediaType, path).ConfigureAwait(false);
         }
 
+        if (user.ProfileImage is not null && user.ProfileImage.Path != path)
+        {
+            await _userManager.ClearProfileImageAsync(user).ConfigureAwait(false);
+        }
+
+        user.ProfileImage = new ImageInfo(path);
         await _userManager.UpdateUserAsync(user).ConfigureAwait(false);
 
         lock (_applied)
@@ -209,6 +223,31 @@ public sealed class ProfilePictureSync : IDisposable
         _logger.LogInformation(
             "SSO: profile picture for user {Id} taken from the provider ({Bytes} bytes).",
             userId, bytes.Length);
+    }
+
+    /// <summary>
+    /// The body, or null when it turns out to be larger than an avatar has any business
+    /// being. Counted while it is read, because what a response says about its length —
+    /// or declines to say — is the sender's choice.
+    /// </summary>
+    private static async Task<byte[]?> ReadCappedAsync(HttpResponseMessage response, CancellationToken ct)
+    {
+        await using var body = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        using var buffer = new MemoryStream();
+
+        var chunk = new byte[64 * 1024];
+        int read;
+        while ((read = await body.ReadAsync(chunk, ct).ConfigureAwait(false)) > 0)
+        {
+            if (buffer.Length + read > MaxBytes)
+            {
+                return null;
+            }
+
+            buffer.Write(chunk, 0, read);
+        }
+
+        return buffer.ToArray();
     }
 
     /// <summary>
@@ -234,10 +273,12 @@ public sealed class ProfilePictureSync : IDisposable
             return own;
         }
 
+        var inside = root.EndsWith(Path.DirectorySeparatorChar)
+            ? root
+            : root + Path.DirectorySeparatorChar;
+
         var candidate = Path.GetFullPath(Path.Join(root, name, file));
-        return candidate.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal)
-            ? candidate
-            : own;
+        return candidate.StartsWith(inside, StringComparison.Ordinal) ? candidate : own;
     }
 
     public void Dispose() => _http.Dispose();

@@ -42,7 +42,7 @@ OpenID Connect single sign-on for Jellyfin — for households already running
 
 <div align="center">
 
-<img src="docs/img/login-flow.gif" alt="Two logins: Jellyfin's login page, the button, Authentik's form, a home screen with Parents and Family — then a sign-out and a second account that sees Kids and Family instead" width="720">
+<img src="docs/img/login-flow.gif" alt="Two logins: Jellyfin's login page, the button, Authentik's form, a home screen with Parents and Family — then a sign-out and a second account that sees Kids and Family instead" width="680">
 
 </div>
 
@@ -59,8 +59,8 @@ Against real software, not mocks. Every push runs:
 
 | | |
 |---|---|
-| **341 unit tests** | Token validation, permissions, lockout guards, markup, the served pages |
-| **84 end-to-end tests** | Throwaway Jellyfin container, fake provider, real browser |
+| **345 unit tests** | Token validation, permissions, lockout guards, markup, the served pages |
+| **85 end-to-end tests** | Throwaway Jellyfin container, fake provider, real browser |
 | **Three Jellyfin versions** | The same build against 12.0, 12.1 and 12.2 |
 | **9 real-provider logins** | Authentik, Keycloak and Authelia, through their own forms |
 | **Mutation testing** | Stryker breaks the code to see whether the tests notice: 70 %, floor 65 % |
@@ -265,4 +265,3 @@ The built plugin is GPLv3. It links `Jellyfin.Controller` and `Jellyfin.Model`, 
 Jellyfin publishes under `GPL-3.0-only`, so the DLL in the release zip carries those
 terms — as every Jellyfin plugin's does, whatever its own sources say. Copy the code
 under MIT; pass the plugin on under GPLv3.
-x

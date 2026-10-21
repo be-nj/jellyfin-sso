@@ -70,12 +70,12 @@ for provider in authentik keycloak authelia; do
 
   if [ "$provider" = authentik ]; then
     mp4 "$clip" "$out/login-flow.mp4"
-    gif "$clip" "$out/login-flow.gif" 720 4 0.7
+    gif "$clip" "$out/login-flow.gif" 680 4 0.55
   else
     # Half the width: these two stand side by side under the first one, and three
     # full-size GIFs would be more than a README should ask a phone to download.
     mp4 "$clip" "$out/login-flow-$provider.mp4"
-    gif "$clip" "$out/login-flow-$provider.gif" 440 5 0.7
+    gif "$clip" "$out/login-flow-$provider.gif" 420 4 0.55
   fi
 done
 

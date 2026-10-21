@@ -102,10 +102,18 @@ One card per group: *Group name*, *Libraries*, **Admin (all libraries)**, *Live 
 access*, *Live TV management*, *Downloads*, *Delete media*, *Manage collections*,
 *Manage subtitles*, *Manage lyrics*, *Max parental rating* (empty = no limit).
 
+These four became plugin-managed in 1.12.14: set by hand in Jellyfin for an SSO user,
+they now follow the groups from the next login. The exclusion list under *Safety* is the
+way to keep a particular account out of that.
+
 *Delete media* is the one to leave off unless it is meant: a deletion from the Jellyfin
 client removes the file, not a database row. A group that stops granting it also loses
 any per-folder deletion rights that were set by hand, since a folder list left behind
 would keep granting what the switch just took away.
+
+Being an administrator does not grant *Delete media* — Jellyfin's own user screen owns
+that, and an operator who left it off meant it. Everything else on the card an
+administrator gets.
 
 Playback, transcoding and remuxing are not on the card. Every SSO user may play media —
 that is what the login is for — and *Remote access* is Jellyfin's own, left where the

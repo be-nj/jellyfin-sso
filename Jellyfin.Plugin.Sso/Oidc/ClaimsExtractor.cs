@@ -195,8 +195,12 @@ public sealed class ClaimsExtractor
             using var document = JsonDocument.Parse(text);
             return GroupsAtPath(document.RootElement, path);
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException
+            or ArgumentException)
         {
+            // Not JSON, or text that cannot even be turned into UTF-8 — a lone surrogate
+            // throws InvalidOperationException rather than JsonException. Either way the
+            // claim grants nothing, which is what a claim nobody can read should do.
             return [];
         }
     }

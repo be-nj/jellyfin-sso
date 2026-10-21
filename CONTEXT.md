@@ -67,9 +67,20 @@ Derived permissions, phased:
 - MVP: library access (`EnabledFolders`) + admin status (`IsAdministrator`).
 - Phase 2: Live TV (access + manage), download/sync (`EnableContentDownloading`),
   parental rating (`MaxParentalRating`, for real kid accounts).
+- Phase 3 (1.12.14): deletion (`EnableContentDeletion`), collections
+  (`EnableCollectionManagement`), subtitles (`EnableSubtitleManagement`), lyrics
+  (`EnableLyricManagement`). Deletion is the one exception to "an administrator gets
+  everything": it removes files, so only a group that grants it grants it.
 UI: a table where each row maps one group (free-text + autocomplete from **Seen Groups**)
 to a multiselect of libraries (referenced by stable GUID, shown by friendly name) plus an
 admin toggle.
+
+**Profile Picture Sync** (1.12.14, off by default):
+The `picture` claim — configurable per provider, a dotted path like the groups claim —
+is fetched after the permission sync and written through Jellyfin's own image pipeline.
+State: one in-memory record per user of the address and hash last written, so the second
+login fetches but does not rewrite. It is deliberately *not* in the configuration file:
+it is a cache, not a setting, and it is allowed to be empty after a restart.
 
 **Declarative Sync**:
 On every login the plugin computes the user's full library access from their current
