@@ -17,6 +17,7 @@ namespace Jellyfin.Plugin.Sso.Controllers;
 public sealed class SsoController : ControllerBase
 {
     private readonly PendingStateStore _states;
+    private readonly LogoutSessionStore _logoutSessions;
     private readonly OidcClientFactory _oidc;
     private readonly ClaimsExtractor _claims;
     private readonly UserProvisioner _provisioner;
@@ -32,6 +33,7 @@ public sealed class SsoController : ControllerBase
 
     public SsoController(
         PendingStateStore states,
+        LogoutSessionStore logoutSessions,
         OidcClientFactory oidc,
         ClaimsExtractor claims,
         UserProvisioner provisioner,
@@ -46,6 +48,7 @@ public sealed class SsoController : ControllerBase
         ILogger<SsoController> logger)
     {
         _states = states;
+        _logoutSessions = logoutSessions;
         _oidc = oidc;
         _claims = claims;
         _provisioner = provisioner;
@@ -212,6 +215,11 @@ public sealed class SsoController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Logout(string? providerId, CancellationToken ct)
     {
+        Response.Headers.CacheControl = "no-store";
+        Response.Headers["Referrer-Policy"] = "no-referrer";
+        var session = _logoutSessions.Consume(Request.Cookies[LogoutSessionStore.CookieName]);
+        Response.Cookies.Delete(LogoutSessionStore.CookieName, LogoutCookieOptions());
+
         // Local by construction: BasePath is either empty or a validated path, so this
         // is a path and never an address somewhere else. LocalRedirect enforces that.
         var home = $"{BasePath()}/web/index.html";
@@ -219,6 +227,7 @@ public sealed class SsoController : ControllerBase
         if (config is null || !config.SignOutOfIdentityProvider)
             return LocalRedirect(home);
 
+        providerId ??= session?.ProviderId;
         var provider = providerId is null
             ? EnabledProviders().FirstOrDefault()
             : GetEnabledProvider(providerId);
@@ -238,12 +247,15 @@ public sealed class SsoController : ControllerBase
             }
 
             var returnTo = $"{ExternalBaseUri()}{home}";
-            var url = new RequestUrl(disco.EndSessionEndpoint)
-                .Create(new Parameters
-                {
-                    { "client_id", provider.ClientId },
-                    { "post_logout_redirect_uri", returnTo },
-                });
+            var parameters = new Parameters
+            {
+                { "client_id", provider.ClientId },
+                { "post_logout_redirect_uri", returnTo },
+            };
+            if (session is not null && session.Matches(provider))
+                parameters.Add("id_token_hint", session.IdentityToken);
+
+            var url = new RequestUrl(disco.EndSessionEndpoint).Create(parameters);
 
             return Redirect(url);
         }
@@ -397,6 +409,13 @@ public sealed class SsoController : ControllerBase
             if (pending.QuickConnectCode is not null)
                 return AskToApproveQuickConnect(userId, username, pending.QuickConnectCode);
 
+            _logoutSessions.Consume(Request.Cookies[LogoutSessionStore.CookieName]);
+            Response.Cookies.Append(
+                LogoutSessionStore.CookieName,
+                _logoutSessions.Issue(provider, tokens.IdentityToken),
+                LogoutCookieOptions());
+            Response.Headers.CacheControl = "no-store";
+
             return await CompleteWebLoginAsync(username, ct).ConfigureAwait(false);
         }
         catch (InvalidOperationException ex)
@@ -520,6 +539,15 @@ public sealed class SsoController : ControllerBase
                 codeChallenge: PendingStateStore.CodeChallenge(pending.CodeVerifier),
                 codeChallengeMethod: "S256");
     }
+
+    private CookieOptions LogoutCookieOptions() => new()
+    {
+        HttpOnly = true,
+        Secure = ExternalBaseUri().StartsWith("https://", StringComparison.OrdinalIgnoreCase),
+        SameSite = SameSiteMode.Lax,
+        Path = $"{BasePath()}/sso/oidc",
+        IsEssential = true,
+    };
 
     private Task<IActionResult> CompleteWebLoginAsync(string username, CancellationToken ct)
     {

@@ -92,11 +92,27 @@ Without a reachable logo, or with the setting off, the plugin's own marks are se
 
 Jellyfin's logout drops its own token and leaves the provider session alone, so the next
 login goes through without credentials. With **Sign out of the identity provider too**
-enabled, sending the browser to **`/sso/oidc/logout`** after Jellyfin's logout ends the
-provider session as well and returns to the web client.
+enabled, sending the browser to **`/sso/oidc/logout`** after Jellyfin's logout requests
+provider logout and returns to the web client. For a browser SSO login, the plugin sends
+the validated ID token as `id_token_hint`, allowing providers such as Authentik to identify
+the session rather than ask for confirmation.
 
-With several providers, `/sso/oidc/logout` uses the first enabled one;
-`/sso/oidc/logout/<providerId>` names it.
+The ID token stays in server memory, addressed by an opaque HttpOnly browser session
+cookie. It is replaced on the next browser SSO login and removed when this logout endpoint
+is visited; retention is capped at 30 days and 10,000 browser logins. The hint becomes
+unavailable on server restart or when the browser discards the cookie. Quick Connect and
+account linking do not replace the browser's logout context.
+
+With several providers, `/sso/oidc/logout` uses the provider from that browser's SSO login,
+or the first enabled one if no retained login is available;
+`/sso/oidc/logout/<providerId>` names it explicitly. A token is never sent to a different
+provider or a changed authority/client ID.
+
+Without a retained login (including sessions created before this update), the request
+contains only `client_id` and `post_logout_redirect_uri`. Providers that accept this bare
+request end their session; others, including Authentik, may require the user to confirm.
+Returning to Jellyfin alone does not prove the provider session ended. Register the
+post-logout redirect URI at your provider if it requires it.
 
 **The switch alone changes nothing visible** — it only decides what `/sso/oidc/logout`
 does. A server plugin cannot touch Jellyfin's logout button, so wiring the two together

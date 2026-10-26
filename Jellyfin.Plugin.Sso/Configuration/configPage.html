@@ -168,6 +168,8 @@
                 On its own this changes nothing visible: it decides what
                 <code>/sso/oidc/logout</code> does. Jellyfin's own logout button can only be
                 wired to it with a snippet in the web client — see docs/login-and-logout.md.
+                Browser SSO logins supply an ID token hint; without a retained login,
+                the provider may ask for logout confirmation instead of ending its session.
               </div>
             </div>
             <div class="checkboxContainer">
