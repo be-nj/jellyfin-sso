@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
+using System.IdentityModel.Tokens.Jwt;
+using Microsoft.AspNetCore.WebUtilities;
 
 namespace Jellyfin.Plugin.Sso.E2eTests;
 
@@ -271,6 +273,7 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         var location = response.Headers.Location!.ToString();
         Assert.StartsWith($"{_env.Idp.BrowserAuthority}/endsession", location);
+        Assert.DoesNotContain("id_token_hint", location);
         // The provider has to know where to send the user back.
         Assert.Contains($"post_logout_redirect_uri={Uri.EscapeDataString($"{_env.BaseUrl}/web/index.html")}", location);
 
@@ -279,6 +282,109 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
         var back = await FollowAsync(location);
         Assert.Equal(endedAt + 1, _env.Idp.SessionsEnded);
         Assert.Equal(HttpStatusCode.OK, back.Status);
+    }
+
+    [Fact]
+    public async Task Logout_sends_the_browser_login_id_token_once_after_Jellyfin_logout()
+    {
+        await _env.PatchConfigAsync(config => config["SignOutOfIdentityProvider"] = true);
+        using var client = JellyfinEnvironment.TrustingClient(followRedirects: false);
+        var login = await _env.StartWebLoginAsync(
+            new FakeUser("sub-logout-hint", "logouthint", ["media"]), client);
+        Assert.True(login.Succeeded, login.Body);
+        var auth = await _env.AuthenticateAsync("logouthint", login.Secret!);
+        var token = JsonNode.Parse(await auth.Content.ReadAsStringAsync())!["AccessToken"]!.GetValue<string>();
+        using var logout = new HttpRequestMessage(HttpMethod.Post, $"{_env.BaseUrl}/Sessions/Logout");
+        logout.Headers.Authorization = JellyfinEnvironment.TokenHeader(token);
+        (await client.SendAsync(logout)).EnsureSuccessStatusCode();
+
+        var response = await client.GetAsync($"{_env.BaseUrl}/sso/oidc/logout");
+        var query = QueryHelpers.ParseQuery(response.Headers.Location!.Query);
+        var hint = query["id_token_hint"].ToString();
+        var jwt = new JwtSecurityTokenHandler().ReadJwtToken(hint);
+        Assert.Equal("sub-logout-hint", jwt.Subject);
+        Assert.Contains(JellyfinEnvironment.ClientId, jwt.Audiences);
+        Assert.DoesNotContain(hint, login.Body);
+        Assert.Equal("no-store", response.Headers.CacheControl!.ToString());
+
+        var repeated = await client.GetAsync($"{_env.BaseUrl}/sso/oidc/logout");
+        Assert.DoesNotContain("id_token_hint", repeated.Headers.Location!.ToString());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Logout_uses_the_login_provider_and_never_sends_its_hint_to_another(bool explicitOther)
+    {
+        await _env.AddSecondProviderAsync();
+        await _env.PatchConfigAsync(config => config["SignOutOfIdentityProvider"] = true);
+        using var client = JellyfinEnvironment.TrustingClient(followRedirects: false);
+        var login = await _env.StartWebLoginAsync(
+            new FakeUser("sub-second-logout", "secondlogout", ["media"]), client,
+            providerId: JellyfinEnvironment.SecondProviderId);
+        Assert.True(login.Succeeded, login.Body);
+
+        var endpoint = $"{_env.BaseUrl}/sso/oidc/logout"
+            + (explicitOther ? $"/{JellyfinEnvironment.ProviderId}" : "");
+        var response = await client.GetAsync(endpoint);
+        var query = QueryHelpers.ParseQuery(response.Headers.Location!.Query);
+        Assert.Equal(
+            JellyfinEnvironment.ClientId + (explicitOther ? "" : "-2"),
+            query["client_id"].ToString());
+        Assert.Equal(!explicitOther, query.ContainsKey("id_token_hint"));
+    }
+
+    [Fact]
+    public async Task A_later_browser_login_replaces_only_that_browsers_logout_hint()
+    {
+        await _env.PatchConfigAsync(config => config["SignOutOfIdentityProvider"] = true);
+        using var first = JellyfinEnvironment.TrustingClient(followRedirects: false);
+        using var second = JellyfinEnvironment.TrustingClient(followRedirects: false);
+        Assert.True((await _env.StartWebLoginAsync(
+            new FakeUser("sub-original", "original", ["media"]), first)).Succeeded);
+        Assert.True((await _env.StartWebLoginAsync(
+            new FakeUser("sub-other-browser", "otherbrowser", ["media"]), second)).Succeeded);
+        Assert.True((await _env.StartWebLoginAsync(
+            new FakeUser("sub-replacement", "replacement", ["media"]), first)).Succeeded);
+
+        foreach (var (client, sub) in new[] { (first, "sub-replacement"), (second, "sub-other-browser") })
+        {
+            var response = await client.GetAsync($"{_env.BaseUrl}/sso/oidc/logout");
+            var hint = QueryHelpers.ParseQuery(response.Headers.Location!.Query)["id_token_hint"].ToString();
+            Assert.Equal(sub, new JwtSecurityTokenHandler().ReadJwtToken(hint).Subject);
+        }
+    }
+
+    [Fact]
+    public async Task Logout_does_not_send_a_retained_token_after_the_client_id_changes()
+    {
+        await _env.PatchConfigAsync(config => config["SignOutOfIdentityProvider"] = true);
+        using var client = JellyfinEnvironment.TrustingClient(followRedirects: false);
+        Assert.True((await _env.StartWebLoginAsync(
+            new FakeUser("sub-changed-client", "changedclient", ["media"]), client)).Succeeded);
+        await _env.PatchConfigAsync(config =>
+            config["Providers"]![0]!["ClientId"] = "replacement-client");
+
+        var response = await client.GetAsync($"{_env.BaseUrl}/sso/oidc/logout");
+        var query = QueryHelpers.ParseQuery(response.Headers.Location!.Query);
+
+        Assert.Equal("replacement-client", query["client_id"].ToString());
+        Assert.False(query.ContainsKey("id_token_hint"));
+    }
+
+    [Fact]
+    public async Task Local_only_logout_also_discards_the_retained_login()
+    {
+        using var client = JellyfinEnvironment.TrustingClient(followRedirects: false);
+        Assert.True((await _env.StartWebLoginAsync(
+            new FakeUser("sub-local-logout", "locallogout", ["media"]), client)).Succeeded);
+
+        var local = await client.GetAsync($"{_env.BaseUrl}/sso/oidc/logout");
+        Assert.Equal("/web/index.html", local.Headers.Location!.ToString());
+        await _env.PatchConfigAsync(config => config["SignOutOfIdentityProvider"] = true);
+
+        var response = await client.GetAsync($"{_env.BaseUrl}/sso/oidc/logout");
+        Assert.DoesNotContain("id_token_hint", response.Headers.Location!.ToString());
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
