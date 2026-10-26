@@ -388,6 +388,15 @@ public sealed class SsoController : ControllerBase
             if (pending.LinkUserId is { } linkUserId)
                 return CompleteSelfServiceLink(provider, identity, linkUserId);
 
+            if (identity.Groups.Count == 0 && !provider.GroupsFromUserInfo)
+            {
+                _logger.LogWarning(
+                    "No groups were read from ID token claim {Claim} for provider {Id}. "
+                    + "If this provider keeps groups in userinfo, enable "
+                    + "'Fetch groups from userinfo endpoint' in its provider card.",
+                    provider.GroupsClaim, KnownProviderId(provider.Id));
+            }
+
             var (userId, username) = await _provisioner.ResolveAsync(provider, identity, ct)
                 .ConfigureAwait(false);
 
