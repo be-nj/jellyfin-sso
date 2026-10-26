@@ -69,10 +69,11 @@ public sealed class LogoutSessionStoreTests
     public void Abandoned_sessions_are_bounded()
     {
         var store = new LogoutSessionStore();
-        var oldest = store.Issue(Provider(), "oldest");
-        for (var i = 0; i < LogoutSessionStore.MaxSessions; i++)
-            store.Issue(Provider(), "token");
+        var handles = Enumerable.Range(0, LogoutSessionStore.MaxSessions + 1)
+            .Select(_ => store.Issue(Provider(), "token")).ToList();
 
-        Assert.Null(store.Consume(oldest));
+        Assert.Equal(
+            LogoutSessionStore.MaxSessions,
+            handles.Count(handle => store.Consume(handle) is not null));
     }
 }

@@ -102,6 +102,8 @@ cookie. It is replaced on the next browser SSO login and removed when this logou
 is visited; retention is capped at 30 days and 10,000 browser logins. The hint becomes
 unavailable on server restart or when the browser discards the cookie. Quick Connect and
 account linking do not replace the browser's logout context.
+Back-channel logout revokes Jellyfin tokens but does not purge this browser cache; its
+entries remain subject to the same retention limits.
 
 With several providers, `/sso/oidc/logout` uses the provider from that browser's SSO login,
 or the first enabled one if no retained login is available;
