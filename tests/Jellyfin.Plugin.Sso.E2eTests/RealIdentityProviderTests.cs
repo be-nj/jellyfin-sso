@@ -21,8 +21,8 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
     private static IPlaywright? _playwright;
     private static IBrowser? _browser;
 
-    private readonly JellyfinEnvironment _env;
-    private IRealIdentityProvider _idp = null!;
+    private protected readonly JellyfinEnvironment _env;
+    private protected IRealIdentityProvider _idp = null!;
 
     protected RealIdentityProviderTests(JellyfinEnvironment env)
     {
@@ -124,7 +124,7 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
     /// network reconfiguring under it — which has nothing to do with the plugin, so a
     /// login that fails that way is walked once more in a fresh context.
     /// </summary>
-    private async Task<IPage> SignInAsync(RealIdentityUser user)
+    private protected async Task<IPage> SignInAsync(RealIdentityUser user)
     {
         try
         {
@@ -299,6 +299,31 @@ public sealed class AutheliaTests : RealIdentityProviderTests
     public AutheliaTests(JellyfinEnvironment env)
         : base(env)
     {
+    }
+
+    [Fact]
+    public async Task Without_userinfo_groups_login_succeeds_with_no_libraries_and_an_actionable_warning()
+    {
+        await _env.PatchConfigAsync(config =>
+            config["Providers"]![0]!["GroupsFromUserInfo"] = false);
+        var logsBefore = await _env.ServerLogsAsync();
+
+        var page = await SignInAsync(_idp.MemberUser);
+
+        Assert.DoesNotContain("login.html", page.Url);
+        var user = await _env.FindUserAsync(_idp.MemberUser.Username);
+        Assert.NotNull(user);
+        var policy = await _env.UserPolicyAsync(_idp.MemberUser.Username);
+        Assert.False(policy["IsAdministrator"]!.GetValue<bool>());
+        Assert.False(policy["EnableAllFolders"]!.GetValue<bool>());
+        Assert.Empty(policy["EnabledFolders"]!.AsArray());
+        Assert.Empty((await _env.PluginConfigAsync())["SeenGroups"]!.AsArray());
+
+        var logs = (await _env.ServerLogsAsync())[logsBefore.Length..];
+        Assert.Contains("libraries=0, groups=", logs);
+        Assert.Contains(
+            "No groups were read from ID token claim groups for provider real-provider", logs);
+        Assert.Contains("Fetch groups from userinfo endpoint", logs);
     }
 
     internal override async Task<IRealIdentityProvider> StartProviderAsync(JellyfinEnvironment env)
