@@ -62,7 +62,7 @@ Against real software, not mocks. Every push runs:
 | **354 unit tests** | Token validation, permissions, lockout guards, markup, the served pages |
 | **85 end-to-end tests** | Throwaway Jellyfin container, an OIDC provider built for the suite, real browser |
 | **Three Jellyfin versions** | The same build against 12.0, 12.1 and 12.2 |
-| **9 real-provider logins** | Authentik, Keycloak and Authelia, through their own forms |
+| **16 real-provider logins** | Authentik, Keycloak and Authelia, through their own forms — including the misconfigurations their guides warn about |
 | **Mutation testing** | Stryker breaks the code to see whether the tests notice: 70 %, floor 65 % |
 | **CodeQL** | No open alerts |
 | **Weekly upstream run** | The same tests again, against the newest Jellyfin and the newest Authentik, Keycloak and Authelia |
@@ -154,14 +154,16 @@ same way for each of the four, this one included.
 
 | | Since | Latest | ★ | Licence | Written by AI | Tests |
 |---|---|---|---:|---|---|---|
-| **This one** | 2026-09 | v1.12.14 · 2026-10 | 1 | MIT → GPLv3 | **93 of 114** commits | 341 + 84 |
-| K0lin | 2026-06 | v5.1.1 · 2026-09 | 162 | GPL-3.0 | no trailers | 68 |
-| Ezeqielle | 2026-05 | v1.0.10 · 2026-09 | 40 | GPL-3.0 | 33 of last 100 | 16 |
-| 9p4 | 2022-01 | v4.0.0.4 · archived | 1,455 | GPL-3.0 | no trailers | none |
+| **This one** | 2026-09 | v1.12.14 · 2026-10 | 3 | MIT → GPLv3 | **107 of 131** commits | 354 + 105 |
+| K0lin | 2026-06 | v5.1.1 · 2026-09 | 176 | GPL-3.0 | none from an AI | 68 |
+| Ezeqielle | 2026-05 | v1.0.10 · 2026-09 | 41 | GPL-3.0 | 33 of last 100 | 16 |
+| 9p4 | 2022-01 | v4.0.0.4 · archived | 1,453 | GPL-3.0 | none from an AI | none |
 
 *Written by AI* counts commits carrying a `Co-Authored-By: Claude` trailer: Claude Opus 5
-throughout here, Opus 4.6 to 5 in Ezeqielle's. *Tests* counts unit + end-to-end cases.
-Only this one is mutation tested (70 %, floor 65) and scanned by CodeQL.
+throughout here, Opus 4.6 to 5 in Ezeqielle's. Three commits here came from GitHub's
+Copilot agent instead, and K0lin's trailers are all Renovate's, which is why that cell
+says what it says rather than "none". *Tests* counts unit + end-to-end cases, every case
+the suites hold. Only this one is mutation tested (70 %, floor 65) and scanned by CodeQL.
 
 ### What that means for this one
 
