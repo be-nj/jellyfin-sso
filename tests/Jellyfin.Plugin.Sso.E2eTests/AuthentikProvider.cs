@@ -37,6 +37,14 @@ internal sealed class AuthentikProvider : IRealIdentityProvider
     private const string BootstrapToken = "e2e-bootstrap-token-0123456789";
     private const string AppSlug = "jellyfin";
 
+    /// <summary>
+    /// A second application, identical to the first except that its provider has no
+    /// signing key — the one mistake docs/authentik.md puts in bold. Created here rather
+    /// than in the test because it costs two API calls on a container that is already
+    /// running, and because a provider is not something a browser can configure.
+    /// </summary>
+    private const string UnsignedAppSlug = "jellyfin-unsigned";
+
     private readonly INetwork _network;
     private readonly IContainer[] _containers;
 
@@ -45,6 +53,7 @@ internal sealed class AuthentikProvider : IRealIdentityProvider
         _network = network;
         _containers = containers;
         Authority = $"{baseUrl}/application/o/{AppSlug}/";
+        UnsignedAuthority = $"{baseUrl}/application/o/{UnsignedAppSlug}/";
     }
 
     public string Name => "Authentik";
@@ -52,6 +61,12 @@ internal sealed class AuthentikProvider : IRealIdentityProvider
     public string Authority { get; }
 
     public string ClientId => "jellyfin-e2e-client";
+
+    /// <summary>The issuer of the application whose provider was left without a signing key.</summary>
+    internal string UnsignedAuthority { get; }
+
+    /// <summary>The client of that same application.</summary>
+    internal string UnsignedClientId => "jellyfin-e2e-unsigned";
 
     public string GroupsClaim => "groups";
 
@@ -297,7 +312,7 @@ internal sealed class AuthentikProvider : IRealIdentityProvider
             ["client_id"] = ClientId,
             ["authorization_flow"] = authorizationFlow,
             ["invalidation_flow"] = invalidationFlow,
-            ["property_mappings"] = new JsonArray(mappings),
+            ["property_mappings"] = ScopeMappingArray(mappings),
             ["include_claims_in_id_token"] = true,
             ["signing_key"] = signingKey,
             // Recent authentik versions gate the grant types per provider, and a provider
@@ -314,6 +329,31 @@ internal sealed class AuthentikProvider : IRealIdentityProvider
             ["name"] = "Jellyfin",
             ["slug"] = AppSlug,
             ["provider"] = int.Parse(providerPk, System.Globalization.CultureInfo.InvariantCulture),
+        });
+
+        // The same provider with the signing key left out, so a test can walk the login
+        // that docs/authentik.md warns about instead of taking the warning on trust.
+        var unsignedPk = await PostAsync(api, "providers/oauth2/", new JsonObject
+        {
+            ["name"] = "jellyfin-e2e-unsigned",
+            ["client_type"] = "public",
+            ["client_id"] = UnsignedClientId,
+            ["authorization_flow"] = authorizationFlow,
+            ["invalidation_flow"] = invalidationFlow,
+            ["property_mappings"] = ScopeMappingArray(mappings),
+            ["include_claims_in_id_token"] = true,
+            ["grant_types"] = new JsonArray { "authorization_code" },
+            ["redirect_uris"] = new JsonArray
+            {
+                new JsonObject { ["matching_mode"] = "strict", ["url"] = redirectUri },
+            },
+        });
+
+        await PostAsync(api, "core/applications/", new JsonObject
+        {
+            ["name"] = "Jellyfin (no signing key)",
+            ["slug"] = UnsignedAppSlug,
+            ["provider"] = int.Parse(unsignedPk, System.Globalization.CultureInfo.InvariantCulture),
         });
     }
 
@@ -363,7 +403,14 @@ internal sealed class AuthentikProvider : IRealIdentityProvider
     /// for fewer scopes than it needs — which surfaces much later as a refused userinfo
     /// call rather than as a missing mapping.
     /// </summary>
-    private async Task<JsonNode[]> ScopeMappingsAsync(HttpClient api)
+    /// <summary>
+    /// A fresh array of the mapping keys. A JsonNode belongs to one parent, so the two
+    /// providers created above cannot be handed the same array.
+    /// </summary>
+    private static JsonArray ScopeMappingArray(string[] mappings)
+        => new(mappings.Select(pk => (JsonNode)pk!).ToArray());
+
+    private async Task<string[]> ScopeMappingsAsync(HttpClient api)
     {
         var deadline = DateTimeOffset.UtcNow.AddMinutes(2);
 
@@ -373,7 +420,7 @@ internal sealed class AuthentikProvider : IRealIdentityProvider
                 .AsArray();
             var wanted = all
                 .Where(m => Scopes.Contains(m!["scope_name"]!.GetValue<string>()))
-                .Select(m => (JsonNode)m!["pk"]!.GetValue<string>())
+                .Select(m => m!["pk"]!.GetValue<string>())
                 .ToArray();
 
             if (wanted.Length == Scopes.Length)
