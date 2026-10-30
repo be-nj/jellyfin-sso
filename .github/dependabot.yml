@@ -31,3 +31,11 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      # github/codeql-action/init, /analyze and /upload-sarif are one repository, and
+      # the action refuses to run with its steps on different versions: "Loaded a
+      # configuration file for version '4.39.0', but running version '4.39.1'". Bumped
+      # one pull request each, every one of them fails on its own and none can merge.
+      codeql-action:
+        patterns:
+          - 'github/codeql-action*'
