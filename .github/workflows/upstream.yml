@@ -37,6 +37,9 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Check the image exists before testing against it
+        run: scripts/upstream-check-images.sh jellyfin/jellyfin:latest
+
       - name: Run the e2e suite against the latest server image
         env:
           E2E_JELLYFIN_TAG: latest
@@ -74,9 +77,20 @@ jobs:
         with:
           global-json-file: global.json
 
+      # authentik is the one of the three that publishes no ":latest" on ghcr — its
+      # moving tag is ":stable", which is what its own install documentation uses. The
+      # first scheduled run asked for ":latest" and spent a minute discovering that
+      # Docker calls a tag that does not exist "manifest unknown" (#100).
+      - name: Check the images exist before testing against them
+        run: >
+          scripts/upstream-check-images.sh
+          ghcr.io/goauthentik/server:stable
+          quay.io/keycloak/keycloak:latest
+          ghcr.io/authelia/authelia:latest
+
       - name: Run the suite against the latest Authentik, Keycloak and Authelia
         env:
-          E2E_AUTHENTIK_IMAGE: ghcr.io/goauthentik/server:latest
+          E2E_AUTHENTIK_IMAGE: ghcr.io/goauthentik/server:stable
           E2E_KEYCLOAK_IMAGE: quay.io/keycloak/keycloak:latest
           E2E_AUTHELIA_IMAGE: ghcr.io/authelia/authelia:latest
         run: >

@@ -76,7 +76,11 @@ suite only proves the plugin worked with the versions it was written against.
 
 So the pins are lifted once a week. The `Upstream` workflow runs the same tests against
 the newest Jellyfin image and the newest Authentik, Keycloak and Authelia, on Monday at
-05:00 UTC and on demand, and nothing in it is a required check. A failure opens an issue —
+05:00 UTC and on demand, and nothing in it is a required check. "Newest" is each
+project's own moving tag, which is `latest` for Jellyfin, Keycloak and Authelia and
+`stable` for authentik, who publish no `latest` on ghcr; the run pulls all four before it
+starts, so a tag this repository got wrong fails by name instead of arriving as a test
+failure. A failure opens an issue —
 or comments on the one already open — with a link to the run, whose job summary lists the
 digest of every image it pulled, because "the latest Keycloak broke it" is only useful
 with the bytes named. The issue is not closed automatically: it is closed by whoever
