@@ -455,6 +455,10 @@ public sealed class KeycloakTests : RealIdentityProviderTests
             (await _env.PluginConfigAsync())["SeenGroups"]!.AsArray()
                 .Select(group => group!.GetValue<string>()));
 
+        // And the server said why, which is the difference between a five-minute
+        // diagnosis and an afternoon of it.
+        Assert.Contains("Full group path", await _env.ServerLogsAsync());
+
         // The other half: spelled the way the claim arrives, the same login works.
         await _env.PatchConfigAsync(config =>
             JellyfinEnvironment.Mapping(config, "media")["Group"] = "/media");
