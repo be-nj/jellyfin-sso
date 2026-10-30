@@ -380,6 +380,45 @@ public sealed class PermissionSyncTests : IDisposable
     }
 
     [Fact]
+    public async Task A_mapping_that_names_only_the_last_part_of_a_path_says_so_in_the_log()
+    {
+        // What Keycloak sends with "Full group path" left on, against the mapping a
+        // reader of its guide would have typed.
+        Map("media", false, MoviesId);
+
+        await _sync.SyncAsync(_userId, Identity("/media"));
+
+        Assert.Empty(CapturedPolicy().EnabledFolders);
+        Assert.Contains(
+            _log.Warnings,
+            line => line.Contains("'media'", StringComparison.Ordinal)
+                && line.Contains("'/media'", StringComparison.Ordinal)
+                && line.Contains("Full group path", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_deeper_path_is_the_same_near_miss()
+    {
+        Map("media", false, MoviesId);
+
+        await _sync.SyncAsync(_userId, Identity("/household/media"));
+
+        Assert.Contains(
+            _log.Warnings,
+            line => line.Contains("'/household/media'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_group_that_merely_ends_in_the_same_letters_is_not_a_near_miss()
+    {
+        Map("media", false, MoviesId);
+
+        await _sync.SyncAsync(_userId, Identity("multimedia"));
+
+        Assert.Empty(_log.Warnings);
+    }
+
+    [Fact]
     public async Task A_mapping_nobody_sent_is_not_worth_a_warning()
     {
         Map("downloaders", false, MoviesId);

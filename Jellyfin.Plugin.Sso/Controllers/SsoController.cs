@@ -388,14 +388,7 @@ public sealed class SsoController : ControllerBase
             if (pending.LinkUserId is { } linkUserId)
                 return CompleteSelfServiceLink(provider, identity, linkUserId);
 
-            if (identity.Groups.Count == 0 && !provider.GroupsFromUserInfo)
-            {
-                _logger.LogWarning(
-                    "No groups were read from ID token claim {Claim} for provider {Id}. "
-                    + "If this provider keeps groups in userinfo, enable "
-                    + "'Fetch groups from userinfo endpoint' in its provider card.",
-                    provider.GroupsClaim, KnownProviderId(provider.Id));
-            }
+            WarnIfNoGroupsArrived(provider, identity);
 
             var (userId, username) = await _provisioner.ResolveAsync(provider, identity, ct)
                 .ConfigureAwait(false);
@@ -566,6 +559,39 @@ public sealed class SsoController : ControllerBase
         }
 
         return await CompleteQuickConnectAsync(pending.UserId, pending.Code).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// A login that brought no groups while group mappings exist. Nothing fails — the
+    /// account is created and arrives with no libraries, which is the setup mistake that
+    /// takes longest to recognise, so the log says which settings decide it.
+    ///
+    /// Only when mappings exist: a server that maps no groups at all is not misconfigured,
+    /// and a warning on every login of such an installation would be noise.
+    /// </summary>
+    private void WarnIfNoGroupsArrived(ProviderConfig provider, OidcIdentity identity)
+    {
+        if (identity.Groups.Count > 0
+            || Plugin.Instance?.Configuration.GroupMappings.Count is null or 0)
+        {
+            return;
+        }
+
+        if (provider.GroupsFromUserInfo)
+        {
+            _logger.LogWarning(
+                "No groups came back from the userinfo endpoint for provider {Id}, which "
+                + "was asked for claim {Claim}. Check the claim name, and that the scopes "
+                + "this provider needs for it are in the provider card.",
+                KnownProviderId(provider.Id), provider.GroupsClaim);
+            return;
+        }
+
+        _logger.LogWarning(
+            "No groups were read from ID token claim {Claim} for provider {Id}. "
+            + "If this provider keeps groups in userinfo, enable "
+            + "'Fetch groups from userinfo endpoint' in its provider card.",
+            provider.GroupsClaim, KnownProviderId(provider.Id));
     }
 
     private async Task<IActionResult> CompleteQuickConnectAsync(Guid userId, string quickConnectCode)

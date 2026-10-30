@@ -47,7 +47,7 @@ public sealed class PermissionSync
             .Where(m => identity.Groups.Contains(m.Group, StringComparer.Ordinal))
             .ToList();
 
-        WarnAboutCaseOnlyMisses(config, identity, matched);
+        WarnAboutNearMisses(config, identity, matched);
 
         var isAdmin = ResolveAdmin(matched, userId, config);
 
@@ -175,23 +175,54 @@ public sealed class PermissionSync
     /// always a typo, though, and the symptom — the user sees nothing — says nothing about
     /// the cause. So it is said here, once per login.
     /// </summary>
-    private void WarnAboutCaseOnlyMisses(
+    private void WarnAboutNearMisses(
         PluginConfiguration config, OidcIdentity identity, List<GroupMappingConfig> matched)
     {
         foreach (var mapping in config.GroupMappings.Except(matched))
         {
-            var nearMiss = identity.Groups.FirstOrDefault(
-                group => string.Equals(group, mapping.Group, StringComparison.OrdinalIgnoreCase));
-
-            if (nearMiss is not null)
+            foreach (var arrived in identity.Groups)
             {
+                var reason = MissReason(mapping.Group, arrived);
+                if (reason is null)
+                {
+                    continue;
+                }
+
                 _logger.LogWarning(
                     "SSO group mapping '{Mapping}' does not match the group '{Arrived}' the "
-                    + "provider sent: the names differ only in case, and matching is exact.",
+                    + "provider sent: {Reason}, and matching is exact.",
                     mapping.Group,
-                    nearMiss);
+                    arrived,
+                    reason);
             }
         }
+    }
+
+    /// <summary>
+    /// Why a mapping almost matched a group, or null when the two have nothing to do with
+    /// each other. Two near misses are worth saying out loud, because in both the login
+    /// works and the account simply arrives with nothing:
+    ///
+    ///   * the names differ only in case;
+    ///   * the group is a path and the mapping is its last segment, which is what Keycloak
+    ///     sends with "Full group path" left on — "/media" against a mapping of "media".
+    /// </summary>
+    private static string? MissReason(string mapping, string arrived)
+    {
+        if (string.Equals(mapping, arrived, StringComparison.OrdinalIgnoreCase))
+        {
+            return "the names differ only in case";
+        }
+
+        var lastSegment = arrived[(arrived.LastIndexOf('/') + 1)..];
+        if (arrived.Contains('/', StringComparison.Ordinal)
+            && string.Equals(mapping, lastSegment, StringComparison.OrdinalIgnoreCase))
+        {
+            return "the provider sent a path and the mapping names only its last part "
+                + "(Keycloak does this with \"Full group path\" left on)";
+        }
+
+        return null;
     }
 
     /// <summary>Null means no limit; a group without a limit lifts it for the whole user.</summary>
