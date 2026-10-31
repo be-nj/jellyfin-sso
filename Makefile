@@ -73,6 +73,16 @@ screenshots:
 # Records the login clip the README shows, against a real Authentik, and turns the raw
 # webm into the GIF and the MP4 that are committed. Minutes, because authentik starts
 # four containers — run it when the login looks different, not on every change.
+# The end-to-end stack, held open so a phone, a television box or an emulator can log
+# into it by hand. No credentials: the suite's provider has no login form. Prints what a
+# client needs and writes it to tests/runs/e2e/stack.json; delete that file to stop early.
+#
+#   make stack
+#   E2E_STACK_MINUTES=120 make stack
+stack:
+	$(MAKE) e2e E2E_FILTER='--filter "FullyQualifiedName~ManualStackTests"' \
+	  E2E_EXTRA_ENV='-e E2E_IDP_PLAIN_AUTHORIZE=1'
+
 demo:
 	$(MAKE) e2e E2E_FILTER='--filter "Category=Demo"'
 	scripts/demo-clip.sh
@@ -83,7 +93,7 @@ e2e:
 	  -v /var/run/docker.sock:/var/run/docker.sock \
 	  -v "$(CURDIR)":"$(CURDIR)" -w "$(CURDIR)" \
 	  -e HOME=/tmp -e NUGET_PACKAGES="$(CURDIR)/tests/runs/nuget" \
-	  -e E2E_PLAYWRIGHT_WITH_DEPS=1 \
+	  -e E2E_PLAYWRIGHT_WITH_DEPS=1 $(E2E_EXTRA_ENV) \
 	  mcr.microsoft.com/dotnet/sdk:10.0.402 \
 	  bash -c 'apt-get update -qq && apt-get install -y -qq zip docker.io >/dev/null \
 	    && dotnet test tests/Jellyfin.Plugin.Sso.E2eTests -c Release --logger trx $(E2E_FILTER)'
