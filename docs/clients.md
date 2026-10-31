@@ -64,7 +64,7 @@ only thing that matters here: how a login can happen at all.
 | Moonfin | Android, Android TV, iOS, desktop | Quick Connect | 3.0.0 TV build, Google TV 14 emulator — signed in, and it draws a QR code beside the digits |
 | Swiftfin | iOS, tvOS | Quick Connect | from its sources |
 | plezy | Android, iOS, desktop | Quick Connect | from its sources |
-| Wholphin | Android TV | Quick Connect | from its sources; its builds are ARM-only, so an x86 emulator cannot run it |
+| Wholphin | Android TV | Quick Connect | on a Google TV, by the maintainer: *Add user* shows a Quick Connect code straight away, with no password screen first; the login was done in a browser on a PC and the television was signed in two or three seconds later. Its builds are ARM-only, so no emulator here can run it — version not recorded |
 | Switchfin | PC, PS4, PS Vita, Switch | Quick Connect | from its sources |
 | Blink | desktop (Tauri) | Quick Connect | from its sources |
 | Jellyfin for Roku | Roku | Quick Connect | from its sources |
@@ -72,11 +72,17 @@ only thing that matters here: how a login can happen at all.
 | Streamyfin (TV build) | Android TV | Quick Connect | not run here: ARM libraries, x86 emulator. Same login code as its phone build |
 | **tsukimi** | Linux (GTK) | **neither** | from its sources: it authenticates by username and password and has no Quick Connect, so an SSO account cannot sign in to it at all |
 
+Wholphin was checked on real hardware instead, against a live server, because nothing
+here can run it: the Android emulator refuses a foreign CPU architecture on an x86 host
+("Avd's CPU Architecture 'arm64' is not supported by the QEMU2 emulator"), and the
+x86 images that once carried ARM translation no longer do. Its ARM-only builds are not a
+shortcoming — televisions are ARM.
+
 Closed-source clients — Infuse, Symfonium — could not be read, and are not listed.
 Whether they work comes down to the same question: do they offer Quick Connect.
 
-The checks ran in October 2026 against a throwaway server with this plugin installed,
-built by `make stack` — a Jellyfin container with the release ZIP, the suite's provider,
+The emulator checks ran in October 2026 against a throwaway server with this plugin
+installed, built by `make stack` — a Jellyfin container with the release ZIP, the suite's provider,
 and nothing a person has to type a password into. The server recorded each login as a
 session for the same SSO account, which is the thing worth proving: the client never
 learns a password, and the account it gets is the one the provider named.
