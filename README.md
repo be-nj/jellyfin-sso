@@ -90,11 +90,11 @@ itself. What a client can do is one of two things — and a few can do neither.
 | | Apps |
 |---|---|
 | **In the app.** The app loads the server's own web client, so the provider button is on the login page and the provider opens where you are | **Jellyfin for Android** ✔, **Jellyfin Desktop**, LG (webOS), any browser |
-| **Quick Connect.** The app shows a six-character code; you sign in at your provider on a phone, and the app lets itself in | **Jellyfin Android TV** ✔, **Findroid** ✔, **Streamyfin** ✔, **Finamp** ✔, **Moonfin** ✔, Samsung (Tizen), Swiftfin, plezy, Wholphin, Switchfin, Blink, Jellyfin for Roku, Jellyfin for Kodi |
+| **Quick Connect.** The app shows a six-character code; you sign in at your provider on a phone, and the app lets itself in | **Jellyfin Android TV** ✔, **Findroid** ✔, **Streamyfin** ✔, **Finamp** ✔, **Moonfin** ✔, **Wholphin** ✔, Samsung (Tizen), Swiftfin, plezy, Switchfin, Blink, Jellyfin for Roku, Jellyfin for Kodi |
 | **Neither.** A username and a password, and nothing else — an SSO account cannot sign in at all | tsukimi |
 
-✔ means driven by hand in an emulator against a throwaway server with this plugin
-installed; the rest is read from the clients' own sources. Nobody publishes install
+✔ means driven by hand — in an emulator against a throwaway server with this plugin
+installed, or on a real television; the rest is read from the clients' own sources. Nobody publishes install
 figures for Jellyfin clients, so this is not a ranking: it is the apps that the ecosystem
 lists name, plus the ones with the most stars, plus everything that turned up while
 checking. [The full list, and what each check did](docs/clients.md).
