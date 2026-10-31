@@ -259,6 +259,21 @@
             <h3 class="sso-card-title">Safety</h3>
             <div class="checkboxContainer">
               <label>
+                <input id="RequireMappedGroup" type="checkbox" is="emby-checkbox" />
+                <span>Refuse logins that match no mapping</span>
+              </label>
+              <div class="fieldDescription">
+                Off by default: a login in no mapped group gets an account with no libraries.
+                Switched on, that login is turned away instead and no account is created —
+                a second lock inside the plugin for the day the provider is the thing
+                configured wrongly. It applies to accounts that already exist, so a group
+                taken away is access taken away. Users excluded from sync are exempt, and
+                local passwords still work, so a mistyped claim name cannot lock you out of
+                your own server. <strong>Keep one local administrator.</strong>
+              </div>
+            </div>
+            <div class="checkboxContainer">
+              <label>
                 <input id="PreserveAdminPermissions" type="checkbox" is="emby-checkbox" />
                 <span>Never remove administrator rights on login</span>
               </label>

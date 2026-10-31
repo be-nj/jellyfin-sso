@@ -38,6 +38,7 @@ its signature is checked, and the group names that arrive with it.
 | Anonymous call to the admin API | Every data endpoint requires an administrator | `The_admin_api_is_closed_to_anonymous_callers` |
 | Group rename at the provider silently keeping access | Permissions are rewritten from the groups on every login | `Access_is_revoked_when_the_groups_disappear` |
 | Mistyped admin group locking everyone out | The last administrator is never demoted | `PermissionSyncTests` |
+| A provider configured to let in more people than it should | Optional: *Refuse logins that match no mapping* turns away a login that matches no group mapping, before an account exists, and keeps doing so for accounts that already exist. Off by default, because the provider is the usual place for this decision; on, it is a second lock that does not depend on the provider staying right | `LoginGateTests`, `A_login_in_no_mapped_group_is_refused_once_the_server_asks_for_one`, `An_account_that_loses_its_group_loses_the_login_too` |
 | Claims smuggled under another name | Only the configured groups claim is read | `Claims_under_a_different_name_are_not_read_as_groups` |
 | Forged log lines through a crafted provider id | Only configured ids and the fixed RFC 6749 error codes are logged | `LoggableTests` |
 | Provider name injecting markup into the login page | Names are HTML-escaped, ids URL-encoded | `A_provider_name_cannot_inject_markup` |

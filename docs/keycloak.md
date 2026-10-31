@@ -9,6 +9,12 @@
 3. Leave the plugin's *Scopes* **empty**. Keycloak has no `groups` scope unless someone
    creates one, and an unknown scope fails the authorization with `invalid_scope`.
 4. Issuer URL: `https://<your-keycloak>/realms/<realm>`.
+5. **Who may log in** is decided here, not in Jellyfin: give the client a dedicated
+   authorization flow, or restrict it to members of a group, unless every Keycloak user
+   should get a Jellyfin account. The plugin can also hold the line from its side —
+   *Refuse logins that match no mapping* in
+   [Safety](configuration.md#safety) — which is worth switching on as a second lock
+   rather than as a replacement.
 
 Keycloak puts the groups in the ID token, so *Fetch groups from userinfo endpoint* stays
 off.

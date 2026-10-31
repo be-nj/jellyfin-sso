@@ -43,9 +43,7 @@ public sealed class PermissionSync
             return;
         }
 
-        var matched = config.GroupMappings
-            .Where(m => identity.Groups.Contains(m.Group, StringComparer.Ordinal))
-            .ToList();
+        var matched = GroupMatching.Matching(config, identity);
 
         WarnAboutNearMisses(config, identity, matched);
 
@@ -169,60 +167,23 @@ public sealed class PermissionSync
     }
 
     /// <summary>
-    /// Matching is exact, because "Media" and "media" can be two different groups at the
-    /// provider and a mapping that silently covered both would hand out access nobody
-    /// granted. A mapping that differs from an arriving group only in case is almost
-    /// always a typo, though, and the symptom — the user sees nothing — says nothing about
-    /// the cause. So it is said here, once per login.
+    /// A mapping that almost matched says nothing about itself in the symptom — the user
+    /// simply sees nothing — so it is said here, once per login. The rules for what counts
+    /// as "almost" live in <see cref="GroupMatching"/>, because the login gate needs the
+    /// same ones.
     /// </summary>
     private void WarnAboutNearMisses(
         PluginConfiguration config, OidcIdentity identity, List<GroupMappingConfig> matched)
     {
-        foreach (var mapping in config.GroupMappings.Except(matched))
+        foreach (var (mapping, arrived, reason) in GroupMatching.NearMisses(config, identity, matched))
         {
-            foreach (var arrived in identity.Groups)
-            {
-                var reason = MissReason(mapping.Group, arrived);
-                if (reason is null)
-                {
-                    continue;
-                }
-
-                _logger.LogWarning(
-                    "SSO group mapping '{Mapping}' does not match the group '{Arrived}' the "
-                    + "provider sent: {Reason}, and matching is exact.",
-                    mapping.Group,
-                    arrived,
-                    reason);
-            }
+            _logger.LogWarning(
+                "SSO group mapping '{Mapping}' does not match the group '{Arrived}' the "
+                + "provider sent: {Reason}, and matching is exact.",
+                mapping,
+                arrived,
+                reason);
         }
-    }
-
-    /// <summary>
-    /// Why a mapping almost matched a group, or null when the two have nothing to do with
-    /// each other. Two near misses are worth saying out loud, because in both the login
-    /// works and the account simply arrives with nothing:
-    ///
-    ///   * the names differ only in case;
-    ///   * the group is a path and the mapping is its last segment, which is what Keycloak
-    ///     sends with "Full group path" left on — "/media" against a mapping of "media".
-    /// </summary>
-    private static string? MissReason(string mapping, string arrived)
-    {
-        if (string.Equals(mapping, arrived, StringComparison.OrdinalIgnoreCase))
-        {
-            return "the names differ only in case";
-        }
-
-        var lastSegment = arrived[(arrived.LastIndexOf('/') + 1)..];
-        if (arrived.Contains('/', StringComparison.Ordinal)
-            && string.Equals(mapping, lastSegment, StringComparison.OrdinalIgnoreCase))
-        {
-            return "the provider sent a path and the mapping names only its last part "
-                + "(Keycloak does this with \"Full group path\" left on)";
-        }
-
-        return null;
     }
 
     /// <summary>Null means no limit; a group without a limit lifts it for the whole user.</summary>

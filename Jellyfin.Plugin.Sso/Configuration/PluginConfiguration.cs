@@ -36,6 +36,19 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool SignOutOfIdentityProvider { get; set; }
 
     /// <summary>
+    /// Refuse a login that matches no group mapping, instead of creating an account with
+    /// no libraries. Off by default, because the provider is the usual place to decide who
+    /// may reach Jellyfin at all — switching it on adds a second lock, inside the plugin,
+    /// for the case where the provider was the thing configured wrongly.
+    ///
+    /// It applies to accounts that already exist as well: a group taken away is access
+    /// taken away. Accounts in <see cref="SyncExcludedUserIds"/> are exempt, and local
+    /// passwords are untouched, so an operator locked out by a wrong claim name can still
+    /// sign in to their own server.
+    /// </summary>
+    public bool RequireMappedGroup { get; set; }
+
+    /// <summary>
     /// Whether the plugin writes a login button per enabled provider into Jellyfin's
     /// login disclaimer. Off for anyone who places their own button with the JavaScript
     /// Injector and does not want a second one underneath it.
