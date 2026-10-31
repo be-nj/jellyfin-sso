@@ -22,6 +22,17 @@ public sealed class UserProvisioner
     /// Returns (userId, username) on success.
     /// Throws when a username collision with an existing non-linked account is detected.
     /// </summary>
+    /// <summary>
+    /// The Jellyfin account this identity is already linked to, or null for one that has
+    /// never signed in here. Reads the links and changes nothing, so the login gate can
+    /// ask before anything is created.
+    /// </summary>
+    public static Guid? LinkedUserId(ProviderConfig provider, OidcIdentity identity)
+        => Plugin.Instance?.Configuration.Links
+            .FirstOrDefault(l => l.ProviderId == provider.Id
+                && string.Equals(l.Sub, identity.Sub, StringComparison.Ordinal))
+            ?.JellyfinUserId;
+
     public async Task<(Guid UserId, string Username)> ResolveAsync(
         ProviderConfig provider,
         OidcIdentity identity,

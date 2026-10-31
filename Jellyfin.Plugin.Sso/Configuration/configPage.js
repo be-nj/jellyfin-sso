@@ -83,6 +83,7 @@ function load(view) {
             _config.LoginRequestsPerMinute == null
                 ? DEFAULT_LOGIN_REQUESTS_PER_MINUTE
                 : _config.LoginRequestsPerMinute);
+        setChk(view, 'RequireMappedGroup', !!_config.RequireMappedGroup);
         setChk(view, 'PreserveAdminPermissions', !!_config.PreserveAdminPermissions);
         renderMappings(view, _config.GroupMappings || []);
         renderLinks(view);
@@ -143,6 +144,7 @@ function save(view) {
         GroupMappings: collectMappings(view),
         Links: (_config && _config.Links) || [],
         SeenGroups: (_config && _config.SeenGroups) || [],
+        RequireMappedGroup: getChk(view, 'RequireMappedGroup'),
         PreserveAdminPermissions: getChk(view, 'PreserveAdminPermissions'),
         SignOutOfIdentityProvider: getChk(view, 'SignOutOfIdentityProvider'),
         AddLoginButtonToBranding: getChk(view, 'AddLoginButtonToBranding'),

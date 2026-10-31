@@ -43,11 +43,9 @@ public sealed class PermissionSync
             return;
         }
 
-        var matched = config.GroupMappings
-            .Where(m => identity.Groups.Contains(m.Group, StringComparer.Ordinal))
-            .ToList();
+        var matched = GroupMatching.Matching(config, identity);
 
-        WarnAboutCaseOnlyMisses(config, identity, matched);
+        WarnAboutNearMisses(config, identity, matched);
 
         var isAdmin = ResolveAdmin(matched, userId, config);
 
@@ -169,28 +167,22 @@ public sealed class PermissionSync
     }
 
     /// <summary>
-    /// Matching is exact, because "Media" and "media" can be two different groups at the
-    /// provider and a mapping that silently covered both would hand out access nobody
-    /// granted. A mapping that differs from an arriving group only in case is almost
-    /// always a typo, though, and the symptom — the user sees nothing — says nothing about
-    /// the cause. So it is said here, once per login.
+    /// A mapping that almost matched says nothing about itself in the symptom — the user
+    /// simply sees nothing — so it is said here, once per login. The rules for what counts
+    /// as "almost" live in <see cref="GroupMatching"/>, because the login gate needs the
+    /// same ones.
     /// </summary>
-    private void WarnAboutCaseOnlyMisses(
+    private void WarnAboutNearMisses(
         PluginConfiguration config, OidcIdentity identity, List<GroupMappingConfig> matched)
     {
-        foreach (var mapping in config.GroupMappings.Except(matched))
+        foreach (var (mapping, arrived, reason) in GroupMatching.NearMisses(config, identity, matched))
         {
-            var nearMiss = identity.Groups.FirstOrDefault(
-                group => string.Equals(group, mapping.Group, StringComparison.OrdinalIgnoreCase));
-
-            if (nearMiss is not null)
-            {
-                _logger.LogWarning(
-                    "SSO group mapping '{Mapping}' does not match the group '{Arrived}' the "
-                    + "provider sent: the names differ only in case, and matching is exact.",
-                    mapping.Group,
-                    nearMiss);
-            }
+            _logger.LogWarning(
+                "SSO group mapping '{Mapping}' does not match the group '{Arrived}' the "
+                + "provider sent: {Reason}, and matching is exact.",
+                mapping,
+                arrived,
+                reason);
         }
     }
 

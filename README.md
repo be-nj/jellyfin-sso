@@ -26,7 +26,8 @@ OpenID Connect single sign-on for Jellyfin — for households already running
 - **Sign in through your provider.** PKCE public client, no secret stored.
 - **Groups decide access** — libraries, Live TV, downloads, deletion, collections,
   subtitles, lyrics, parental rating, admin — reapplied on every login.
-- **Accounts created at first login**, existing ones [linked explicitly](docs/linking.md).
+- **Accounts created at first login**, existing ones [linked explicitly](docs/linking.md) —
+  or no account at all, if you ask the plugin to refuse logins that match no group.
 - **Phones and TVs** via Jellyfin's [Quick Connect](docs/clients.md).
 - **Profile pictures from the provider**, if you want them — off by default, because an
   avatar somebody chose here is theirs.
@@ -59,12 +60,12 @@ Against real software, not mocks. Every push runs:
 
 | | |
 |---|---|
-| **354 unit tests** | Token validation, permissions, lockout guards, markup, the served pages |
-| **85 end-to-end tests** | Throwaway Jellyfin container, an OIDC provider built for the suite, real browser |
+| **368 unit tests** | Token validation, permissions, lockout guards, markup, the served pages |
+| **91 end-to-end tests** | Throwaway Jellyfin container, an OIDC provider built for the suite, real browser |
 | **Three Jellyfin versions** | The same build against 12.0, 12.1 and 12.2 |
-| **9 real-provider logins** | Authentik, Keycloak and Authelia, through their own forms |
+| **16 real-provider logins** | Authentik, Keycloak and Authelia, through their own forms — including the misconfigurations their guides warn about |
 | **Mutation testing** | Stryker breaks the code to see whether the tests notice: 70 %, floor 65 % |
-| **CodeQL** | No open alerts |
+| **CodeQL** | Every alert fixed, or dismissed with a written reason |
 | **Weekly upstream run** | The same tests again, against the newest Jellyfin and the newest Authentik, Keycloak and Authelia |
 
 That provider is a provider, not a stub: discovery document, JWKS, authorization code
@@ -119,7 +120,7 @@ that project happened to build:
 <tr><th colspan="5" align="left">Accounts</th></tr>
 <tr><td align="left">Keyed by the provider's subject</td><td align="center">●</td><td align="center">◐</td><td align="center">○</td><td align="center">◐</td></tr>
 <tr><td align="left">Users link their own account</td><td align="center">●</td><td align="center">○</td><td align="center">○</td><td align="center">○</td></tr>
-<tr><td align="left">Refuse the login when no role matches</td><td align="center">○</td><td align="center">●</td><td align="center">◐</td><td align="center">●</td></tr>
+<tr><td align="left">Refuse the login when no role matches</td><td align="center">●</td><td align="center">●</td><td align="center">◐</td><td align="center">●</td></tr>
 <tr><td align="left">Accounts exempt from the group sync</td><td align="center">●</td><td align="center">○</td><td align="center">○</td><td align="center">○</td></tr>
 <tr><td align="left">Last administrator never demoted</td><td align="center">●</td><td align="center">◐</td><td align="center">○</td><td align="center">○</td></tr>
 <tr><th colspan="5" align="left">What the groups grant</th></tr>
@@ -145,7 +146,7 @@ name claim against a link table an administrator keeps; K0lin's administrator gu
 setting you turn on; 9p4's button is a snippet you paste into the login disclaimer;
 Ezeqielle maps deletion, collections and subtitles but not lyrics, and can refuse
 accounts it did not create rather than refusing by role; the picture here is off until
-you switch it on.
+you switch it on, as is refusing a login that matches no mapping.
 
 ### Where they come from
 
@@ -154,14 +155,16 @@ same way for each of the four, this one included.
 
 | | Since | Latest | ★ | Licence | Written by AI | Tests |
 |---|---|---|---:|---|---|---|
-| **This one** | 2026-09 | v1.12.14 · 2026-10 | 1 | MIT → GPLv3 | **93 of 114** commits | 341 + 84 |
-| K0lin | 2026-06 | v5.1.1 · 2026-09 | 162 | GPL-3.0 | no trailers | 68 |
-| Ezeqielle | 2026-05 | v1.0.10 · 2026-09 | 40 | GPL-3.0 | 33 of last 100 | 16 |
-| 9p4 | 2022-01 | v4.0.0.4 · archived | 1,455 | GPL-3.0 | no trailers | none |
+| **This one** | 2026-09 | v1.12.15 · 2026-10 | 3 | MIT → GPLv3 | **107 of 131** commits | 368 + 111 |
+| K0lin | 2026-06 | v5.1.1 · 2026-09 | 176 | GPL-3.0 | none from an AI | 68 |
+| Ezeqielle | 2026-05 | v1.0.10 · 2026-09 | 41 | GPL-3.0 | 33 of last 100 | 16 |
+| 9p4 | 2022-01 | v4.0.0.4 · archived | 1,453 | GPL-3.0 | none from an AI | none |
 
 *Written by AI* counts commits carrying a `Co-Authored-By: Claude` trailer: Claude Opus 5
-throughout here, Opus 4.6 to 5 in Ezeqielle's. *Tests* counts unit + end-to-end cases.
-Only this one is mutation tested (70 %, floor 65) and scanned by CodeQL.
+throughout here, Opus 4.6 to 5 in Ezeqielle's. Three commits here came from GitHub's
+Copilot agent instead, and K0lin's trailers are all Renovate's, which is why that cell
+says what it says rather than "none". *Tests* counts unit + end-to-end cases, every case
+the suites hold. Only this one is mutation tested (70 %, floor 65) and scanned by CodeQL.
 
 ### What that means for this one
 

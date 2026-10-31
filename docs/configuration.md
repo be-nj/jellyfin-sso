@@ -143,6 +143,11 @@ limit lifts the limit.
 
 Same tab as the group mappings:
 
+- **Refuse logins that match no mapping** — off by default. With it off, somebody in no
+  mapped group signs in and gets an account with no libraries; with it on, that login is
+  turned away and no account is created. It applies to accounts that already exist, so a
+  group taken away at the provider is access taken away here. Excluded users (below) are
+  exempt, and the server log says which group nearly matched when one did.
 - **Never remove administrator rights on login** — administrators keep the flag even when
   no admin group matches. Library access still comes from the groups.
 - **Excluded from sync** — one checkbox per Jellyfin user. They can log in via SSO, but
@@ -151,6 +156,12 @@ Same tab as the group mappings:
 > **Lockout guard:** the last remaining administrator is never demoted, whatever the
 > groups say, so a mistyped admin group leaves a warning in the log rather than locking
 > everyone out.
+>
+> *Refuse logins that match no mapping* is the one switch that can turn SSO away from
+> everybody at once — a claim name that matches nothing, or an empty mapping list, refuses
+> every login. It cannot lock you out of the server itself: Jellyfin's own password login
+> is untouched, and the refusals name their reason in the log. Keep one local
+> administrator with a password, which is worth doing whatever this switch is set to.
 
 ## Account Links
 

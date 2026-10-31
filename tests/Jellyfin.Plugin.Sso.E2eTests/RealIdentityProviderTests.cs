@@ -21,8 +21,8 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
     private static IPlaywright? _playwright;
     private static IBrowser? _browser;
 
-    private readonly JellyfinEnvironment _env;
-    private IRealIdentityProvider _idp = null!;
+    private protected readonly JellyfinEnvironment _env;
+    private protected IRealIdentityProvider _idp = null!;
 
     protected RealIdentityProviderTests(JellyfinEnvironment env)
     {
@@ -119,12 +119,66 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A login nobody expects to work, because either the provider or the provider card is
+    /// set up the way one of the guides warns against. Returns what the browser was left
+    /// looking at — the provider's refusal, or Jellyfin's — so the test can say which
+    /// failure it got rather than only that there was one. Fails if a session appears,
+    /// because a misconfiguration that signs people in anyway is the interesting case.
+    /// </summary>
+    private protected async Task<string> AttemptRefusedLoginAsync(RealIdentityUser user)
+    {
+        await using var context = await _browser!.NewContextAsync(new BrowserNewContextOptions
+        {
+            BaseURL = _idp.ServerBaseUrl ?? _env.BaseUrl,
+            IgnoreHTTPSErrors = true,
+        });
+        var page = await context.NewPageAsync();
+        await page.GotoAsync("/sso/oidc/start");
+
+        // The form may never arrive: a provider that refuses the authorization request
+        // answers with its own error page instead of asking who is logging in.
+        try
+        {
+            await page.Locator(_idp.LoginFormSelector)
+                .WaitForAsync(new LocatorWaitForOptions { Timeout = 15_000 });
+            await _idp.SignInAsync(page, user);
+        }
+        catch (TimeoutException)
+        {
+            return await DescribeAsync(page);
+        }
+
+        // Give the plugin as long as it would need to sign somebody in, then insist that
+        // it did not.
+        try
+        {
+            await page.WaitForFunctionAsync(
+                "() => !!(window.ApiClient && window.ApiClient.accessToken() && window.ApiClient.getCurrentUserId())",
+                null,
+                new PageWaitForFunctionOptions { Timeout = 15_000 });
+        }
+        catch (TimeoutException)
+        {
+            return await DescribeAsync(page);
+        }
+
+        Assert.Fail(
+            $"The login was expected to be refused, but it reached a signed-in web client.\n"
+            + await DescribeAsync(page));
+        return string.Empty;
+    }
+
+    /// <summary>Where the browser ended up, for a failure message or an assertion.</summary>
+    private static async Task<string> DescribeAsync(IPage page)
+        => $"url:  {page.Url}\ntext: {await page.InnerTextAsync("body")}";
+
+    /// <summary>
     /// Walks the login the way a person would. Chromium in CI occasionally loses every
     /// connection under the running page — "net::ERR_NETWORK_CHANGED", the runner's
     /// network reconfiguring under it — which has nothing to do with the plugin, so a
     /// login that fails that way is walked once more in a fresh context.
     /// </summary>
-    private async Task<IPage> SignInAsync(RealIdentityUser user)
+    private protected async Task<IPage> SignInAsync(RealIdentityUser user)
     {
         try
         {
@@ -286,6 +340,29 @@ public sealed class AuthentikTests : RealIdentityProviderTests
     {
     }
 
+    /// <summary>
+    /// The warning docs/authentik.md puts in bold: without a signing key, authentik
+    /// issues a token the plugin cannot verify. The container holds a second application
+    /// configured exactly that way, so the sentence can be walked rather than trusted.
+    /// </summary>
+    [Fact]
+    public async Task A_provider_without_a_signing_key_signs_nobody_in()
+    {
+        var authentik = (AuthentikProvider)_idp;
+        await _env.PatchConfigAsync(config =>
+        {
+            config["Providers"]![0]!["Authority"] = authentik.UnsignedAuthority;
+            config["Providers"]![0]!["ClientId"] = authentik.UnsignedClientId;
+        });
+
+        await AttemptRefusedLoginAsync(_idp.MemberUser);
+
+        // The point of the warning: the login fails, and it fails before an account
+        // exists, rather than letting an unverifiable token through.
+        Assert.Null(await _env.FindUserAsync(_idp.MemberUser.Username));
+        Assert.Empty((await _env.PluginConfigAsync())["Links"]!.AsArray());
+    }
+
     internal override async Task<IRealIdentityProvider> StartProviderAsync(JellyfinEnvironment env)
         => await AuthentikProvider.StartAsync(
             env.Certificate, env.WorkDirectory, $"{env.BaseUrl}/sso/oidc/callback/{ProviderId}");
@@ -301,6 +378,31 @@ public sealed class AutheliaTests : RealIdentityProviderTests
     {
     }
 
+    [Fact]
+    public async Task Without_userinfo_groups_login_succeeds_with_no_libraries_and_an_actionable_warning()
+    {
+        await _env.PatchConfigAsync(config =>
+            config["Providers"]![0]!["GroupsFromUserInfo"] = false);
+        var logsBefore = await _env.ServerLogsAsync();
+
+        var page = await SignInAsync(_idp.MemberUser);
+
+        Assert.DoesNotContain("login.html", page.Url);
+        var user = await _env.FindUserAsync(_idp.MemberUser.Username);
+        Assert.NotNull(user);
+        var policy = await _env.UserPolicyAsync(_idp.MemberUser.Username);
+        Assert.False(policy["IsAdministrator"]!.GetValue<bool>());
+        Assert.False(policy["EnableAllFolders"]!.GetValue<bool>());
+        Assert.Empty(policy["EnabledFolders"]!.AsArray());
+        Assert.Empty((await _env.PluginConfigAsync())["SeenGroups"]!.AsArray());
+
+        var logs = (await _env.ServerLogsAsync())[logsBefore.Length..];
+        Assert.Contains("libraries=0, groups=", logs);
+        Assert.Contains(
+            "No groups were read from ID token claim groups for provider real-provider", logs);
+        Assert.Contains("Fetch groups from userinfo endpoint", logs);
+    }
+
     internal override async Task<IRealIdentityProvider> StartProviderAsync(JellyfinEnvironment env)
         => await AutheliaProvider.StartAsync(
             env.Certificate, env.WorkDirectory, env.LocalhostBaseUrl, ProviderId);
@@ -314,6 +416,114 @@ public sealed class KeycloakTests : RealIdentityProviderTests
     public KeycloakTests(JellyfinEnvironment env)
         : base(env)
     {
+    }
+
+    /// <summary>
+    /// Step 3 of docs/keycloak.md: leave the plugin's Scopes empty, because Keycloak has
+    /// no "groups" scope unless somebody creates one and an unknown scope fails the whole
+    /// authorization. Asserted here so the instruction cannot quietly stop being true.
+    /// </summary>
+    [Fact]
+    public async Task Asking_Keycloak_for_a_groups_scope_fails_the_authorization()
+    {
+        await _env.PatchConfigAsync(config => config["Providers"]![0]!["Scopes"] =
+            new JsonArray { "openid", "profile", "email", "groups" });
+
+        var ended = await AttemptRefusedLoginAsync(_idp.MemberUser);
+
+        Assert.Null(await _env.FindUserAsync(_idp.MemberUser.Username));
+        Assert.Contains("invalid_scope", ended, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Step 2: with "Full group path" on, the claim reads "/media" and a mapping that
+    /// says "media" matches nothing — which is the half of the warning worth proving,
+    /// because nothing fails, the user simply arrives with no libraries.
+    /// </summary>
+    [Fact]
+    public async Task The_full_group_path_arrives_with_a_leading_slash()
+    {
+        await _env.PatchConfigAsync(config =>
+            config["Providers"]![0]!["ClientId"] = KeycloakProvider.FullPathClientId);
+
+        await SignInAsync(_idp.MemberUser);
+
+        var policy = await _env.UserPolicyAsync(_idp.MemberUser.Username);
+        Assert.Empty(policy["EnabledFolders"]!.AsArray());
+        Assert.Contains(
+            "/media",
+            (await _env.PluginConfigAsync())["SeenGroups"]!.AsArray()
+                .Select(group => group!.GetValue<string>()));
+
+        // And the server said why, which is the difference between a five-minute
+        // diagnosis and an afternoon of it.
+        Assert.Contains("Full group path", await _env.ServerLogsAsync());
+
+        // The other half: spelled the way the claim arrives, the same login works.
+        await _env.PatchConfigAsync(config =>
+            JellyfinEnvironment.Mapping(config, "media")["Group"] = "/media");
+
+        await SignInAsync(_idp.MemberUser);
+
+        var folders = (await _env.UserPolicyAsync(_idp.MemberUser.Username))["EnabledFolders"]!
+            .AsArray().Select(folder => Guid.Parse(folder!.GetValue<string>()));
+        Assert.Equal([Guid.Parse(_env.MoviesLibraryId)], folders);
+    }
+
+    /// <summary>
+    /// What a client with no group mapper actually sends this plugin: nothing it can use.
+    /// docs/keycloak.md used to say the realm roles still arrive as realm_access.roles and
+    /// that typing that path works — they do not, in either place the plugin looks.
+    /// Keycloak's built-in realm-roles mapper writes realm_access into the access token
+    /// and, by default, neither into the ID token nor into userinfo.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Without_a_mapper_Keycloak_sends_no_groups_this_plugin_can_read(bool fromUserInfo)
+    {
+        await _env.PatchConfigAsync(config =>
+        {
+            config["Providers"]![0]!["ClientId"] = KeycloakProvider.NoMapperClientId;
+            config["Providers"]![0]!["GroupsClaim"] = "realm_access.roles";
+            config["Providers"]![0]!["GroupsFromUserInfo"] = fromUserInfo;
+        });
+
+        await SignInAsync(_idp.MemberUser);
+
+        // The login works — it is the libraries that are missing, which is what makes
+        // this worth a test rather than a sentence.
+        var policy = await _env.UserPolicyAsync(_idp.MemberUser.Username);
+        Assert.Empty(policy["EnabledFolders"]!.AsArray());
+        Assert.Empty((await _env.PluginConfigAsync())["SeenGroups"]!.AsArray());
+    }
+
+    /// <summary>
+    /// And the arrangement that does work: the realm-roles mapper with "Add to ID token"
+    /// on, read through the dotted path. The unit tests exercise that reader against
+    /// synthetic claims; this is the first time it meets a claim Keycloak nested itself.
+    /// </summary>
+    [Fact]
+    public async Task Realm_roles_in_the_id_token_work_as_a_dotted_path()
+    {
+        await _env.PatchConfigAsync(config =>
+        {
+            config["Providers"]![0]!["ClientId"] = KeycloakProvider.RealmRolesClientId;
+            config["Providers"]![0]!["GroupsClaim"] = "realm_access.roles";
+        });
+
+        await SignInAsync(_idp.MemberUser);
+
+        var folders = (await _env.UserPolicyAsync(_idp.MemberUser.Username))["EnabledFolders"]!
+            .AsArray().Select(folder => Guid.Parse(folder!.GetValue<string>()));
+        Assert.Equal([Guid.Parse(_env.MoviesLibraryId)], folders);
+
+        // The role arrived under its own name, nested two levels down, which is the part
+        // the dotted-path reader is responsible for.
+        Assert.Contains(
+            "media",
+            (await _env.PluginConfigAsync())["SeenGroups"]!.AsArray()
+                .Select(group => group!.GetValue<string>()));
     }
 
     internal override async Task<IRealIdentityProvider> StartProviderAsync(JellyfinEnvironment env)

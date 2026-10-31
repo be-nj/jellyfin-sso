@@ -400,6 +400,11 @@ public sealed class SsoController : ControllerBase
             if (pending.LinkUserId is { } linkUserId)
                 return CompleteSelfServiceLink(provider, identity, linkUserId);
 
+            WarnIfNoGroupsArrived(provider, identity);
+
+            if (RefuseUnmatchedLogin(provider, identity) is { } refused)
+                return refused;
+
             var (userId, username) = await _provisioner.ResolveAsync(provider, identity, ct)
                 .ConfigureAwait(false);
 
@@ -587,6 +592,81 @@ public sealed class SsoController : ControllerBase
         return await CompleteQuickConnectAsync(pending.UserId, pending.Code).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// A login that brought no groups while group mappings exist. Nothing fails — the
+    /// account is created and arrives with no libraries, which is the setup mistake that
+    /// takes longest to recognise, so the log says which settings decide it.
+    ///
+    /// Only when mappings exist: a server that maps no groups at all is not misconfigured,
+    /// and a warning on every login of such an installation would be noise.
+    /// </summary>
+    private void WarnIfNoGroupsArrived(ProviderConfig provider, OidcIdentity identity)
+    {
+        if (identity.Groups.Count > 0
+            || Plugin.Instance?.Configuration.GroupMappings.Count is null or 0)
+        {
+            return;
+        }
+
+        if (provider.GroupsFromUserInfo)
+        {
+            _logger.LogWarning(
+                "No groups came back from the userinfo endpoint for provider {Id}, which "
+                + "was asked for claim {Claim}. Check the claim name, and that the scopes "
+                + "this provider needs for it are in the provider card.",
+                KnownProviderId(provider.Id), provider.GroupsClaim);
+            return;
+        }
+
+        _logger.LogWarning(
+            "No groups were read from ID token claim {Claim} for provider {Id}. "
+            + "If this provider keeps groups in userinfo, enable "
+            + "'Fetch groups from userinfo endpoint' in its provider card.",
+            provider.GroupsClaim, KnownProviderId(provider.Id));
+    }
+
+    /// <summary>
+    /// The stricter rule an operator can switch on: a login that matches no group mapping
+    /// is turned away rather than given an account with nothing in it. Asked before
+    /// anything is created, so a refused login leaves no user, no link and no trace beyond
+    /// the log.
+    ///
+    /// The answer to the browser names no group: the person in front of it cannot act on
+    /// the detail, and the detail came from somebody else's token.
+    /// </summary>
+    private IActionResult? RefuseUnmatchedLogin(ProviderConfig provider, OidcIdentity identity)
+    {
+        var config = Plugin.Instance!.Configuration;
+        var refusal = LoginGate.Refusal(
+            config, identity, UserProvisioner.LinkedUserId(provider, identity));
+
+        if (refusal is null)
+        {
+            return null;
+        }
+
+        _logger.LogWarning(
+            "SSO login refused for provider {Id}: {Reason}. The server is set to require a "
+            + "matching group mapping.",
+            KnownProviderId(provider.Id),
+            refusal.Reason);
+
+        foreach (var (mapping, arrived, reason) in refusal.NearMisses)
+        {
+            _logger.LogWarning(
+                "SSO group mapping '{Mapping}' does not match the group '{Arrived}' the "
+                + "provider sent: {Reason}, and matching is exact.",
+                mapping,
+                arrived,
+                reason);
+        }
+
+        return ForbiddenText(
+            "This server signs in only accounts that match one of its group mappings, and "
+            + "this login matched none. Ask whoever runs it to put your account in a group "
+            + "the server knows.");
+    }
+
     private async Task<IActionResult> CompleteQuickConnectAsync(Guid userId, string quickConnectCode)
     {
         var authorized = await _quickConnect.AuthorizeRequest(userId, quickConnectCode)
@@ -712,6 +792,15 @@ public sealed class SsoController : ControllerBase
         => new ContentResult
         {
             StatusCode = StatusCodes.Status404NotFound,
+            Content = message,
+            ContentType = "text/plain",
+        };
+
+    /// <summary>A refusal the caller cannot fix by retrying.</summary>
+    private static IActionResult ForbiddenText(string message)
+        => new ContentResult
+        {
+            StatusCode = StatusCodes.Status403Forbidden,
             Content = message,
             ContentType = "text/plain",
         };
