@@ -28,5 +28,10 @@ In the plugin's provider card:
 
 Groups come from the `groups` list in Authelia's user file.
 
+**Who may log in** is decided in Authelia, with an access control rule for this client,
+unless every Authelia user should get a Jellyfin account. The plugin can hold the line
+from its side as well — *Refuse logins that match no mapping* in
+[Safety](configuration.md#safety) — as a second lock rather than a replacement.
+
 Authelia refuses plain-HTTP redirect URIs for public clients, so this provider needs
 Jellyfin on `https://`.

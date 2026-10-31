@@ -267,6 +267,98 @@ public sealed class SsoLoginTests : IAsyncLifetime
         Assert.False((await _env.UserPolicyAsync("demoteuser"))["IsAdministrator"]!.GetValue<bool>());
     }
 
+    // ─── Refusing a login that matches no mapping ─────────────────────────────
+
+    [Fact]
+    public async Task A_login_in_no_mapped_group_is_refused_once_the_server_asks_for_one()
+    {
+        await _env.PatchConfigAsync(config => config["RequireMappedGroup"] = true);
+
+        var login = await _env.StartWebLoginAsync(new FakeUser("sub-stranger", "stranger", ["strangers"]));
+
+        Assert.Equal(HttpStatusCode.Forbidden, login.CallbackStatus);
+        Assert.Contains("matched none", login.Body!, StringComparison.Ordinal);
+        // Nothing was created: no account to clean up, and no link to a server this
+        // person was never let into.
+        Assert.Null(await _env.FindUserAsync("stranger"));
+        Assert.Empty((await _env.PluginConfigAsync())["Links"]!.AsArray());
+    }
+
+    [Fact]
+    public async Task The_refusal_names_no_group_to_the_browser()
+    {
+        await _env.PatchConfigAsync(config => config["RequireMappedGroup"] = true);
+
+        var login = await _env.StartWebLoginAsync(new FakeUser("sub-quiet", "quiet", ["secret-department"]));
+
+        // The person in front of the browser cannot act on the detail, and the detail came
+        // out of somebody else's token.
+        Assert.DoesNotContain("secret-department", login.Body!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_matching_group_is_unaffected_by_the_switch()
+    {
+        await _env.PatchConfigAsync(config => config["RequireMappedGroup"] = true);
+
+        var login = await _env.StartWebLoginAsync(new FakeUser("sub-member", "memberuser", ["media"]));
+
+        Assert.True(login.Succeeded, login.Body);
+        Assert.Equal([Library(_env.MoviesLibraryId)], Folders(await _env.UserPolicyAsync("memberuser")));
+    }
+
+    [Fact]
+    public async Task An_account_that_loses_its_group_loses_the_login_too()
+    {
+        await _env.PatchConfigAsync(config => config["RequireMappedGroup"] = true);
+        var first = await _env.StartWebLoginAsync(new FakeUser("sub-lapsed", "lapseduser", ["media"]));
+        Assert.True(first.Succeeded, first.Body);
+
+        // The group is taken away at the provider. A switch that only guarded the first
+        // login would leave the account working for ever.
+        var second = await _env.StartWebLoginAsync(new FakeUser("sub-lapsed", "lapseduser", []));
+
+        Assert.Equal(HttpStatusCode.Forbidden, second.CallbackStatus);
+        // The account stays as it is — this revokes the login, it does not delete people.
+        Assert.NotNull(await _env.FindUserAsync("lapseduser"));
+    }
+
+    [Fact]
+    public async Task An_excluded_account_can_still_log_in_without_a_group()
+    {
+        var first = await _env.StartWebLoginAsync(new FakeUser("sub-keeper", "keeperuser", ["media"]));
+        Assert.True(first.Succeeded, first.Body);
+        var userId = (await _env.FindUserAsync("keeperuser"))!["Id"]!.GetValue<string>();
+
+        await _env.PatchConfigAsync(config =>
+        {
+            config["RequireMappedGroup"] = true;
+            config["SyncExcludedUserIds"]!.AsArray().Add(userId);
+        });
+
+        var second = await _env.StartWebLoginAsync(new FakeUser("sub-keeper", "keeperuser", []));
+
+        Assert.True(second.Succeeded, second.Body);
+    }
+
+    [Fact]
+    public async Task Switched_on_with_no_mappings_at_all_turns_everybody_away()
+    {
+        await _env.PatchConfigAsync(config =>
+        {
+            config["RequireMappedGroup"] = true;
+            config["GroupMappings"] = new JsonArray();
+        });
+
+        var login = await _env.StartWebLoginAsync(new FakeUser("sub-nobody", "nobodyuser", ["media"]));
+
+        Assert.Equal(HttpStatusCode.Forbidden, login.CallbackStatus);
+        Assert.Contains(
+            "no group mappings are configured",
+            await _env.ServerLogsAsync(),
+            StringComparison.Ordinal);
+    }
+
     private static List<Guid> Folders(JsonNode policy)
         => policy["EnabledFolders"]?.AsArray().Select(f => Guid.Parse(f!.GetValue<string>())).ToList() ?? [];
 

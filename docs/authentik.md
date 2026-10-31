@@ -25,7 +25,9 @@ protocol and an **Application** is what users see.
    ```
 
 4. **Who may log in** is decided here: bind a policy to the application unless every
-   Authentik user should get a Jellyfin account.
+   Authentik user should get a Jellyfin account. The plugin can hold the line from its
+   side too — *Refuse logins that match no mapping* in
+   [Safety](configuration.md#safety) — as a second lock rather than a replacement.
 
 In the plugin: *Groups claim name* `groups`, *Scopes* empty, *Fetch groups from userinfo
 endpoint* off.
