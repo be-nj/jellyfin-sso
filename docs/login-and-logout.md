@@ -98,10 +98,12 @@ the validated ID token as `id_token_hint`, allowing providers such as Authentik 
 the session rather than ask for confirmation.
 
 The ID token stays in server memory, addressed by an opaque HttpOnly browser session
-cookie. It is replaced on the next browser SSO login and removed when this logout endpoint
-is visited; retention is capped at 30 days and 10,000 browser logins. The hint becomes
-unavailable on server restart or when the browser discards the cookie. Quick Connect and
-account linking do not replace the browser's logout context.
+cookie, and **only while this setting is on** — a server that never signs anybody out of
+their provider keeps nothing. It is replaced on the next browser SSO login and dropped
+when this logout endpoint is visited, including a logout that does not use it; retention
+is capped at 30 days and 10,000 browser logins. The hint becomes unavailable on server
+restart or when the browser discards the cookie, and the next login brings it back.
+Quick Connect and account linking do not replace the browser's logout context.
 Back-channel logout revokes Jellyfin tokens but does not purge this browser cache; its
 entries remain subject to the same retention limits.
 

@@ -372,17 +372,44 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
         Assert.False(query.ContainsKey("id_token_hint"));
     }
 
+    /// <summary>
+    /// A server that never signs anybody out of their provider has no use for a stored ID
+    /// token, so none is kept. Switching the setting on afterwards finds nothing to send:
+    /// the next login is what starts the retention.
+    /// </summary>
     [Fact]
-    public async Task Local_only_logout_also_discards_the_retained_login()
+    public async Task Nothing_is_retained_while_the_provider_logout_is_switched_off()
     {
+        using var client = JellyfinEnvironment.TrustingClient(followRedirects: false);
+        var login = await _env.StartWebLoginAsync(
+            new FakeUser("sub-no-retention", "noretention", ["media"]), client);
+        Assert.True(login.Succeeded, login.Body);
+
+        await _env.PatchConfigAsync(config => config["SignOutOfIdentityProvider"] = true);
+
+        var response = await client.GetAsync($"{_env.BaseUrl}/sso/oidc/logout");
+        Assert.DoesNotContain("id_token_hint", response.Headers.Location!.ToString());
+    }
+
+    /// <summary>
+    /// And the other direction: retained with the setting on, then the setting goes off
+    /// and the browser logs out locally. The token is dropped there rather than kept for
+    /// a logout that may never come, so turning the setting back on sends no hint until
+    /// somebody logs in again.
+    /// </summary>
+    [Fact]
+    public async Task A_local_logout_drops_the_retained_login_rather_than_keeping_it()
+    {
+        await _env.PatchConfigAsync(config => config["SignOutOfIdentityProvider"] = true);
         using var client = JellyfinEnvironment.TrustingClient(followRedirects: false);
         Assert.True((await _env.StartWebLoginAsync(
             new FakeUser("sub-local-logout", "locallogout", ["media"]), client)).Succeeded);
 
+        await _env.PatchConfigAsync(config => config["SignOutOfIdentityProvider"] = false);
         var local = await client.GetAsync($"{_env.BaseUrl}/sso/oidc/logout");
         Assert.Equal("/web/index.html", local.Headers.Location!.ToString());
-        await _env.PatchConfigAsync(config => config["SignOutOfIdentityProvider"] = true);
 
+        await _env.PatchConfigAsync(config => config["SignOutOfIdentityProvider"] = true);
         var response = await client.GetAsync($"{_env.BaseUrl}/sso/oidc/logout");
         Assert.DoesNotContain("id_token_hint", response.Headers.Location!.ToString());
     }

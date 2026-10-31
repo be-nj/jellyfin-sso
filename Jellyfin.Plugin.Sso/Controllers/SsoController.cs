@@ -217,6 +217,12 @@ public sealed class SsoController : ControllerBase
     {
         Response.Headers.CacheControl = "no-store";
         Response.Headers["Referrer-Policy"] = "no-referrer";
+        // Read and dropped before anything decides what this logout will do, on purpose:
+        // somebody logging out should not leave their ID token held here, whether or not
+        // the provider is told about it. The cost is that a logout which does not use the
+        // hint — the switch off, or another provider named in the path — spends it anyway,
+        // and the next login is what brings it back. That is the right way round: holding
+        // the token longer would be the surprising half.
         var session = _logoutSessions.Consume(Request.Cookies[LogoutSessionStore.CookieName]);
         Response.Cookies.Delete(LogoutSessionStore.CookieName, LogoutCookieOptions());
 
@@ -414,12 +420,7 @@ public sealed class SsoController : ControllerBase
             if (pending.QuickConnectCode is not null)
                 return AskToApproveQuickConnect(userId, username, pending.QuickConnectCode);
 
-            _logoutSessions.Consume(Request.Cookies[LogoutSessionStore.CookieName]);
-            Response.Cookies.Append(
-                LogoutSessionStore.CookieName,
-                _logoutSessions.Issue(provider, tokens.IdentityToken),
-                LogoutCookieOptions());
-            Response.Headers.CacheControl = "no-store";
+            RememberForLogout(provider, tokens.IdentityToken);
 
             return await CompleteWebLoginAsync(username, ct).ConfigureAwait(false);
         }
@@ -543,6 +544,33 @@ public sealed class SsoController : ControllerBase
                 nonce: pending.Nonce,
                 codeChallenge: PendingStateStore.CodeChallenge(pending.CodeVerifier),
                 codeChallengeMethod: "S256");
+    }
+
+    /// <summary>
+    /// Keeps this browser's ID token so a later logout can prove to the provider which
+    /// session is ending, and hands the browser the opaque handle to it.
+    ///
+    /// Only while <c>SignOutOfIdentityProvider</c> is on. An ID token is somebody's
+    /// identity, and the only thing this plugin ever does with a stored one is put it in
+    /// an <c>id_token_hint</c>; on a server that never asks the provider to sign anybody
+    /// out, keeping one per browser login for thirty days would be collecting what nobody
+    /// is going to read.
+    /// </summary>
+    private void RememberForLogout(ProviderConfig provider, string identityToken)
+    {
+        if (Plugin.Instance?.Configuration.SignOutOfIdentityProvider != true)
+        {
+            return;
+        }
+
+        // Replaces whatever this browser had: one retained login per browser, and the
+        // previous token stops being held the moment it stops being current.
+        _logoutSessions.Consume(Request.Cookies[LogoutSessionStore.CookieName]);
+        Response.Cookies.Append(
+            LogoutSessionStore.CookieName,
+            _logoutSessions.Issue(provider, identityToken),
+            LogoutCookieOptions());
+        Response.Headers.CacheControl = "no-store";
     }
 
     private CookieOptions LogoutCookieOptions() => new()
