@@ -52,12 +52,22 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
     private FakeIdentityProvider(int port, TestCertificate certificate)
     {
         Port = port;
+        PlainPort = TestCertificate.FreePort();
         _signingKey = new RsaSecurityKey(_rsa) { KeyId = KeyId };
 
         var builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders();
         builder.WebHost.ConfigureKestrel(kestrel =>
-            kestrel.ListenAnyIP(port, listen => listen.UseHttps(certificate.Certificate)));
+        {
+            kestrel.ListenAnyIP(port, listen => listen.UseHttps(certificate.Certificate));
+
+            // The same endpoints again without TLS. Nothing in the suite uses this: the
+            // plugin's discovery client refuses plain HTTP off loopback, which is the
+            // point. It exists for the manual stack, where the browser that has to follow
+            // the authorize redirect belongs to a phone or a television box and has no
+            // way to be told about a certificate signed by nobody.
+            kestrel.ListenAnyIP(PlainPort);
+        });
         _app = builder.Build();
 
         MapEndpoints(_app);
@@ -73,6 +83,21 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
 
     /// <summary>How the test process and the browser reach this provider.</summary>
     public string BrowserAuthority => $"https://localhost:{Port}";
+
+    /// <summary>The port serving the same endpoints without TLS; see the constructor.</summary>
+    public int PlainPort { get; }
+
+    /// <summary>
+    /// Where the discovery document sends a browser to authorize. HTTPS, as a provider's
+    /// is — unless E2E_IDP_PLAIN_AUTHORIZE is set, which the manual stack does so that a
+    /// device with no way to trust this certificate can still follow the redirect. Only
+    /// this endpoint moves: the token, userinfo and JWKS endpoints the plugin itself calls
+    /// stay on TLS either way.
+    /// </summary>
+    public string AuthorizeEndpoint =>
+        Environment.GetEnvironmentVariable("E2E_IDP_PLAIN_AUTHORIZE") == "1"
+            ? $"http://localhost:{PlainPort}/authorize"
+            : $"{BrowserAuthority}/authorize";
 
     /// <summary>The identity handed out by the next authorize call.</summary>
     public FakeUser NextUser { get; set; } = new("sub-default", "default-user", []);
@@ -134,7 +159,7 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
         {
             ["issuer"] = ContainerAuthority,
             // The browser follows this one, so it must be host-resolvable.
-            ["authorization_endpoint"] = $"{BrowserAuthority}/authorize",
+            ["authorization_endpoint"] = AuthorizeEndpoint,
             // Jellyfin calls these server-side from inside the container.
             ["token_endpoint"] = $"{ContainerAuthority}/token",
             ["userinfo_endpoint"] = $"{ContainerAuthority}/userinfo",

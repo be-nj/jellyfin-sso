@@ -69,7 +69,7 @@ jobs:
       - name: Run the e2e suite
         run: >
           dotnet test tests/Jellyfin.Plugin.Sso.E2eTests -c Release
-          --filter "Category!=RealIdp&Category!=Screenshots&Category!=Demo"
+          --filter "Category!=RealIdp&Category!=Screenshots&Category!=Demo&Category!=Manual"
 
       - name: Build the plugin package
         run: scripts/package.sh "${{ steps.version.outputs.version }}"

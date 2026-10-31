@@ -75,12 +75,44 @@ signature fails there exactly as it fails against Keycloak. Two things it does n
 it is this repository's own code rather than somebody else's product, and it never
 authenticates anybody. There is no login form and no user directory; `/authorize`
 redirects straight back with a code for whichever identity the test named, which is what
-keeps 85 tests fast and deterministic. Logging in for real — a form, a password, a
+keeps the end-to-end tests fast and deterministic. Logging in for real — a form, a password, a
 provider nobody here controls — is what the nine real-provider logins do, in containers
 running Authentik, Keycloak and Authelia. The clips above are those containers too.
 
 The provider guides are the configuration those containers get. What the plugin trusts,
 and which test holds each claim: [threat model](docs/threat-model.md).
+
+## In the apps
+
+Jellyfin's API has no idea what SSO is, so no client can send you to your provider by
+itself. What a client can do is one of two things, and which one decides what signing in
+feels like.
+
+| App | Platform | How a login happens | Checked |
+|---|---|---|---|
+| **Jellyfin** (official) | Android | **In the app.** It shows the server's own web client, so the provider button is on the login page | 2.7.3, Android 16 |
+| **Jellyfin Desktop** | Windows, macOS, Linux | **In the app**, same reason — it embeds the web client | from its sources |
+| **Jellyfin Android TV** | Android TV, Google TV | Quick Connect: the television shows a code, the provider login happens on a phone | 0.19.10, Google TV 14 |
+| **Findroid** | Android | Quick Connect | 1.2.0, Android 16 |
+| **Streamyfin** | Android, iOS | Quick Connect | 0.55.2, Android 16 |
+| **Finamp** (music) | Android, iOS | Quick Connect | 1.0.2, Android 16 |
+| **Swiftfin** | iOS, tvOS | Quick Connect | from its sources |
+| **plezy** | Android, iOS, desktop | Quick Connect | from its sources |
+
+*In the app* means the provider's own page opens where you are: tap the button, sign in,
+you are in. It happens wherever a client is the web client in a frame, which is most
+desktop and one of the mobile apps.
+
+*Quick Connect* is the other route, and it is what the native apps have. The app shows a
+six-character code; you open
+`https://<your-jellyfin>/sso/oidc/start/qc?code=<the-code>` on a phone or laptop, sign in
+at your provider there, and the app lets itself in. Once per device, not per evening. No
+password is ever typed into the television.
+
+Checked means driven by hand in an emulator against a throwaway server with this plugin
+installed, in October 2026 — `make stack` builds the same thing. The rest is read from
+the clients' sources. [More](docs/clients.md), including what a client would have to
+implement for a provider page of its own.
 
 ## Compared with the other plugins
 
