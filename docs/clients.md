@@ -64,7 +64,7 @@ only thing that matters here: how a login can happen at all.
 | Moonfin | Android, Android TV, iOS, desktop | Quick Connect | 3.0.0 TV build, Google TV 14 emulator — signed in, and it draws a QR code beside the digits |
 | Swiftfin | iOS, tvOS | Quick Connect | from its sources |
 | plezy | Android, iOS, desktop | Quick Connect | from its sources |
-| Wholphin | Android TV | Quick Connect | on a Google TV, by the maintainer: *Add user* shows a Quick Connect code straight away, with no password screen first; the login was done in a browser on a PC and the television was signed in two or three seconds later. Its builds are ARM-only, so no emulator here can run it — version not recorded |
+| Wholphin | Android TV | Quick Connect | on a Google TV, by the maintainer: *Add user* shows a Quick Connect code straight away, with no password screen first; the browser step on a PC was this plugin's own SSO login — through Authentik, not a password — and the television was signed in two or three seconds later. Its builds are ARM-only, so no emulator here can run it — version not recorded |
 | Switchfin | PC, PS4, PS Vita, Switch | Quick Connect | from its sources |
 | Blink | desktop (Tauri) | Quick Connect | from its sources |
 | Jellyfin for Roku | Roku | Quick Connect | from its sources |
