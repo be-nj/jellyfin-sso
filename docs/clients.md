@@ -8,11 +8,20 @@ this plugin to tell a client that a provider exists. So an app signs you in one 
 ways, and which one it is depends on whether the app is the web client in disguise. A
 few manage neither, and with those an SSO account cannot sign in at all.
 
-## In the app: the web client in a frame
+## In the app: the web client, loaded from the server
 
-The official Android app, Jellyfin Desktop, the Samsung and LG apps, and any browser all
-show the server's own web client. The plugin writes its button into that page, so the
+The official Android app, Jellyfin Desktop, the LG webOS app and any browser all load the
+web client **from the server**. The plugin writes its button into that page, so the
 provider's login opens where you already are, and nothing else is needed.
+
+"From the server" is the part that matters, and it is not the same as "is a web client".
+The webOS app is a small wrapper that reads the server's manifest and navigates to
+`<server>/web/…`, so the page and the button come from the same place. The Samsung Tizen
+app **packages its own copy** of jellyfin-web into the installable, and runs it from a
+local origin. Branding still reaches it, because branding is an API call, so the button
+renders — and then submits to a path on the television rather than on the server, which
+goes nowhere ([issue #118](https://github.com/be-nj/jellyfin-sso/issues/118)). Samsung
+owners are on the Quick Connect route below until that is fixed.
 
 ## Quick Connect: the code route
 
@@ -46,8 +55,8 @@ only thing that matters here: how a login can happen at all.
 |---|---|---|---|
 | Jellyfin (official) | Android | in the app | 2.7.3, Android 16 emulator — signed in through the button on the login page |
 | Jellyfin Desktop | Windows, macOS, Linux | in the app | from its sources — it embeds the web client |
-| Jellyfin for Samsung (Tizen) | Samsung TVs | in the app | from its sources — it packages jellyfin-web |
-| Jellyfin for LG (webOS) | LG TVs | in the app | from its sources — same |
+| Jellyfin for LG (webOS) | LG TVs | in the app | from its sources — it navigates to `<server>/web/…`, so the button is the server's |
+| Jellyfin for Samsung (Tizen) | Samsung TVs | Quick Connect | from its sources — it packages jellyfin-web and runs it locally, so the button renders but submits nowhere ([#118](https://github.com/be-nj/jellyfin-sso/issues/118)) |
 | Jellyfin Android TV | Android TV, Google TV | Quick Connect | 0.19.10, Google TV 14 emulator — signed in |
 | Findroid | Android | Quick Connect | 1.2.0, Android 16 emulator — signed in; also against a live server with a real Authentik |
 | Streamyfin | Android, iOS | Quick Connect | 0.55.2, Android 16 emulator — signed in |
@@ -83,9 +92,8 @@ and then posts the authorized state to `/sso/OID/Auth/{provider}` to receive a J
 
 They could be served — the first two are this plugin's own endpoints under another name,
 and the third is a session minted from a state the callback has already authorized, which
-is what the Quick Connect path does by another route. It is not built, because one client
-with a handful of users is thin ground for a second public API that would then have to
-keep working, and because the endpoint that mints a session is the last part of this
-plugin that should be improvised. It is written down as
-[issue #115](https://github.com/be-nj/jellyfin-sso/issues/115), to pick up if another
-client adopts the same shape.
+is what the Quick Connect path does by another route. It will not be:
+[#115](https://github.com/be-nj/jellyfin-sso/issues/115) was closed on the judgement that
+one client with a handful of users is not worth a second public API, whose one new piece
+would be an endpoint that mints a Jellyfin session — the last part of this plugin that
+should grow surface it does not need.

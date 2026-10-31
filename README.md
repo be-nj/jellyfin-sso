@@ -89,8 +89,8 @@ itself. What a client can do is one of two things — and a few can do neither.
 
 | | Apps |
 |---|---|
-| **In the app.** The app is the server's own web client in a frame, so the provider button is on the login page and the provider opens where you are | **Jellyfin for Android** ✔, **Jellyfin Desktop**, Samsung (Tizen), LG (webOS), any browser |
-| **Quick Connect.** The app shows a six-character code; you sign in at your provider on a phone, and the app lets itself in | **Jellyfin Android TV** ✔, **Findroid** ✔, **Streamyfin** ✔, **Finamp** ✔, **Moonfin** ✔, Swiftfin, plezy, Wholphin, Switchfin, Blink, Jellyfin for Roku, Jellyfin for Kodi |
+| **In the app.** The app loads the server's own web client, so the provider button is on the login page and the provider opens where you are | **Jellyfin for Android** ✔, **Jellyfin Desktop**, LG (webOS), any browser |
+| **Quick Connect.** The app shows a six-character code; you sign in at your provider on a phone, and the app lets itself in | **Jellyfin Android TV** ✔, **Findroid** ✔, **Streamyfin** ✔, **Finamp** ✔, **Moonfin** ✔, Samsung (Tizen), Swiftfin, plezy, Wholphin, Switchfin, Blink, Jellyfin for Roku, Jellyfin for Kodi |
 | **Neither.** A username and a password, and nothing else — an SSO account cannot sign in at all | tsukimi |
 
 ✔ means driven by hand in an emulator against a throwaway server with this plugin
