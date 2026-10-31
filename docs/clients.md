@@ -5,13 +5,23 @@
 Jellyfin's API has no idea what SSO is. A client asks for a username and a password, or
 it asks for a Quick Connect code; there is no third thing it can ask for, and no way for
 this plugin to tell a client that a provider exists. So an app signs you in one of two
-ways, and which one it is depends on whether the app is the web client in disguise.
+ways, and which one it is depends on whether the app is the web client in disguise. A
+few manage neither, and with those an SSO account cannot sign in at all.
 
-## In the app: the web client in a frame
+## In the app: the web client, loaded from the server
 
-The official Android app, Jellyfin Desktop, the Samsung and LG apps, and any browser all
-show the server's own web client. The plugin writes its button into that page, so the
+The official Android app, Jellyfin Desktop, the LG webOS app and any browser all load the
+web client **from the server**. The plugin writes its button into that page, so the
 provider's login opens where you already are, and nothing else is needed.
+
+"From the server" is the part that matters, and it is not the same as "is a web client".
+The webOS app is a small wrapper that reads the server's manifest and navigates to
+`<server>/web/…`, so the page and the button come from the same place. The Samsung Tizen
+app **packages its own copy** of jellyfin-web into the installable, and runs it from a
+local origin. Branding still reaches it, because branding is an API call, so the button
+renders — and then submits to a path on the television rather than on the server, which
+goes nowhere ([issue #118](https://github.com/be-nj/jellyfin-sso/issues/118)). Samsung
+owners are on the Quick Connect route below until that is fixed.
 
 ## Quick Connect: the code route
 
@@ -34,23 +44,42 @@ apps themselves; a server plugin cannot. It is on the [roadmap](../README.md#con
 as upstream work. Why Quick Connect at all:
 [ADR 0002](adr/0002-native-clients-via-quick-connect.md).
 
-## What was checked, and how
+## Which apps, and how they were chosen
 
-| App | Version | Where | Route | Result |
-|---|---|---|---|---|
-| Jellyfin (official) | 2.7.3 | Android 16 emulator | in the app | signed in through the button on the login page |
-| Jellyfin Android TV | 0.19.10 | Google TV 14 emulator | Quick Connect | code approved by the SSO login, app signed in |
-| Findroid | 1.2.0 | Android 16 emulator | Quick Connect | signed in; also against a live server with a real Authentik |
-| Streamyfin | 0.55.2 | Android 16 emulator | Quick Connect | signed in |
-| Finamp | 1.0.2 | Android 16 emulator | Quick Connect | signed in |
-| Streamyfin (TV build) | 0.55.2 | Google TV 14 emulator | — | not checked: the build ships ARM libraries and the x86 emulator cannot load them. Same login code as the phone build |
-| Swiftfin, plezy, Jellyfin Desktop | — | read from their sources | — | Quick Connect (Swiftfin, plezy), web client (Desktop) |
+Nobody publishes install figures for Jellyfin clients, and the lists that rank them rank
+reader interest rather than use. So this is not a popularity table. It is every client
+that turned up in the ecosystem lists or has a notable number of stars, sorted by the
+only thing that matters here: how a login can happen at all.
 
-October 2026, against a throwaway server with this plugin installed, built by
-`make stack` — a Jellyfin container with the release ZIP, the suite's provider, and
-nothing a person has to type a password into. The server recorded the logins as sessions
-for the same SSO account, which is the thing worth proving: the client never learns a
-password, and the account it gets is the one the provider named.
+| App | Platform | Route | Checked |
+|---|---|---|---|
+| Jellyfin (official) | Android | in the app | 2.7.3, Android 16 emulator — signed in through the button on the login page |
+| Jellyfin Desktop | Windows, macOS, Linux | in the app | from its sources — it embeds the web client |
+| Jellyfin for LG (webOS) | LG TVs | in the app | from its sources — it navigates to `<server>/web/…`, so the button is the server's |
+| Jellyfin for Samsung (Tizen) | Samsung TVs | Quick Connect | from its sources — it packages jellyfin-web and runs it locally, so the button renders but submits nowhere ([#118](https://github.com/be-nj/jellyfin-sso/issues/118)) |
+| Jellyfin Android TV | Android TV, Google TV | Quick Connect | 0.19.10, Google TV 14 emulator — signed in |
+| Findroid | Android | Quick Connect | 1.2.0, Android 16 emulator — signed in; also against a live server with a real Authentik |
+| Streamyfin | Android, iOS | Quick Connect | 0.55.2, Android 16 emulator — signed in |
+| Finamp (music) | Android, iOS | Quick Connect | 1.0.2, Android 16 emulator — signed in |
+| Moonfin | Android, Android TV, iOS, desktop | Quick Connect | 3.0.0 TV build, Google TV 14 emulator — signed in, and it draws a QR code beside the digits |
+| Swiftfin | iOS, tvOS | Quick Connect | from its sources |
+| plezy | Android, iOS, desktop | Quick Connect | from its sources |
+| Wholphin | Android TV | Quick Connect | from its sources; its builds are ARM-only, so an x86 emulator cannot run it |
+| Switchfin | PC, PS4, PS Vita, Switch | Quick Connect | from its sources |
+| Blink | desktop (Tauri) | Quick Connect | from its sources |
+| Jellyfin for Roku | Roku | Quick Connect | from its sources |
+| Jellyfin for Kodi | Kodi | Quick Connect | from its sources |
+| Streamyfin (TV build) | Android TV | Quick Connect | not run here: ARM libraries, x86 emulator. Same login code as its phone build |
+| **tsukimi** | Linux (GTK) | **neither** | from its sources: it authenticates by username and password and has no Quick Connect, so an SSO account cannot sign in to it at all |
+
+Closed-source clients — Infuse, Symfonium — could not be read, and are not listed.
+Whether they work comes down to the same question: do they offer Quick Connect.
+
+The checks ran in October 2026 against a throwaway server with this plugin installed,
+built by `make stack` — a Jellyfin container with the release ZIP, the suite's provider,
+and nothing a person has to type a password into. The server recorded each login as a
+session for the same SSO account, which is the thing worth proving: the client never
+learns a password, and the account it gets is the one the provider named.
 
 ## What a client would need for a provider page of its own
 
@@ -63,9 +92,8 @@ and then posts the authorized state to `/sso/OID/Auth/{provider}` to receive a J
 
 They could be served — the first two are this plugin's own endpoints under another name,
 and the third is a session minted from a state the callback has already authorized, which
-is what the Quick Connect path does by another route. It is not built, because one client
-with a handful of users is thin ground for a second public API that would then have to
-keep working, and because the endpoint that mints a session is the last part of this
-plugin that should be improvised. It is written down as
-[issue #115](https://github.com/be-nj/jellyfin-sso/issues/115), to pick up if another
-client adopts the same shape.
+is what the Quick Connect path does by another route. It will not be:
+[#115](https://github.com/be-nj/jellyfin-sso/issues/115) was closed on the judgement that
+one client with a handful of users is not worth a second public API, whose one new piece
+would be an endpoint that mints a Jellyfin session — the last part of this plugin that
+should grow surface it does not need.
