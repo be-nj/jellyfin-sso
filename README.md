@@ -85,34 +85,24 @@ and which test holds each claim: [threat model](docs/threat-model.md).
 ## In the apps
 
 Jellyfin's API has no idea what SSO is, so no client can send you to your provider by
-itself. What a client can do is one of two things, and which one decides what signing in
-feels like.
+itself. What a client can do is one of two things — and a few can do neither.
 
-| App | Platform | How a login happens | Checked |
-|---|---|---|---|
-| **Jellyfin** (official) | Android | **In the app.** It shows the server's own web client, so the provider button is on the login page | 2.7.3, Android 16 |
-| **Jellyfin Desktop** | Windows, macOS, Linux | **In the app**, same reason — it embeds the web client | from its sources |
-| **Jellyfin Android TV** | Android TV, Google TV | Quick Connect: the television shows a code, the provider login happens on a phone | 0.19.10, Google TV 14 |
-| **Findroid** | Android | Quick Connect | 1.2.0, Android 16 |
-| **Streamyfin** | Android, iOS | Quick Connect | 0.55.2, Android 16 |
-| **Finamp** (music) | Android, iOS | Quick Connect | 1.0.2, Android 16 |
-| **Swiftfin** | iOS, tvOS | Quick Connect | from its sources |
-| **plezy** | Android, iOS, desktop | Quick Connect | from its sources |
+| | Apps |
+|---|---|
+| **In the app.** The app is the server's own web client in a frame, so the provider button is on the login page and the provider opens where you are | **Jellyfin for Android** ✔, **Jellyfin Desktop**, Samsung (Tizen), LG (webOS), any browser |
+| **Quick Connect.** The app shows a six-character code; you sign in at your provider on a phone, and the app lets itself in | **Jellyfin Android TV** ✔, **Findroid** ✔, **Streamyfin** ✔, **Finamp** ✔, **Moonfin** ✔, Swiftfin, plezy, Wholphin, Switchfin, Blink, Jellyfin for Roku, Jellyfin for Kodi |
+| **Neither.** A username and a password, and nothing else — an SSO account cannot sign in at all | tsukimi |
 
-*In the app* means the provider's own page opens where you are: tap the button, sign in,
-you are in. It happens wherever a client is the web client in a frame, which is most
-desktop and one of the mobile apps.
+✔ means driven by hand in an emulator against a throwaway server with this plugin
+installed; the rest is read from the clients' own sources. Nobody publishes install
+figures for Jellyfin clients, so this is not a ranking: it is the apps that the ecosystem
+lists name, plus the ones with the most stars, plus everything that turned up while
+checking. [The full list, and what each check did](docs/clients.md).
 
-*Quick Connect* is the other route, and it is what the native apps have. The app shows a
-six-character code; you open
-`https://<your-jellyfin>/sso/oidc/start/qc?code=<the-code>` on a phone or laptop, sign in
-at your provider there, and the app lets itself in. Once per device, not per evening. No
-password is ever typed into the television.
-
-Checked means driven by hand in an emulator against a throwaway server with this plugin
-installed, in October 2026 — `make stack` builds the same thing. The rest is read from
-the clients' sources. [More](docs/clients.md), including what a client would have to
-implement for a provider page of its own.
+*Quick Connect* is the whole answer for native apps, and it is less of a compromise than
+it sounds: the login happens on a device with a keyboard and a password manager, once per
+device, and no password is ever typed into a television.
+`https://<your-jellyfin>/sso/oidc/start/qc?code=<the-code>` is the address that does it.
 
 ## Compared with the other plugins
 
