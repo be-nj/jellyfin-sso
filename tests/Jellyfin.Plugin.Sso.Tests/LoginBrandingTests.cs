@@ -167,6 +167,81 @@ public sealed class LoginBrandingTests : IDisposable
         Assert.Contains("/jellyfin/sso/oidc/start/p1", _branding.LoginDisclaimer);
     }
 
+    // ─── Clients that run their own copy of the web client ───────────────────
+
+    /// <summary>
+    /// An app that packages jellyfin-web and runs it from its own origin — the Samsung
+    /// app does — still receives the branding, because branding is an API call. A
+    /// root-relative link then points at the television. When the operator publishes an
+    /// address, the button uses it, and that app can follow it.
+    /// </summary>
+    [Fact]
+    public void A_published_address_makes_the_button_absolute()
+    {
+        _network.PublishedServerUriBySubnet = ["all=https://jellyfin.example.com"];
+        Provider();
+
+        Branding().Apply();
+
+        Assert.Contains(
+            "https://jellyfin.example.com/sso/oidc/start/p1", _branding.LoginDisclaimer);
+    }
+
+    [Fact]
+    public void A_published_address_carries_the_sub_path_too()
+    {
+        _network.PublishedServerUriBySubnet = ["all=https://example.com"];
+        _network.BaseUrl = "/jellyfin";
+        Provider();
+
+        Branding().Apply();
+
+        Assert.Contains("https://example.com/jellyfin/sso/oidc/start/p1", _branding.LoginDisclaimer);
+    }
+
+    /// <summary>The entry that answers for everybody wins over one for a single network.</summary>
+    [Fact]
+    public void The_address_for_everybody_is_preferred()
+    {
+        _network.PublishedServerUriBySubnet =
+            ["192.168.1.0/24=http://10.0.0.5:8096", "all=https://jellyfin.example.com"];
+        Provider();
+
+        Branding().Apply();
+
+        Assert.Contains("https://jellyfin.example.com/sso/oidc/start/p1", _branding.LoginDisclaimer);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("all=")]
+    [InlineData("all=not an address")]
+    [InlineData("all=file:///etc/passwd")]
+    [InlineData("all=javascript:alert(1)")]
+    public void Anything_that_is_not_an_http_address_is_ignored(string entry)
+    {
+        _network.PublishedServerUriBySubnet = [entry];
+        Provider();
+
+        Branding().Apply();
+
+        // Falls back to the root-relative form, which is what every client that loaded
+        // the page from the server needs anyway.
+        Assert.Contains("action=\"/sso/oidc/start/p1\"", _branding.LoginDisclaimer);
+    }
+
+    [Fact]
+    public void A_published_address_without_a_subnet_prefix_is_read_as_the_address()
+    {
+        _network.PublishedServerUriBySubnet = ["https://jellyfin.example.com"];
+        Provider();
+
+        Branding().Apply();
+
+        Assert.Contains("https://jellyfin.example.com/sso/oidc/start/p1", _branding.LoginDisclaimer);
+    }
+
     [Fact]
     public void Branding_Jellyfin_has_never_written_is_created_rather_than_assumed()
     {

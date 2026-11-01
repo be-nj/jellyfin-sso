@@ -207,8 +207,14 @@ public static class LoginButtonMarkup
     }
 
     /// <summary>
-    /// Jellyfin can be served under a sub-path; links in the branding are plain strings,
-    /// so the base URL from the server's network configuration has to be prepended.
+    /// What every link in the branding is prefixed with. Branding holds plain HTML, so
+    /// the prefix has to be carried in the markup itself.
+    ///
+    /// Usually a sub-path — Jellyfin can be served under one — and then the links are
+    /// root-relative, which is right for every client that loaded the page from the
+    /// server. A caller that passes a whole address instead gets that address, for the
+    /// clients that did not: an app with its own copy of the web client resolves a
+    /// root-relative path against itself, where this plugin is not.
     /// </summary>
     private static string NormaliseBasePath(string? basePath)
     {
@@ -216,6 +222,12 @@ public static class LoginButtonMarkup
         if (trimmed.Length == 0)
         {
             return string.Empty;
+        }
+
+        if (Uri.TryCreate(trimmed, UriKind.Absolute, out var absolute)
+            && (absolute.Scheme == Uri.UriSchemeHttp || absolute.Scheme == Uri.UriSchemeHttps))
+        {
+            return trimmed;
         }
 
         return trimmed.StartsWith('/') ? trimmed : "/" + trimmed;

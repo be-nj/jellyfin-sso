@@ -19,9 +19,14 @@ The webOS app is a small wrapper that reads the server's manifest and navigates 
 `<server>/web/…`, so the page and the button come from the same place. The Samsung Tizen
 app **packages its own copy** of jellyfin-web into the installable, and runs it from a
 local origin. Branding still reaches it, because branding is an API call, so the button
-renders — and then submits to a path on the television rather than on the server, which
-goes nowhere ([issue #118](https://github.com/be-nj/jellyfin-sso/issues/118)). Samsung
-owners are on the Quick Connect route below until that is fixed.
+renders — and a root-relative link would then submit to a path on the television rather
+than on the server.
+
+So the button uses an absolute address when there is one to use: set
+**Dashboard → Networking → Published server URIs** (`all=https://your-jellyfin`), and
+the link carries that address instead. Without it the link stays root-relative, which is
+right for every client that loaded the page from the server and useless on Samsung. The
+Quick Connect route below works either way.
 
 ## Quick Connect: the code route
 
@@ -56,7 +61,7 @@ only thing that matters here: how a login can happen at all.
 | Jellyfin (official) | Android | in the app | 2.7.3, Android 16 emulator — signed in through the button on the login page |
 | Jellyfin Desktop | Windows, macOS, Linux | in the app | from its sources — it embeds the web client |
 | Jellyfin for LG (webOS) | LG TVs | in the app | from its sources — it navigates to `<server>/web/…`, so the button is the server's |
-| Jellyfin for Samsung (Tizen) | Samsung TVs | Quick Connect | from its sources — it packages jellyfin-web and runs it locally, so the button renders but submits nowhere ([#118](https://github.com/be-nj/jellyfin-sso/issues/118)) |
+| Jellyfin for Samsung (Tizen) | Samsung TVs | Quick Connect, or the button with a published server URI set | from its sources — it packages jellyfin-web and runs it locally, so a root-relative link submits nowhere; untested on a television |
 | Jellyfin Android TV | Android TV, Google TV | Quick Connect | 0.19.10, Google TV 14 emulator — signed in |
 | Findroid | Android | Quick Connect | 1.2.0, Android 16 emulator — signed in; also against a live server with a real Authentik |
 | Streamyfin | Android, iOS | Quick Connect | 0.55.2, Android 16 emulator — signed in |
