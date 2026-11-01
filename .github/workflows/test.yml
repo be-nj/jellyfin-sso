@@ -60,6 +60,12 @@ jobs:
         if: needs.changes.outputs.code != 'false'
         run: dotnet test tests/Jellyfin.Plugin.Sso.Tests -c Release --logger trx
 
+      # The README states four counts, and they drift the moment somebody adds a test
+      # and does not think about the README. Cheap here, because the projects are built.
+      - name: Check the counts the README states
+        if: needs.changes.outputs.code != 'false'
+        run: scripts/check-readme-counts.sh
+
       - name: Upload test results
         if: always() && needs.changes.outputs.code != 'false'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
