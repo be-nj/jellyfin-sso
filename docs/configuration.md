@@ -139,6 +139,19 @@ A user in several groups gets the union: every library of every matched group, e
 permission any group grants, and the most permissive parental rating — a group without a
 limit lifts the limit.
 
+## Published server address
+
+Jellyfin's **Dashboard → Networking → Published server URIs** is not this plugin's
+setting, but it decides one thing here. The login button the plugin writes into the
+branding is a link, and branding is plain HTML with no idea where the server is. Without
+a published address the link is root-relative — correct for every client that loaded the
+web client from the server, and useless in an app that ships its own copy and runs it
+locally, as Samsung's does: the button appears and submits to the television.
+
+With `all=https://your-jellyfin` set, the button carries that address and works in those
+apps too. Use the address people actually open; it is the same value Jellyfin hands to
+clients for everything else.
+
 ## Safety
 
 Same tab as the group mappings:
