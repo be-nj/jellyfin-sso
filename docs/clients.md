@@ -44,6 +44,18 @@ Connect, which this plugin can complete:
 Afterwards the app holds a normal Jellyfin session — once per device, not per evening,
 and no password is ever typed into a television.
 
+Where step 2 is, app by app, because it is not always where you would look:
+
+| App | Where Quick Connect is |
+|---|---|
+| Jellyfin Android TV | the first thing the sign-in screen shows; the password is the alternative underneath |
+| Wholphin | *Add user* shows the code straight away |
+| Moonfin | *Sign in* shows the code, with a QR code beside it |
+| Finamp | after the server is chosen, the code is on the account screen above the user list |
+| Findroid | an explicit *Quick Connect* button under the username and password |
+| Streamyfin (phone) | a small icon beside the *Log in* button — easy to miss; it opens a sheet with the code |
+| Streamyfin (television) | a button of its own under *Anmelden*, with a QR code beside the digits |
+
 A **QR code** on the TV would remove the typing, but it has to be drawn by the client
 apps themselves; a server plugin cannot. It is on the [roadmap](../README.md#contributing)
 as upstream work. Why Quick Connect at all:
@@ -74,11 +86,12 @@ only thing that matters here: how a login can happen at all.
 | Blink | desktop (Tauri) | Quick Connect | from its sources |
 | Jellyfin for Roku | Roku | Quick Connect | from its sources |
 | Jellyfin for Kodi | Kodi | Quick Connect | from its sources |
-| Streamyfin (TV build) | Android TV | Quick Connect | not run here: ARM libraries, x86 emulator. Same login code as its phone build |
+| Streamyfin (TV build) | Android TV | Quick Connect | 0.55.2 on a Sony BRAVIA 4K AE2 (Android 14, armeabi-v7a), by the maintainer: Quick Connect is a button of its own under the password form, the browser step was this plugin's SSO login, and the set was signed in. Installed by sideloading — the television build is published as an APK, not in the Play Store |
 | **tsukimi** | Linux (GTK) | **neither** | from its sources: it authenticates by username and password and has no Quick Connect, so an SSO account cannot sign in to it at all |
 
-Wholphin was checked on real hardware instead, against a live server, because nothing
-here can run it: the Android emulator refuses a foreign CPU architecture on an x86 host
+Wholphin and Streamyfin's television build were checked on real hardware instead, against
+a live server, because nothing here can run them: the Android emulator refuses a foreign
+CPU architecture on an x86 host
 ("Avd's CPU Architecture 'arm64' is not supported by the QEMU2 emulator"), and the
 x86 images that once carried ARM translation no longer do. Its ARM-only builds are not a
 shortcoming — televisions are ARM.
