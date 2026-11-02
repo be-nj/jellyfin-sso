@@ -44,6 +44,17 @@ Connect, which this plugin can complete:
 Afterwards the app holds a normal Jellyfin session — once per device, not per evening,
 and no password is ever typed into a television.
 
+Where step 2 is, app by app, because it is not always where you would look:
+
+| App | Where Quick Connect is |
+|---|---|
+| Jellyfin Android TV | the first thing the sign-in screen shows; the password is the alternative underneath |
+| Wholphin | *Add user* shows the code straight away |
+| Moonfin | *Sign in* shows the code, with a QR code beside it |
+| Finamp | after the server is chosen, the code is on the account screen above the user list |
+| Findroid | an explicit *Quick Connect* button under the username and password |
+| Streamyfin | a small icon beside the *Log in* button — easy to miss; it opens a sheet with the code |
+
 A **QR code** on the TV would remove the typing, but it has to be drawn by the client
 apps themselves; a server plugin cannot. It is on the [roadmap](../README.md#contributing)
 as upstream work. Why Quick Connect at all:
