@@ -158,9 +158,11 @@ Same tab as the group mappings:
 
 - **Refuse logins that match no mapping** — off by default. With it off, somebody in no
   mapped group signs in and gets an account with no libraries; with it on, that login is
-  turned away and no account is created. It applies to accounts that already exist, so a
-  group taken away at the provider is access taken away here. Excluded users (below) are
-  exempt, and the server log says which group nearly matched when one did.
+  turned away and no account is created. It applies to accounts that already exist: once
+  the **last** mapped group is gone at the provider, so is the login. Losing one of
+  several mapped groups changes what the account can see, as it always did, and nothing
+  more. Excluded users (below) are exempt, and the server log says which group nearly
+  matched when one did.
 - **Never remove administrator rights on login** — administrators keep the flag even when
   no admin group matches. Library access still comes from the groups.
 - **Excluded from sync** — one checkbox per Jellyfin user. They can log in via SSO, but

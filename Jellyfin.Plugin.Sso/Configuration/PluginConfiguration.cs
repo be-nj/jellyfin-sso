@@ -41,8 +41,9 @@ public class PluginConfiguration : BasePluginConfiguration
     /// may reach Jellyfin at all — switching it on adds a second lock, inside the plugin,
     /// for the case where the provider was the thing configured wrongly.
     ///
-    /// It applies to accounts that already exist as well: a group taken away is access
-    /// taken away. Accounts in <see cref="SyncExcludedUserIds"/> are exempt, and local
+    /// It applies to accounts that already exist as well: once the last mapped group is
+    /// gone, so is the login. Losing one of several changes what the account can see and
+    /// nothing else. Accounts in <see cref="SyncExcludedUserIds"/> are exempt, and local
     /// passwords are untouched, so an operator locked out by a wrong claim name can still
     /// sign in to their own server.
     /// </summary>

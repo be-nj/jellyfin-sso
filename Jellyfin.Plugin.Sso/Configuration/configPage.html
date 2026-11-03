@@ -272,8 +272,9 @@
                 Off by default: a login in no mapped group gets an account with no libraries.
                 Switched on, that login is turned away instead and no account is created —
                 a second lock inside the plugin for the day the provider is the thing
-                configured wrongly. It applies to accounts that already exist, so a group
-                taken away is access taken away. Users excluded from sync are exempt, and
+                configured wrongly. It applies to accounts that already exist: once the
+                last mapped group is gone, so is the login — losing one of several only
+                changes what the account sees. Users excluded from sync are exempt, and
                 local passwords still work, so a mistyped claim name cannot lock you out of
                 your own server. <strong>Keep one local administrator.</strong>
               </div>
