@@ -7,7 +7,15 @@
 # The target ABI is taken from the Jellyfin.Controller reference in the csproj,
 # so it can never drift from what the plugin was compiled against. Newest
 # version first; an existing entry for the same version is replaced.
+#
+# Only the newest MANIFEST_KEEP entries are kept. Jellyfin shows every version in
+# the manifest in one dropdown, and seventeen of them is a wall of near-identical
+# numbers to scroll past for the one that matters. What the older entries are good
+# for is stepping back off a bad release, and five covers that; the ZIPs stay on
+# the releases page for anything further back.
 set -euo pipefail
+
+KEEP=${MANIFEST_KEEP:-5}
 
 VERSION=${1:?usage: scripts/update-manifest.sh <version> <checksum> <sourceUrl> [changelog]}
 CHECKSUM=${2:?missing checksum}
@@ -32,8 +40,8 @@ entry=$(jq -n \
       sourceUrl: $sourceUrl, checksum: $checksum, timestamp: $timestamp}')
 
 tmp=$(mktemp)
-jq --argjson entry "$entry" --arg version "$VERSION" \
-    '.[0].versions = ([$entry] + (.[0].versions | map(select(.version != $version))))' \
+jq --argjson entry "$entry" --arg version "$VERSION" --argjson keep "$KEEP" \
+    '.[0].versions = ([$entry] + (.[0].versions | map(select(.version != $version))))[:$keep]' \
     "$MANIFEST" > "$tmp"
 mv "$tmp" "$MANIFEST"
 
@@ -41,4 +49,6 @@ mv "$tmp" "$MANIFEST"
 # jf.be-nj.net/m.json. Generated rather than maintained, so the two cannot drift.
 cp "$MANIFEST" "$REPO_ROOT/m.json"
 
+listed=$(jq '.[0].versions | length' "$MANIFEST")
 echo "manifest.json (and its m.json copy) now list $VERSION (targetAbi $TARGET_ABI)"
+echo "$listed version(s) offered, newest $KEEP kept"

@@ -104,6 +104,13 @@ version to `manifest.json` on `main`, which is what servers poll. The `targetAbi
 into the manifest is derived from the `Jellyfin.Controller` reference in the csproj, so a
 Jellyfin bump automatically applies to the next release.
 
+The manifest keeps only the five newest versions. Jellyfin puts every version it finds
+there into one dropdown, and after seventeen releases that dropdown was a wall of
+near-identical numbers to scroll past for the one that matters. Five is what stepping
+back off a bad release needs; anything older stays installable from the ZIP on its
+[releases page](https://github.com/be-nj/jellyfin-sso/releases), it just no longer
+crowds the list. `MANIFEST_KEEP=<n> scripts/update-manifest.sh …` changes the number.
+
 Tags must be four-part or three-part (`v1.12.1` becomes `1.12.1.0`) and must point at a
 commit on `main`.
 

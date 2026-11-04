@@ -229,6 +229,8 @@ Then **Plugins → Catalog → Authentication → SSO Authentication → Install
   trust it, and the release ZIP it points to carries
   [build provenance](https://github.com/be-nj/jellyfin-sso/attestations).
 - Shorter to type, same file: `jf.be-nj.net/m.json`.
+- The catalog offers the five newest versions. Older ones stay downloadable from the
+  [releases page](https://github.com/be-nj/jellyfin-sso/releases).
 - Building it yourself: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 > ### Before you switch
