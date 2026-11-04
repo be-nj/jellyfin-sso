@@ -252,7 +252,14 @@ public sealed class SsoController : ControllerBase
                 return LocalRedirect(home);
             }
 
-            var returnTo = $"{ExternalBaseUri()}{home}";
+            // ExternalBaseUri already ends with the sub-path and `home` begins with it, so
+            // concatenating the two published the prefix twice: a server under /jellyfin
+            // asked the provider to return the browser to /jellyfin/jellyfin/web/…, which
+            // is not the registered redirect. Keycloak and Authentik refuse an
+            // unregistered one and abort the logout, leaving the user on a provider error
+            // page with their provider session alive — and the retained token has already
+            // been spent by then, so trying again does not help.
+            var returnTo = $"{ExternalBaseUri()}/web/index.html";
             var parameters = new Parameters
             {
                 { "client_id", provider.ClientId },
