@@ -109,7 +109,9 @@ entries remain subject to the same retention limits.
 
 With several providers, `/sso/oidc/logout` uses the provider from that browser's SSO login,
 or the first enabled one if no retained login is available;
-`/sso/oidc/logout/<providerId>` names it explicitly. A token is never sent to a different
+`/sso/oidc/logout/<providerId>` names it explicitly. A logout the browser reports as
+coming from another site is ignored: it would otherwise let any page sign a visitor out
+of their identity provider. A token is never sent to a different
 provider or a changed authority/client ID.
 
 Without a retained login (including sessions created before this update), the request

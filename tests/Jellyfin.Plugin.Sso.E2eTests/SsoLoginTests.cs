@@ -366,4 +366,40 @@ public sealed class SsoLoginTests : IAsyncLifetime
         => policy["EnabledFolders"]?.AsArray().Select(f => Guid.Parse(f!.GetValue<string>())).ToList() ?? [];
 
     private static Guid Library(string itemId) => Guid.Parse(itemId);
+
+    /// <summary>
+    /// The callback page carries a live credential in its body — the one-time login
+    /// secret. It must not be stored. This used to be set only as a side effect of
+    /// remembering the logout token, which happens only when the provider-logout switch
+    /// is on, so with the switch off the page was a cacheable 200.
+    /// </summary>
+    [Fact]
+    public async Task The_page_that_carries_the_login_secret_is_not_cacheable()
+    {
+        await _env.PatchConfigAsync(config => config["SignOutOfIdentityProvider"] = false);
+
+        using var client = JellyfinEnvironment.TrustingClient(followRedirects: false);
+        _env.Idp.NextUser = new FakeUser("sub-nostore", "nostoreuser", ["media"]);
+
+        var url = $"{_env.BaseUrl}/sso/oidc/start/{JellyfinEnvironment.ProviderId}";
+        HttpResponseMessage response;
+        for (var hop = 0; ; hop++)
+        {
+            response = await client.GetAsync(url);
+            if (response.Headers.Location is null || hop == 10)
+            {
+                break;
+            }
+
+            url = response.Headers.Location.IsAbsoluteUri
+                ? response.Headers.Location.ToString()
+                : new Uri(new Uri(url), response.Headers.Location).ToString();
+        }
+
+        using var page = response;
+        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        Assert.Contains("Pw:", await page.Content.ReadAsStringAsync());
+        Assert.Equal("no-store", page.Headers.CacheControl?.ToString());
+    }
+
 }

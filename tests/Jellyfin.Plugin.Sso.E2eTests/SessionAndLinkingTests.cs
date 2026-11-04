@@ -310,6 +310,48 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
         Assert.Equal("/web/index.html", response.Headers.Location!.ToString());
     }
 
+    /// <summary>
+    /// A logout is a GET, which means another site can navigate a visitor into it. That
+    /// would sign them out of their identity provider — every application in that session
+    /// — and spend the token kept for their own logout. The browser says where the
+    /// navigation came from, and a cross-site one is ignored.
+    /// </summary>
+    [Fact]
+    public async Task A_logout_driven_from_another_site_is_ignored()
+    {
+        await _env.PatchConfigAsync(config => config["SignOutOfIdentityProvider"] = true);
+
+        using var client = JellyfinEnvironment.TrustingClient(followRedirects: false);
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{_env.BaseUrl}/sso/oidc/logout");
+        request.Headers.Add("Sec-Fetch-Site", "cross-site");
+
+        var endedAt = _env.Idp.SessionsEnded;
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        // Back to Jellyfin, not to the provider's end-session endpoint.
+        Assert.Equal("/web/index.html", response.Headers.Location!.ToString());
+        Assert.Equal(endedAt, _env.Idp.SessionsEnded);
+    }
+
+    /// <summary>The navigation the documentation describes still works.</summary>
+    [Fact]
+    public async Task A_logout_from_the_web_client_itself_is_honoured()
+    {
+        await _env.PatchConfigAsync(config => config["SignOutOfIdentityProvider"] = true);
+
+        using var client = JellyfinEnvironment.TrustingClient(followRedirects: false);
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{_env.BaseUrl}/sso/oidc/logout");
+        request.Headers.Add("Sec-Fetch-Site", "same-origin");
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.StartsWith(
+            $"{_env.Idp.BrowserAuthority}/endsession",
+            response.Headers.Location!.ToString());
+    }
+
     [Fact]
     public async Task Logout_ends_the_provider_session_when_switched_on()
     {

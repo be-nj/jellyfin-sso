@@ -66,7 +66,9 @@ its signature is checked, and the group names that arrive with it.
   signing in no longer authorizes the code on its own — the login ends on a page that
   names the account and shows the code, and approval is a separate click
   ([#1](https://github.com/be-nj/jellyfin-sso/issues/1)). A household member who is sent
-  such a link therefore sees whose code they are about to let in.
+  such a link therefore sees whose code they are about to let in — and that page refuses
+  to be framed, because a click can be stolen from a frame and the click is the whole
+  approval.
 - **The limit counts addresses, not people.** Everyone behind one router is one caller,
   and a caller with an IPv6 prefix to walk is many. Sixty requests a minute is roomy
   enough that the first case does not bite and tight enough that the second gains little;
