@@ -120,8 +120,15 @@ public sealed class ClaimsExtractor
         if (!string.Equals(nonce, expectedNonce, StringComparison.Ordinal))
             throw new SecurityTokenException("ID token nonce mismatch.");
 
-        var sub = principal.FindFirst("sub")?.Value
-            ?? throw new SecurityTokenException("ID token missing 'sub' claim.");
+        // Blank, not merely absent. A provider whose subject comes from a mapper pointed
+        // at an attribute that is empty for some users sends "sub": "", and an empty
+        // string is a perfectly good dictionary key: the first such login would create
+        // the link, and every later one would match it and sign in to that account.
+        var sub = Trimmed(principal.FindFirst("sub")?.Value)
+            ?? throw new SecurityTokenException(
+                "The ID token's 'sub' claim is missing or empty. The subject is what this "
+                + "plugin matches an account on, so check which attribute the provider "
+                + "maps to 'sub'.");
         var username = principal.FindFirst("preferred_username")?.Value
             ?? principal.FindFirst("name")?.Value
             ?? sub;
@@ -151,6 +158,14 @@ public sealed class ClaimsExtractor
     /// roles without a mapper (`realm_access.roles`) and where Entra ID keeps a client's
     /// (`resource_access.&lt;client&gt;.roles`).
     /// </summary>
+    /// <summary>
+    /// Null for a value that is absent or only whitespace. The logout token validator has
+    /// always treated a blank subject as no subject; this is the same rule on the login
+    /// side, which is where it was missing.
+    /// </summary>
+    private static string? Trimmed(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value;
+
     internal static List<string> GroupsFromClaims(ClaimsPrincipal principal, string claim)
     {
         var exact = principal.Claims

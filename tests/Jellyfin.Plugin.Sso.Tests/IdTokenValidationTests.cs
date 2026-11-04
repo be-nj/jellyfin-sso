@@ -111,6 +111,28 @@ public sealed class IdTokenValidationTests : IDisposable
         Assert.Contains("sub", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// An empty subject used to be accepted, and an empty string is a perfectly good key:
+    /// the first login with one created the link, and every later login with one matched
+    /// it and landed in that first person's account — two legitimate users of the same
+    /// provider sharing one Jellyfin account, including its administrator flag. The logout
+    /// token validator has always treated blank as absent; the login side did not.
+    /// </summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("\t")]
+    [InlineData("\u00a0")]
+    public void A_token_whose_sub_is_blank_is_rejected(string sub)
+    {
+        var token = _idp.Mint(sub: sub);
+
+        var ex = Assert.Throws<SecurityTokenException>(() => Validate(token));
+        Assert.Contains("sub", ex.Message, StringComparison.OrdinalIgnoreCase);
+        // The message has to point at the cause: this is a provider mapping, not a bug.
+        Assert.Contains("maps to", ex.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void The_username_falls_back_to_the_sub_when_the_idp_sends_no_preferred_username()
     {
