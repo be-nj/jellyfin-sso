@@ -288,6 +288,30 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, back.Status);
     }
 
+    /// <summary>
+    /// A server published under a sub-path. The return URL used to carry that prefix
+    /// twice, because the origin already ends with it and the home path already begins
+    /// with it — and a provider refuses a post-logout redirect it has not been given,
+    /// which aborts the logout after the retained token has already been spent. Every
+    /// other assertion on this value runs at the root, which is why nobody noticed.
+    /// </summary>
+    [Fact]
+    public async Task The_return_path_carries_the_sub_path_once()
+    {
+        await _env.PatchConfigAsync(config => config["SignOutOfIdentityProvider"] = true);
+
+        using var client = JellyfinEnvironment.TrustingClient(followRedirects: false);
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{_env.BaseUrl}/sso/oidc/logout");
+        request.Headers.Add("X-Forwarded-Prefix", "/jellyfin");
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var location = Uri.UnescapeDataString(response.Headers.Location!.ToString());
+
+        Assert.Contains("/jellyfin/web/index.html", location, StringComparison.Ordinal);
+        Assert.DoesNotContain("/jellyfin/jellyfin", location, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Logout_sends_the_browser_login_id_token_once_after_Jellyfin_logout()
     {
