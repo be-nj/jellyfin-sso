@@ -318,6 +318,19 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
         response.EnsureSuccessStatusCode();
     }
 
+    /// <summary>
+    /// Posts a configuration as the administrator and hands back the response instead of
+    /// insisting on success — for the cases where being refused is the point.
+    /// </summary>
+    public async Task<(System.Net.HttpStatusCode Status, string Body)> TrySaveConfigAsync(
+        Action<JsonNode> change)
+    {
+        var config = await PluginConfigAsync();
+        change(config);
+        using var response = await _admin.PostAsJsonAsync("/sso/admin/config", config);
+        return (response.StatusCode, await response.Content.ReadAsStringAsync());
+    }
+
     /// <summary>The group mapping for a group name, as stored in the live configuration.</summary>
     public static JsonNode Mapping(JsonNode config, string group)
         => config["GroupMappings"]!.AsArray()

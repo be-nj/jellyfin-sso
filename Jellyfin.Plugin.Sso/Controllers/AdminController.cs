@@ -42,6 +42,25 @@ public sealed class AdminController : ControllerBase
     [Authorize(Policy = "RequiresElevation")]
     public IActionResult SaveConfig([FromBody] PluginConfiguration config)
     {
+        // A confidential client's secret is named here, not stored here. The page has no
+        // field for it, so this arrives by hand-edited JSON — and a pasted literal secret
+        // would be written to the plugin's configuration file, which the documentation
+        // promises never happens. Refusing it at the door is what makes that true.
+        foreach (var provider in config.Providers)
+        {
+            if (string.IsNullOrWhiteSpace(provider.ConfidentialSecretRef))
+                continue;
+
+            if (!provider.ConfidentialSecretRef.StartsWith("env:", StringComparison.Ordinal)
+                && !provider.ConfidentialSecretRef.StartsWith("file:", StringComparison.Ordinal))
+            {
+                return BadRequest(
+                    $"Provider '{provider.Id}': ConfidentialSecretRef must name where the "
+                    + "secret is, as 'env:VARIABLE' or 'file:/path', not hold the secret "
+                    + "itself. Nothing was saved.");
+            }
+        }
+
         Plugin.Instance!.UpdateConfiguration(config);
 
         // The login buttons live in Jellyfin's branding, so they are rewritten here —
