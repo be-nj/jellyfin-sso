@@ -376,8 +376,8 @@ public sealed class SsoController : ControllerBase
         if (pending is null)
         {
             return BadRequestText(
-                "This login did not start in this browser, or it has expired. "
-                + "Please start again from the Jellyfin login page.");
+                "This login could not be matched to a state this browser started, or it "
+                + "has expired. Please start again from the Jellyfin login page.");
         }
 
         var provider = GetEnabledProvider(providerId);
