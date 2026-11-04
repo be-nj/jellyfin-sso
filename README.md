@@ -61,7 +61,7 @@ Against real software, not mocks. Every push runs:
 | | |
 |---|---|
 | **396 unit tests** | Token validation, permissions, lockout guards, markup, the served pages |
-| **100 end-to-end tests** | Throwaway Jellyfin container, an OIDC provider built for the suite, real browser |
+| **103 end-to-end tests** | Throwaway Jellyfin container, an OIDC provider built for the suite, real browser |
 | **Three Jellyfin versions** | The same build against 12.0, 12.1 and 12.2 |
 | **16 real-provider logins** | Authentik, Keycloak and Authelia, through their own forms — including the misconfigurations their guides warn about |
 | **Mutation testing** | Stryker breaks the code to see whether the tests notice: 70 %, floor 65 % |
