@@ -430,8 +430,14 @@ public sealed class SsoController : ControllerBase
         }
         catch (InvalidOperationException ex)
         {
+            // The message is for the operator, not the visitor: these carry the configured
+            // authority, the name of an environment variable, and — on a server where the
+            // secret reference was filled in by hand before this was validated — the
+            // secret itself. The log is where that belongs.
             _logger.LogWarning(ex, "SSO login failed for provider {Id}", KnownProviderId(providerId));
-            return BadRequestText(ex.Message);
+            return BadRequestText(
+                "This provider is not configured correctly, so the login could not be "
+                + "completed. The server log says what is wrong.");
         }
     }
 

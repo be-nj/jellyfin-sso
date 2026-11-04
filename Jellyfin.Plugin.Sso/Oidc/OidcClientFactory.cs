@@ -164,8 +164,12 @@ public sealed class OidcClientFactory : IDisposable
             return File.ReadAllText(path).Trim();
         }
 
+        // Deliberately without the value. On a server where this was filled in by hand
+        // before it was validated, the value is the client secret, and a log is not the
+        // place for it either.
         throw new InvalidOperationException(
-            $"ConfidentialSecretRef must start with 'env:' or 'file:'. Got: {secretRef}");
+            "ConfidentialSecretRef must start with 'env:' or 'file:' — it names where the "
+            + "secret is, it does not hold it.");
     }
 
     public void Dispose() => _http.Dispose();

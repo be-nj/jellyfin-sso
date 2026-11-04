@@ -96,6 +96,24 @@ public sealed class ConfidentialSecretTests : IDisposable
         Assert.Contains("must start with", ex.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// This message used to quote the value it was given, and the callback handed it to
+    /// anonymous callers. The value is what an operator pastes the real client secret
+    /// into, so it does not belong in the message — not in an HTTP body, and not in the
+    /// log either.
+    /// </summary>
+    [Fact]
+    public void The_refusal_does_not_quote_the_value_it_was_given()
+    {
+        const string Pasted = "kc-7f3b9a21-literal-client-secret";
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => OidcClientFactory.ResolveSecret(Pasted));
+
+        Assert.DoesNotContain(Pasted, ex.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("7f3b9a21", ex.Message, StringComparison.Ordinal);
+    }
+
     public void Dispose()
     {
         Environment.SetEnvironmentVariable(Variable, null);

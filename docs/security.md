@@ -18,7 +18,8 @@ The details:
 
 - **PKCE public client** by default. A confidential client is supported, but its secret is
   set through the admin API as `env:VAR` or `file:/path` and read at login, never written
-  to the plugin's configuration file
+  to the plugin's configuration file — the API refuses a value that is not one of those
+  two forms, so this is a check and not a convention
   ([how](configuration.md#confidential-clients)).
 - Full ID-token validation: JWKS signature, `iss`, `aud`, `exp`, `nonce`. `iat` is
   checked on the back-channel logout token, where freshness is the replay control. Each

@@ -315,4 +315,31 @@ public sealed class ConfigPageTests : IAsyncLifetime
         Assert.Fail("The configuration page never saved the expected configuration.");
         throw new InvalidOperationException("unreachable");
     }
+
+    /// <summary>
+    /// The secret reference names where the secret is; it must never hold one. There is no
+    /// field for it on the page, so it arrives as hand-written JSON — which is exactly how
+    /// a literal secret used to end up in the plugin's configuration file.
+    /// </summary>
+    [Theory]
+    [InlineData("s3cret-not-a-reference")]
+    [InlineData("ENV:JELLYFIN_SSO_SECRET")]
+    [InlineData("vault:secret/sso")]
+    public async Task A_secret_reference_that_holds_the_secret_is_refused(string secretRef)
+    {
+        var result = await _env.TrySaveConfigAsync(config =>
+        {
+            var provider = config["Providers"]!.AsArray()[0]!;
+            provider["ClientType"] = "Confidential";
+            provider["ConfidentialSecretRef"] = secretRef;
+        });
+
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.Status);
+        Assert.Contains("must name where the secret is", result.Body);
+
+        // Nothing was saved, so the value never reached the configuration file.
+        var saved = await _env.PluginConfigAsync();
+        Assert.Null(saved["Providers"]!.AsArray()[0]!["ConfidentialSecretRef"]?.GetValue<string?>());
+    }
+
 }
