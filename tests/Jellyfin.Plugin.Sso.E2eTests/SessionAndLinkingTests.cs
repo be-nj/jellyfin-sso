@@ -158,9 +158,10 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
     {
         var (userId, token) = await _env.CreateLocalUserWithTokenAsync("selflinker");
 
-        var authorizeUrl = await StartSelfServiceLinkAsync(token);
+        using var browser = JellyfinEnvironment.TrustingClient();
+        var authorizeUrl = await StartSelfServiceLinkAsync(token, browser);
         _env.Idp.NextUser = new FakeUser("sub-selflinker", "selflinker", ["media"]);
-        var result = await FollowAsync(authorizeUrl);
+        var result = await FollowAsync(authorizeUrl, browser);
 
         Assert.Equal(HttpStatusCode.OK, result.Status);
         Assert.Contains("Account linked", result.Body);
@@ -178,9 +179,10 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
     public async Task A_linked_account_can_then_sign_in_with_sso()
     {
         var (_, token) = await _env.CreateLocalUserWithTokenAsync("laterlogin");
-        var authorizeUrl = await StartSelfServiceLinkAsync(token);
+        using var browser = JellyfinEnvironment.TrustingClient();
+        var authorizeUrl = await StartSelfServiceLinkAsync(token, browser);
         _env.Idp.NextUser = new FakeUser("sub-laterlogin", "laterlogin", ["media"]);
-        await FollowAsync(authorizeUrl);
+        await FollowAsync(authorizeUrl, browser);
 
         // The IdP's preferred_username differs on purpose: the link, not the name, decides.
         var login = await _env.StartWebLoginAsync(new FakeUser("sub-laterlogin", "someone-else", ["media"]));
@@ -198,10 +200,11 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
         await _env.StartWebLoginAsync(new FakeUser("sub-contested", "firstowner", ["media"]));
 
         var (_, token) = await _env.CreateLocalUserWithTokenAsync("secondclaimant");
-        var authorizeUrl = await StartSelfServiceLinkAsync(token);
+        using var browser = JellyfinEnvironment.TrustingClient();
+        var authorizeUrl = await StartSelfServiceLinkAsync(token, browser);
         _env.Idp.NextUser = new FakeUser("sub-contested", "firstowner", ["media"]);
 
-        var result = await FollowAsync(authorizeUrl);
+        var result = await FollowAsync(authorizeUrl, browser);
 
         Assert.Contains("already linked to another Jellyfin account", result.Body);
         var links = (await _env.PluginConfigAsync())["Links"]!.AsArray();
@@ -223,9 +226,10 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
     public async Task A_user_can_remove_their_own_link()
     {
         var (_, token) = await _env.CreateLocalUserWithTokenAsync("unlinker");
-        var authorizeUrl = await StartSelfServiceLinkAsync(token);
+        using var browser = JellyfinEnvironment.TrustingClient();
+        var authorizeUrl = await StartSelfServiceLinkAsync(token, browser);
         _env.Idp.NextUser = new FakeUser("sub-unlinker", "unlinker", ["media"]);
-        await FollowAsync(authorizeUrl);
+        await FollowAsync(authorizeUrl, browser);
 
         using var client = JellyfinEnvironment.TrustingClient();
         using var request = new HttpRequestMessage(HttpMethod.Delete, $"{_env.BaseUrl}/sso/link/self");
@@ -416,9 +420,77 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
-    private async Task<string> StartSelfServiceLinkAsync(string token)
+    /// <summary>
+    /// The escalation this binding exists to stop: an account holder asks for an authorize
+    /// URL, which carries their own user id, and gets somebody else to finish it. Without
+    /// the cookie the callback would attach the stranger's identity to the asking account,
+    /// and that account would inherit the stranger's groups on their next login.
+    /// </summary>
+    [Fact]
+    public async Task A_link_flow_finished_in_another_browser_is_refused()
     {
-        using var client = JellyfinEnvironment.TrustingClient();
+        var (_, token) = await _env.CreateLocalUserWithTokenAsync("linkthief");
+
+        using var attacker = JellyfinEnvironment.TrustingClient();
+        var authorizeUrl = await StartSelfServiceLinkAsync(token, attacker);
+
+        // The victim's browser: same URL, no cookie from the attacker's session.
+        _env.Idp.NextUser = new FakeUser("sub-victim", "victim", ["media"]);
+        using var victim = JellyfinEnvironment.TrustingClient();
+        var result = await FollowAsync(authorizeUrl, victim);
+
+        Assert.Equal(HttpStatusCode.BadRequest, result.Status);
+        Assert.Contains("this browser started", result.Body);
+        Assert.Empty((await _env.PluginConfigAsync())["Links"]!.AsArray());
+    }
+
+    /// <summary>
+    /// The same gap on the plain login path: an attacker completes their own login in
+    /// somebody else's browser, which would otherwise sign that browser in as them.
+    /// </summary>
+    [Fact]
+    public async Task A_login_callback_opened_in_another_browser_is_refused()
+    {
+        using var attacker = JellyfinEnvironment.TrustingClient(followRedirects: false);
+        _env.Idp.NextUser = new FakeUser("sub-forcer", "forcer", ["media"]);
+
+        // Walk as far as the callback, then hand that URL to a browser that has no cookie.
+        var url = $"{_env.BaseUrl}/sso/oidc/start/{JellyfinEnvironment.ProviderId}";
+        string? callbackUrl = null;
+        for (var hop = 0; hop < 10 && url is not null; hop++)
+        {
+            using var response = await attacker.GetAsync(url);
+            var next = response.Headers.Location;
+            if (next is null)
+            {
+                break;
+            }
+
+            url = next.IsAbsoluteUri ? next.ToString() : new Uri(new Uri(url), next).ToString();
+            if (url.Contains("/sso/oidc/callback/", StringComparison.Ordinal))
+            {
+                callbackUrl = url;
+                break;
+            }
+        }
+
+        Assert.NotNull(callbackUrl);
+
+        using var victim = JellyfinEnvironment.TrustingClient();
+        var result = await FollowAsync(callbackUrl, victim);
+
+        Assert.Equal(HttpStatusCode.BadRequest, result.Status);
+        Assert.DoesNotContain("AuthenticateByName", result.Body);
+    }
+
+    /// <summary>
+    /// Starts the link flow and returns where to send the browser. The caller passes the
+    /// client it will walk that URL with, because the two steps are one browser: the
+    /// plugin sets a cookie here and requires it back at the callback, so a helper with a
+    /// cookie jar of its own would be testing something no browser does.
+    /// </summary>
+    private async Task<string> StartSelfServiceLinkAsync(string token, HttpClient client)
+    {
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
             $"{_env.BaseUrl}/sso/link/start?providerId={JellyfinEnvironment.ProviderId}");
@@ -431,9 +503,12 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
         return JsonNode.Parse(body)!["AuthorizeUrl"]!.GetValue<string>();
     }
 
-    private static async Task<(HttpStatusCode Status, string Body)> FollowAsync(string url)
+    /// <summary>Walks a redirect chain by hand, keeping one client — and one cookie jar.</summary>
+    private static async Task<(HttpStatusCode Status, string Body)> FollowAsync(
+        string url, HttpClient? client = null)
     {
-        using var client = JellyfinEnvironment.TrustingClient();
+        using var own = client is null ? JellyfinEnvironment.TrustingClient() : null;
+        client ??= own!;
         HttpResponseMessage response;
 
         for (var hop = 0; ; hop++)

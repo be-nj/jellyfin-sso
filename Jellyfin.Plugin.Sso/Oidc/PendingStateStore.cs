@@ -38,6 +38,11 @@ public sealed class PendingStateStore
         string Nonce,
         string RedirectUri,
         DateTimeOffset Expiry,
+        // The browser that started this login, from the cookie minted at the same time.
+        // Without it the state alone is the whole authority, and a state is something an
+        // attacker can hold and hand to somebody else — which is how a link flow could be
+        // finished in a stranger's browser.
+        string BrowserId,
         // non-null only for Quick Connect path
         string? QuickConnectCode = null,
         // non-null only when an existing user is linking their own account
@@ -48,6 +53,7 @@ public sealed class PendingStateStore
     public (string State, PendingState Pending) Issue(
         string providerId,
         string redirectUri,
+        string browserId,
         string? quickConnectCode = null,
         Guid? linkUserId = null)
     {
@@ -63,6 +69,7 @@ public sealed class PendingStateStore
             nonce,
             redirectUri,
             DateTimeOffset.UtcNow.Add(_ttl),
+            browserId,
             quickConnectCode,
             linkUserId);
 
@@ -80,12 +87,38 @@ public sealed class PendingStateStore
         return (state, pending);
     }
 
-    public PendingState? Consume(string state)
+    /// <summary>
+    /// The pending login for this state, or null when there is none, it has expired, or it
+    /// belongs to a different browser. Single-use either way: a state that is presented
+    /// with the wrong browser id is spent, not left for a second try.
+    /// </summary>
+    public PendingState? Consume(string state, string? browserId)
     {
         if (!_store.TryRemove(state, out var pending))
             return null;
-        return pending.Expiry > DateTimeOffset.UtcNow ? pending : null;
+
+        if (pending.Expiry <= DateTimeOffset.UtcNow)
+            return null;
+
+        // Ordinal, not constant-time: the value is 256 bits of randomness looked up in a
+        // hash table, so there is no guessing game for a timing signal to help with.
+        return string.Equals(pending.BrowserId, browserId, StringComparison.Ordinal)
+            ? pending
+            : null;
     }
+
+    /// <summary>
+    /// A fresh browser id, or the one this browser already has. Reused on purpose: two
+    /// logins started in two tabs share the cookie, and generating a new id per login
+    /// would mean the second tab silently invalidated the first.
+    /// </summary>
+    public static string BrowserId(string? fromCookie)
+        => WellFormedBrowserId(fromCookie) ? fromCookie! : GenerateUrlSafe(32);
+
+    /// <summary>Shape only — the value's authority comes from matching a stored one.</summary>
+    internal static bool WellFormedBrowserId(string? value)
+        => value is { Length: 43 }
+            && value.All(c => char.IsAsciiLetterOrDigit(c) || c == '-' || c == '_');
 
     /// <summary>Derives the PKCE code_challenge (S256) from the code_verifier.</summary>
     public static string CodeChallenge(string verifier)

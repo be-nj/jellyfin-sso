@@ -176,7 +176,10 @@ public sealed class SsoLoginTests : IAsyncLifetime
             $"{_env.BaseUrl}/sso/oidc/callback/{JellyfinEnvironment.ProviderId}?code=stale&state=stale");
 
         Assert.Equal(HttpStatusCode.BadRequest, replay.StatusCode);
-        Assert.Contains("state", await replay.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "could not be matched",
+            await replay.Content.ReadAsStringAsync(),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
