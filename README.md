@@ -60,8 +60,8 @@ Against real software, not mocks. Every push runs:
 
 | | |
 |---|---|
-| **415 unit tests** | Token validation, permissions, lockout guards, markup, the served pages |
-| **104 end-to-end tests** | Throwaway Jellyfin container, an OIDC provider built for the suite, real browser |
+| **397 unit tests** | Token validation, permissions, lockout guards, markup, the served pages |
+| **100 end-to-end tests** | Throwaway Jellyfin container, an OIDC provider built for the suite, real browser |
 | **Three Jellyfin versions** | The same build against 12.0, 12.1 and 12.2 |
 | **16 real-provider logins** | Authentik, Keycloak and Authelia, through their own forms — including the misconfigurations their guides warn about |
 | **Mutation testing** | Stryker breaks the code to see whether the tests notice: 70 %, floor 65 % |
@@ -177,7 +177,7 @@ same way for each of the four, this one included.
 
 | | Since | Latest | ★ | Licence | Written by AI | Tests |
 |---|---|---|---:|---|---|---|
-| **This one** | 2026-09 | v1.12.16 · 2026-11 | 3 | MIT → GPLv3 | **120 of 147** commits | 415 + 124 |
+| **This one** | 2026-09 | v1.12.16 · 2026-11 | 3 | MIT → GPLv3 | **120 of 147** commits | 397 + 120 |
 | K0lin | 2026-06 | v5.1.1 · 2026-09 | 176 | GPL-3.0 | none from an AI | 68 |
 | Ezeqielle | 2026-05 | v1.0.10 · 2026-09 | 41 | GPL-3.0 | 33 of last 100 | 16 |
 | 9p4 | 2022-01 | v4.0.0.4 · archived | 1,453 | GPL-3.0 | none from an AI | none |
