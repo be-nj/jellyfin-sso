@@ -156,7 +156,8 @@ internal static class SsoPages
                 // Authenticate as the web client with its device id. Jellyfin keys sessions
                 // by client + device id, so the token belongs to the same session the web
                 // app later plays on, instead of a second session that shares the device id.
-                const info = await fetch('{{basePath}}/System/Info/Public').then(function(r){ return r.json(); });
+                const base = {{JsonEscape(basePath)}};
+                const info = await fetch(base + '/System/Info/Public').then(function(r){ return r.json(); });
                 // Rough match of the names jellyfin-web reports, so the device list stays readable.
                 const ua = navigator.userAgent;
                 const device = /Edg\//.test(ua) ? 'Edge Chromium'
@@ -167,7 +168,7 @@ internal static class SsoPages
                 const authHeader = 'MediaBrowser Client="Jellyfin Web", Device="' + device + '", DeviceId="'
                   + deviceId + '", Version="' + info.Version + '"';
 
-                const res = await fetch('{{basePath}}/Users/AuthenticateByName', {
+                const res = await fetch(base + '/Users/AuthenticateByName', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
                   body: JSON.stringify({ Username: {{JsonEscape(username)}}, Pw: {{JsonEscape(secret)}} })
@@ -200,7 +201,7 @@ internal static class SsoPages
                 localStorage.setItem(credsKey, JSON.stringify(creds));
 
                 msg.textContent = 'Login successful — redirecting…';
-                window.location.href = '{{basePath}}/web/index.html';
+                window.location.href = base + '/web/index.html';
               } catch(e) {
                 msg.textContent = 'SSO login failed: ' + e.message;
               }
@@ -253,7 +254,7 @@ internal static class SsoPages
     internal static string SelfServiceLink(string basePath, IReadOnlyList<ProviderConfig> providers)
     {
         var options = string.Join("\n", providers.Select(p =>
-            $"<option value={JsonEscape(p.Id)}>{Html(p.Name)}</option>"));
+            $"<option value=\"{Html(p.Id)}\">{Html(p.Name)}</option>"));
 
         return Shell(
             "Link SSO account",
@@ -289,7 +290,7 @@ internal static class SsoPages
                 msg.textContent = '';
                 try {
                   const providerId = document.getElementById('provider').value;
-                  const res = await fetch('{{basePath}}/sso/link/start?providerId='
+                  const res = await fetch({{JsonEscape(basePath)}} + '/sso/link/start?providerId='
                     + encodeURIComponent(providerId), {
                     method: 'POST',
                     headers: { 'Authorization': 'MediaBrowser Token="' + accessToken + '"' },

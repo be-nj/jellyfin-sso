@@ -31,8 +31,25 @@ public sealed class ForwardedPathsTests
     [InlineData("/jellyfin\r\nX-Injected: 1")]
     [InlineData("/jellyfin<script>")]
     [InlineData("http://example.invalid/jellyfin")]
+    // The apostrophe ends a JavaScript string literal, and this value is written into
+    // several of them in the pages the plugin serves. A path does not need one.
+    [InlineData("/'-alert(document.domain)-'")]
+    [InlineData("/x';fetch('//evil.invalid')")]
+    // The remaining sub-delimiters go the same way: legal in a path, unnecessary here, and
+    // each one is a character fewer to reason about in a page.
+    [InlineData("/a(b)")]
+    [InlineData("/a;b")]
+    [InlineData("/a,b")]
+    [InlineData("/a=b")]
+    [InlineData("/a&b")]
+    [InlineData("/a@b")]
     public void A_forwarded_prefix_that_is_not_a_path_is_ignored(string hostile)
         => Assert.Equal(string.Empty, ForwardedPaths.Prefix(hostile, null));
+
+    /// <summary>A path that genuinely needs one of those characters percent-encodes it.</summary>
+    [Fact]
+    public void A_percent_encoded_prefix_is_still_a_path()
+        => Assert.Equal("/caf%C3%A9", ForwardedPaths.Prefix("/caf%C3%A9", null));
 
     [Fact]
     public void A_hostile_forwarded_prefix_does_not_hide_the_servers_own()

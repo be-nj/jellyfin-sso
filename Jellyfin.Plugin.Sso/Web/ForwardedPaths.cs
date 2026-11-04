@@ -12,6 +12,12 @@ namespace Jellyfin.Plugin.Sso.Web;
 /// `X-Forwarded-Prefix: https://example.invalid` would otherwise turn a link back into
 /// Jellyfin into a link to somebody else's site. So both are checked against what they
 /// are allowed to look like, and anything else is dropped rather than repaired.
+///
+/// Worth knowing when reasoning about these: the plugin reads the forwarded headers
+/// itself rather than through Jellyfin's known-proxy handling, so they are accepted from
+/// whoever sent the request. What they are allowed to contain is the whole of the
+/// defence, which is why that shape is narrow and why the pages escape these values again
+/// for the context they land in.
 /// </summary>
 public static partial class ForwardedPaths
 {
@@ -19,8 +25,15 @@ public static partial class ForwardedPaths
     /// A sub-path: slash-separated, no scheme, no host, no backslashes. The colon is left
     /// out deliberately — a path may legally contain one, and allowing it would let
     /// "https://example.invalid" through as a path once a leading slash is added.
+    ///
+    /// The sub-delimiters a path may legally carry are left out too, and the apostrophe is
+    /// the reason: this value is also written into JavaScript string literals in the pages
+    /// the plugin serves, where an apostrophe ends the string and what follows is code.
+    /// The pages now escape it for that context as well, so this is the belt and that is
+    /// the braces. A server published under a path that needs one of those characters can
+    /// percent-encode it, which the percent sign still allows.
     /// </summary>
-    [GeneratedRegex(@"^/(?!/)[A-Za-z0-9._~!$&'()*+,;=@%/-]*$")]
+    [GeneratedRegex(@"^/(?!/)[A-Za-z0-9._~%/-]*$")]
     private static partial Regex SafePrefix { get; }
 
     /// <summary>A host, with an optional port — or an IPv6 address in brackets.</summary>
