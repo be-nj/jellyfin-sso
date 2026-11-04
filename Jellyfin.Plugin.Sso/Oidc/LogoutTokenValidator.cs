@@ -12,7 +12,11 @@ namespace Jellyfin.Plugin.Sso.Oidc;
 /// The provider's own session id. The plugin keeps no record of it, so it is carried here
 /// for the log alone — a token that names only a session cannot be acted on.
 /// </param>
-public sealed record LogoutSubject(string? Sub, string? Sid);
+/// <param name="Jti">
+/// The token's own id, where it carries one. Used to recognise the same token presented
+/// twice; a provider that omits it is covered by hashing the token instead.
+/// </param>
+public sealed record LogoutSubject(string? Sub, string? Sid, string? Jti = null);
 
 /// <summary>
 /// Checks a back-channel logout token (OpenID Connect Back-Channel Logout 1.0, §2.6).
@@ -76,7 +80,7 @@ public static class LogoutTokenValidator
         if (sub is null && sid is null)
             throw new SecurityTokenException("A logout token must carry 'sub', 'sid' or both.");
 
-        return new LogoutSubject(sub, sid);
+        return new LogoutSubject(sub, sid, Trimmed(principal.FindFirst("jti")?.Value));
     }
 
     /// <summary>

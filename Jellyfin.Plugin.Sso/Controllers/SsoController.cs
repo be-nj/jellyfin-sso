@@ -18,6 +18,7 @@ public sealed class SsoController : ControllerBase
 {
     private readonly PendingStateStore _states;
     private readonly LogoutSessionStore _logoutSessions;
+    private readonly LogoutTokenLedger _logoutTokens;
     private readonly OidcClientFactory _oidc;
     private readonly ClaimsExtractor _claims;
     private readonly UserProvisioner _provisioner;
@@ -34,6 +35,7 @@ public sealed class SsoController : ControllerBase
     public SsoController(
         PendingStateStore states,
         LogoutSessionStore logoutSessions,
+        LogoutTokenLedger logoutTokens,
         OidcClientFactory oidc,
         ClaimsExtractor claims,
         UserProvisioner provisioner,
@@ -49,6 +51,7 @@ public sealed class SsoController : ControllerBase
     {
         _states = states;
         _logoutSessions = logoutSessions;
+        _logoutTokens = logoutTokens;
         _oidc = oidc;
         _claims = claims;
         _provisioner = provisioner;
@@ -330,6 +333,19 @@ public sealed class SsoController : ControllerBase
                 ex, "Could not check a back-channel logout for provider {Id}",
                 KnownProviderId(provider.Id));
             return BadRequestText("The logout token could not be checked.");
+        }
+
+        // Freshness is not a replay control on its own: the same token stays valid for as
+        // long as its iat is young, and anybody who can read one in flight could otherwise
+        // post it again for the rest of that window. Checked after validation, so an
+        // unsigned or forged token cannot fill the ledger.
+        if (!_logoutTokens.Accept(provider.Id, subject.Jti, logoutToken))
+        {
+            _logger.LogWarning(
+                "Rejected a back-channel logout for provider {Id}: this logout token has "
+                + "already been acted on.",
+                KnownProviderId(provider.Id));
+            return BadRequestText("This logout token has already been used.");
         }
 
         if (subject.Sub is null)
