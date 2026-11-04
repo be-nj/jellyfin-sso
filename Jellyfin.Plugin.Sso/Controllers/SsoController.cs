@@ -372,9 +372,13 @@ public sealed class SsoController : ControllerBase
         if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(state))
             return BadRequestText("The provider returned neither an authorization code nor an error.");
 
-        var pending = _states.Consume(state);
+        var pending = _states.Consume(state, Request.Cookies[PendingBrowserCookie]);
         if (pending is null)
-            return BadRequestText("Invalid or expired state. Please try logging in again.");
+        {
+            return BadRequestText(
+                "This login did not start in this browser, or it has expired. "
+                + "Please start again from the Jellyfin login page.");
+        }
 
         var provider = GetEnabledProvider(providerId);
         if (provider is null || provider.Id != pending.ProviderId)
@@ -529,7 +533,15 @@ public sealed class SsoController : ControllerBase
         Guid? linkUserId = null)
     {
         var redirectUri = BuildCallbackUri(provider.Id);
-        var (state, pending) = _states.Issue(provider.Id, redirectUri, quickConnectCode, linkUserId);
+
+        // The state travels through the provider and back, so it is not proof of who
+        // started the login — anyone can hold one and hand it to somebody else. The cookie
+        // is: it goes to this browser and comes back only from this browser.
+        var browserId = PendingStateStore.BrowserId(Request.Cookies[PendingBrowserCookie]);
+        Response.Cookies.Append(PendingBrowserCookie, browserId, PendingCookieOptions());
+
+        var (state, pending) = _states.Issue(
+            provider.Id, redirectUri, browserId, quickConnectCode, linkUserId);
 
         var disco = await _oidc.GetDiscoveryDocumentAsync(provider, ct).ConfigureAwait(false);
 
@@ -572,6 +584,24 @@ public sealed class SsoController : ControllerBase
             LogoutCookieOptions());
         Response.Headers.CacheControl = "no-store";
     }
+
+    /// <summary>
+    /// Names the browser a login was started in. Not a credential: it grants nothing on its
+    /// own and is only ever compared with the value stored beside the pending login.
+    /// </summary>
+    private const string PendingBrowserCookie = "SsoPendingLogin";
+
+    private CookieOptions PendingCookieOptions() => new()
+    {
+        HttpOnly = true,
+        Secure = ExternalBaseUri().StartsWith("https://", StringComparison.OrdinalIgnoreCase),
+        // Lax, not Strict: the provider redirects the browser back here from its own site,
+        // and Strict would withhold the cookie on exactly that navigation.
+        SameSite = SameSiteMode.Lax,
+        Path = $"{BasePath()}/sso",
+        MaxAge = TimeSpan.FromMinutes(15),
+        IsEssential = true,
+    };
 
     private CookieOptions LogoutCookieOptions() => new()
     {

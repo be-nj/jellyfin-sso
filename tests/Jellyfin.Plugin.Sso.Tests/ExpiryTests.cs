@@ -35,18 +35,18 @@ public sealed class ExpiryTests
     public void An_expired_login_state_is_refused()
     {
         var store = new PendingStateStore(AlreadyOver);
-        var (state, _) = store.Issue("provider-1", "https://jellyfin.example.com/sso/oidc/callback/p1");
+        var (state, _) = store.Issue("provider-1", "https://jellyfin.example.com/sso/oidc/callback/p1", "browser");
 
-        Assert.Null(store.Consume(state));
+        Assert.Null(store.Consume(state, "browser"));
     }
 
     [Fact]
     public void A_fresh_login_state_is_accepted()
     {
         var store = new PendingStateStore(LongEnough);
-        var (state, _) = store.Issue("provider-1", "https://jellyfin.example.com/sso/oidc/callback/p1");
+        var (state, _) = store.Issue("provider-1", "https://jellyfin.example.com/sso/oidc/callback/p1", "browser");
 
-        Assert.NotNull(store.Consume(state));
+        Assert.NotNull(store.Consume(state, "browser"));
     }
 
     [Fact]
