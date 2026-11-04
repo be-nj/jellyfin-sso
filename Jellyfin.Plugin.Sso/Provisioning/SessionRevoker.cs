@@ -26,6 +26,18 @@ public sealed class SessionRevoker
     /// logout to every application the person was signed into, including the ones that
     /// never saw them.
     /// </summary>
+    /// <summary>
+    /// Revokes every token of one Jellyfin account. Used where the account is already
+    /// known and no identity has to be matched — unlinking, where leaving the sessions
+    /// running would leave tokens nobody can end.
+    /// </summary>
+    public async Task RevokeUserAsync(Guid userId, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        await _sessions.RevokeUserTokens(userId, null).ConfigureAwait(false);
+        _logger.LogInformation("SSO ended every session of user {UserId}.", userId);
+    }
+
     public async Task<int> RevokeAsync(string providerId, string sub, CancellationToken ct = default)
     {
         var config = Plugin.Instance?.Configuration;

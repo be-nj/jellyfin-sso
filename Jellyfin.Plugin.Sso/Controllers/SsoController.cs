@@ -521,27 +521,53 @@ public sealed class SsoController : ControllerBase
         return Ok(new { AuthorizeUrl = authorizeUrl });
     }
 
-    /// <summary>Removes the signed-in user's own link.</summary>
+    /// <summary>
+    /// Removes the signed-in user's own link for one provider, and ends their sessions.
+    ///
+    /// The sessions have to go with it. Back-channel logout finds an account through its
+    /// link and nothing else, so an account that unlinked itself kept tokens the identity
+    /// provider could no longer end — disable the person at the provider and the plugin
+    /// would revoke "0 account(s)" and answer 200, while their tokens, which Jellyfin does
+    /// not expire, kept working. Unlinking now means signing out, which is both safe and
+    /// what somebody pressing it would expect.
+    /// </summary>
     [HttpDelete("link/self")]
     [Authorize]
-    public IActionResult RemoveOwnLink([FromQuery] string? providerId)
+    public async Task<IActionResult> RemoveOwnLink(
+        [FromQuery] string providerId, CancellationToken ct)
     {
         var config = Plugin.Instance!.Configuration;
 
+        // Gated like the two endpoints above it, which it was not: an operator who turns
+        // self-service linking off has said who manages links, and that is them.
+        if (!config.AllowSelfServiceLinking)
+            return NotFound("Self-service linking is disabled.");
+
         if (CurrentUserId() is not { } userId)
             return Unauthorized("No Jellyfin user in this request.");
+
+        // Required rather than optional. Without it this removed every link the caller
+        // had, which is a surprising amount of work for a missing query parameter.
+        if (string.IsNullOrWhiteSpace(providerId))
+            return BadRequestText("Name the provider to unlink, as ?providerId=…");
 
         lock (Plugin.ConfigurationLock)
         {
             var removed = config.Links.RemoveAll(l =>
                 l.JellyfinUserId == userId
-                && (providerId is null || l.ProviderId == providerId));
+                && string.Equals(l.ProviderId, providerId, StringComparison.Ordinal));
 
             if (removed == 0)
-                return NotFound("No link found for this account.");
+                return NotFound("No link found for this account and provider.");
 
             Plugin.Instance.SaveConfiguration();
         }
+
+        await _revoker.RevokeUserAsync(userId, ct).ConfigureAwait(false);
+
+        _logger.LogInformation(
+            "User {UserId} unlinked provider {Id}; their sessions were ended.",
+            userId, KnownProviderId(providerId));
 
         return Ok();
     }
