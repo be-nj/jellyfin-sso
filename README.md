@@ -192,9 +192,14 @@ the suites hold. Only this one is mutation tested (70 %, floor 65) and scanned b
 
 - **Youngest and least used** — one star, one household. The others have users who are
   not their authors.
-- **Almost all of it was written by an LLM**, Claude Opus 5: the code, the tests, the
+- **Almost all of it was typed by an LLM**, Claude Opus 5: the code, the tests, the
   threat model, this table. "No trailers" above means exactly that — not that no AI was
-  involved.
+  involved. What the number does not say is that every change was asked for, read and
+  sent back by a person, and that the corrections run in that direction too: the
+  Keycloak guide's closing paragraph was wrong until a question about it was asked, and
+  the sentence describing what *Refuse logins that match no mapping* revokes was wrong
+  until somebody read it properly. Treat the figure as "who held the keyboard", not "who
+  decided".
 - **Nobody outside has read it.** CodeQL, the test matrix and mutation testing stand in
   for a reviewer and are not the same thing, and `docs/reviews/` was written by the model
   that wrote the code. Counting approving pull-request reviews would say little: 9p4 has
