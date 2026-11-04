@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Text;
 using Jellyfin.Plugin.Sso.Configuration;
@@ -87,9 +88,34 @@ public static class LoginButtonMarkup
     /// that image can be any shape or colour. brightness(0) flattens whatever arrives to
     /// black; invert(1) after it makes that white.
     /// </summary>
+    /// <summary>
+    /// A provider id as a CSS string. HTML escaping used to stand in for this, which keeps
+    /// the quote out but lets a brace or a newline through — and this lands in Jellyfin's
+    /// global custom CSS, where that ends the rule and starts another one. CSS escapes with
+    /// a backslash, so that is what this does.
+    /// </summary>
+    private static string CssString(string? value)
+    {
+        var builder = new StringBuilder();
+        foreach (var c in value ?? string.Empty)
+        {
+            if (char.IsAsciiLetterOrDigit(c) || c is '-' or '_')
+            {
+                builder.Append(c);
+            }
+            else
+            {
+                // The space terminates the escape: "\41 b" is "Ab", not U+041B.
+                builder.Append('\\').Append(((int)c).ToString("x", CultureInfo.InvariantCulture)).Append(' ');
+            }
+        }
+
+        return builder.ToString();
+    }
+
     private static string PerProvider(ProviderConfig provider, bool providerLogos)
     {
-        var selector = $".loginDisclaimer .sso-login-button[data-provider=\"{WebUtility.HtmlEncode(provider.Id)}\"]";
+        var selector = $".loginDisclaimer .sso-login-button[data-provider=\"{CssString(provider.Id)}\"]";
         var mark = ProviderIcons.ColourFor(provider.Name, provider.Authority);
 
         if (!provider.BrandedLoginButton)

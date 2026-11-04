@@ -163,4 +163,26 @@ public sealed class LoginButtonStyleTests
         Assert.Equal("#ffffff", ProviderIcons.ReadableOn("not a colour"));
         Assert.Equal("#1c1c1c", ProviderIcons.HoverShadeOf(string.Empty));
     }
+
+    /// <summary>
+    /// The selector lands in Jellyfin's global custom CSS, so a provider id that can end
+    /// its own rule changes how every page of the server looks. HTML escaping used to
+    /// stand in for CSS escaping here: it keeps the quote out and lets a brace through.
+    /// </summary>
+    [Theory]
+    [InlineData("p1\"]{display:none}body{background:red}")]
+    [InlineData("p1}body{background:red}")]
+    [InlineData("p1*/}body{background:red}/*")]
+    public void A_provider_id_cannot_escape_its_own_css_rule(string id)
+    {
+        var provider = Provider("Authentik", branded: false);
+        provider.Id = id;
+
+        var css = LoginButtonMarkup.Css(anyProvider: true, [provider]);
+
+        Assert.DoesNotContain("background:red", css, StringComparison.Ordinal);
+        Assert.DoesNotContain("}body", css, StringComparison.Ordinal);
+        // Whatever the id was, it survives only as CSS escapes inside the selector string.
+        Assert.DoesNotContain(id, css, StringComparison.Ordinal);
+    }
 }
