@@ -308,14 +308,14 @@ public sealed class SsoLoginTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task An_account_that_loses_its_group_loses_the_login_too()
+    public async Task An_account_that_loses_its_last_group_loses_the_login_too()
     {
         await _env.PatchConfigAsync(config => config["RequireMappedGroup"] = true);
         var first = await _env.StartWebLoginAsync(new FakeUser("sub-lapsed", "lapseduser", ["media"]));
         Assert.True(first.Succeeded, first.Body);
 
-        // The group is taken away at the provider. A switch that only guarded the first
-        // login would leave the account working for ever.
+        // The only mapped group is taken away at the provider. A switch that only guarded
+        // the first login would leave the account working for ever.
         var second = await _env.StartWebLoginAsync(new FakeUser("sub-lapsed", "lapseduser", []));
 
         Assert.Equal(HttpStatusCode.Forbidden, second.CallbackStatus);

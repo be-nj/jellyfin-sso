@@ -97,23 +97,20 @@ public sealed class LoginBranding
             return null;
         }
 
-        var entries = published
+        return published
             .Where(entry => !string.IsNullOrWhiteSpace(entry))
-            .OrderByDescending(entry => entry.TrimStart().StartsWith("all=", StringComparison.OrdinalIgnoreCase));
-
-        foreach (var entry in entries)
-        {
-            var address = entry.Contains('=', StringComparison.Ordinal)
-                ? entry[(entry.IndexOf('=', StringComparison.Ordinal) + 1)..]
-                : entry;
-
-            if (Uri.TryCreate(address.Trim(), UriKind.Absolute, out var uri)
+            .OrderByDescending(entry => entry.TrimStart().StartsWith("all=", StringComparison.OrdinalIgnoreCase))
+            .Select(AddressOf)
+            .Select(address => Uri.TryCreate(address, UriKind.Absolute, out var uri) ? uri : null)
+            .FirstOrDefault(uri => uri is not null
                 && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
-            {
-                return uri.GetLeftPart(UriPartial.Authority);
-            }
-        }
+            ?.GetLeftPart(UriPartial.Authority);
+    }
 
-        return null;
+    /// <summary>The address out of a "subnet=address" entry, or the entry itself.</summary>
+    private static string AddressOf(string entry)
+    {
+        var separator = entry.IndexOf('=', StringComparison.Ordinal);
+        return (separator < 0 ? entry : entry[(separator + 1)..]).Trim();
     }
 }

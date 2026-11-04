@@ -60,6 +60,22 @@ public sealed class LoginGateTests : IDisposable
         Assert.Contains("matches a group mapping", refusal!.Reason, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The switch refuses a login that matches *nothing*. Somebody who loses one of
+    /// several mapped groups keeps the login and loses what that group granted, which is
+    /// what the permission sync has always done — a distinction the documentation got
+    /// wrong before it got tested.
+    /// </summary>
+    [Fact]
+    public void Losing_one_of_several_mapped_groups_is_not_losing_the_login()
+    {
+        Config.RequireMappedGroup = true;
+        Map("media");
+        Map("kids");
+
+        Assert.Null(Refusal(Identity("kids")));
+    }
+
     [Fact]
     public void A_login_with_no_groups_at_all_says_that_instead()
     {

@@ -13,12 +13,18 @@ set -uo pipefail
 
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 DOC="$REPO_ROOT/docs/reviews/2026-10-19-security-and-quality.md"
+# The threat model names a test beside every mitigation, for the same reason the review
+# does, and rots the same way: #124 renamed a test and left the citation pointing at a
+# name no longer in the sources.
+CITING=("$DOC" "$REPO_ROOT/docs/threat-model.md")
 failures=0
 
-if [[ ! -f $DOC ]]; then
-    echo "no review document at $DOC" >&2
-    exit 1
-fi
+for doc in "${CITING[@]}"; do
+    if [[ ! -f $doc ]]; then
+        echo "no document at $doc" >&2
+        exit 1
+    fi
+done
 
 echo "== commits named in the review"
 mapfile -t commits < <(grep -oE '`[0-9a-f]{7,40}`' "$DOC" | tr -d '`' | sort -u)
@@ -47,22 +53,50 @@ else
     done
 fi
 
-echo "== tests the review names"
-mapfile -t tests < <(grep -oE '`[A-Z][A-Za-z0-9_]{10,}`' "$DOC" | tr -d '`' | sort -u)
-for test in "${tests[@]}"; do
-    if grep -rqs --include='*.cs' "$test" "$REPO_ROOT/tests"; then
-        file=$(grep -rls --include='*.cs' "$test" "$REPO_ROOT/tests" | head -1)
-        printf '  ok   %-62s %s\n' "$test" "$(basename "$file")"
+echo "== identifiers the review and the threat model name"
+# Both documents cite class and test names as evidence. A name is evidence only while it
+# is in the sources, so each one has to resolve somewhere in the code. tests/runs holds
+# container output owned by root, which is not code and is not readable here.
+mapfile -t names < <(grep -hoE '`[A-Z][A-Za-z0-9_]{10,}`' "${CITING[@]}" | tr -d '`' | sort -u)
+for name in "${names[@]}"; do
+    file=$(grep -rls --include='*.cs' --exclude-dir=runs "$name" \
+        "$REPO_ROOT/tests" "$REPO_ROOT/Jellyfin.Plugin.Sso" 2>/dev/null | head -1)
+    if [[ -n $file ]]; then
+        printf '  ok   %-62s %s\n' "$name" "$(basename "$file")"
     else
-        printf '  MISSING %s\n' "$test"
+        printf '  MISSING %s\n' "$name"
+        failures=$((failures + 1))
+    fi
+done
+
+echo "== the share of commits the README credits to an LLM"
+# The README publishes how much of this repository an LLM typed. Nothing recomputed it,
+# so it sat three commits behind for weeks. This is a guard against that kind of rot, not
+# a demand for an exact figure: the number is a rough share and reads as one, a branch
+# has to state what it will be once its commits land, and a squash changes how many that
+# is. So the tolerance is wide enough that nobody has to touch the README to land a
+# change, and narrow enough that months of drift still fail.
+TOLERANCE=10
+said=$(grep -oE '\*\*[0-9]+ of [0-9]+\*\* commits' "$REPO_ROOT/README.md" | head -1 | grep -oE '[0-9]+ of [0-9]+')
+said_ai=${said%% of *}
+said_total=${said##* of }
+actual_total=$(git -C "$REPO_ROOT" rev-list --count HEAD)
+actual_ai=$(git -C "$REPO_ROOT" log HEAD -i --grep='Co-Authored-By: Claude' --format=%H | wc -l)
+printf '  README says %s of %s; history has %s of %s\n' \
+    "$said_ai" "$said_total" "$actual_ai" "$actual_total"
+for pair in "AI commits:$said_ai:$actual_ai" "commits in total:$said_total:$actual_total"; do
+    IFS=: read -r what stated measured <<<"$pair"
+    drift=$(( stated > measured ? stated - measured : measured - stated ))
+    if (( drift > TOLERANCE )); then
+        echo "  OFF BY $drift  $what (README $stated, history $measured)"
         failures=$((failures + 1))
     fi
 done
 
 echo
 if (( failures > 0 )); then
-    echo "$failures reference(s) in the review do not resolve" >&2
+    echo "$failures claim(s) in the documents do not hold" >&2
     exit 1
 fi
 
-echo "every commit, issue and test the review names resolves"
+echo "every commit, issue and identifier named resolves, and the AI share is current"

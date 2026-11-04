@@ -30,18 +30,11 @@ public static class GroupMatching
     /// </summary>
     public static IEnumerable<(string Mapping, string Arrived, string Reason)> NearMisses(
         PluginConfiguration config, OidcIdentity identity, List<GroupMappingConfig> matched)
-    {
-        foreach (var mapping in config.GroupMappings.Except(matched))
-        {
-            foreach (var arrived in identity.Groups)
-            {
-                if (MissReason(mapping.Group, arrived) is { } reason)
-                {
-                    yield return (mapping.Group, arrived, reason);
-                }
-            }
-        }
-    }
+        => from mapping in config.GroupMappings.Except(matched)
+           from arrived in identity.Groups
+           let reason = MissReason(mapping.Group, arrived)
+           where reason is not null
+           select (mapping.Group, arrived, reason);
 
     /// <summary>
     /// Why a mapping almost matched a group, or null when the two have nothing to do with

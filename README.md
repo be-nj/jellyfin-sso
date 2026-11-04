@@ -60,7 +60,7 @@ Against real software, not mocks. Every push runs:
 
 | | |
 |---|---|
-| **385 unit tests** | Token validation, permissions, lockout guards, markup, the served pages |
+| **386 unit tests** | Token validation, permissions, lockout guards, markup, the served pages |
 | **98 end-to-end tests** | Throwaway Jellyfin container, an OIDC provider built for the suite, real browser |
 | **Three Jellyfin versions** | The same build against 12.0, 12.1 and 12.2 |
 | **16 real-provider logins** | Authentik, Keycloak and Authelia, through their own forms — including the misconfigurations their guides warn about |
@@ -177,7 +177,7 @@ same way for each of the four, this one included.
 
 | | Since | Latest | ★ | Licence | Written by AI | Tests |
 |---|---|---|---:|---|---|---|
-| **This one** | 2026-09 | v1.12.16 · 2026-11 | 3 | MIT → GPLv3 | **117 of 143** commits | 385 + 118 |
+| **This one** | 2026-09 | v1.12.16 · 2026-11 | 3 | MIT → GPLv3 | **120 of 147** commits | 386 + 118 |
 | K0lin | 2026-06 | v5.1.1 · 2026-09 | 176 | GPL-3.0 | none from an AI | 68 |
 | Ezeqielle | 2026-05 | v1.0.10 · 2026-09 | 41 | GPL-3.0 | 33 of last 100 | 16 |
 | 9p4 | 2022-01 | v4.0.0.4 · archived | 1,453 | GPL-3.0 | none from an AI | none |
@@ -192,9 +192,14 @@ the suites hold. Only this one is mutation tested (70 %, floor 65) and scanned b
 
 - **Youngest and least used** — one star, one household. The others have users who are
   not their authors.
-- **Almost all of it was written by an LLM**, Claude Opus 5: the code, the tests, the
+- **Almost all of it was typed by an LLM**, Claude Opus 5: the code, the tests, the
   threat model, this table. "No trailers" above means exactly that — not that no AI was
-  involved.
+  involved. What the number does not say is that every change was asked for, read and
+  sent back by a person, and that the corrections run in that direction too: the
+  Keycloak guide's closing paragraph was wrong until a question about it was asked, and
+  the sentence describing what *Refuse logins that match no mapping* revokes was wrong
+  until somebody read it properly. Treat the figure as "who held the keyboard", not "who
+  decided".
 - **Nobody outside has read it.** CodeQL, the test matrix and mutation testing stand in
   for a reviewer and are not the same thing, and `docs/reviews/` was written by the model
   that wrote the code. Counting approving pull-request reviews would say little: 9p4 has
