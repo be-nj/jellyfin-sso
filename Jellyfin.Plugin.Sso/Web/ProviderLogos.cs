@@ -102,7 +102,7 @@ public sealed partial class ProviderLogos : IDisposable
 
             foreach (var logoUri in BrandLogos(document.RootElement, origin))
             {
-                var branded = await ImageAsync(logoUri, ct).ConfigureAwait(false);
+                var branded = await ImageAsync(logoUri, authority, ct).ConfigureAwait(false);
                 if (branded is not null)
                 {
                     return branded;
@@ -116,14 +116,14 @@ public sealed partial class ProviderLogos : IDisposable
             && LinkHref.Match(link.Value) is { Success: true } href
             && Uri.TryCreate(origin, href.Groups[1].Value, out var declared))
         {
-            var fromLink = await ImageAsync(declared, ct).ConfigureAwait(false);
+            var fromLink = await ImageAsync(declared, authority, ct).ConfigureAwait(false);
             if (fromLink is not null)
             {
                 return fromLink;
             }
         }
 
-        return await ImageAsync(new Uri(origin, "/favicon.ico"), ct).ConfigureAwait(false);
+        return await ImageAsync(new Uri(origin, "/favicon.ico"), authority, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -146,19 +146,40 @@ public sealed partial class ProviderLogos : IDisposable
                 ? logoUri
                 : null;
 
+    /// <summary>
+    /// Fetches a document from the provider. The threat model claims one fetcher for
+    /// everything, with three redirects and a body counted as it arrives; this used to be
+    /// a bare HttpClient instead — fifty redirects by default, and a Content-Length header
+    /// taken on trust. The redirect chain was a second way to leave the configured host.
+    /// </summary>
     private async Task<string?> TextAsync(Uri uri, CancellationToken ct)
     {
-        using var response = await _http.GetAsync(uri, ct).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > MaxBytes)
-        {
-            return null;
-        }
+        var bytes = await _images
+            .GetBytesAsync(uri, MaxBytes, authority: uri, allowPrivateNetworks: true, ct: ct)
+            .ConfigureAwait(false);
 
-        return await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        return bytes is null ? null : System.Text.Encoding.UTF8.GetString(bytes);
     }
 
-    private Task<RemoteImage?> ImageAsync(Uri uri, CancellationToken ct)
-        => _images.GetAsync(uri, MaxBytes, ct);
+    /// <summary>
+    /// Fetches a logo, but only from the provider's own host. The address comes out of the
+    /// provider's brand document or its login page, where an absolute URL used to be taken
+    /// at face value — Uri.TryCreate leaves one alone instead of resolving it against the
+    /// authority — so whoever controlled that document chose which host the server asked
+    /// next, and the answer came back out through an endpoint anybody can load.
+    /// </summary>
+    private Task<RemoteImage?> ImageAsync(Uri uri, Uri authority, CancellationToken ct)
+    {
+        if (!string.Equals(uri.Host, authority.Host, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogDebug(
+                "SSO: ignoring a logo at {Url}: it is not on {Host}, the provider's own host.",
+                uri, authority.Host);
+            return Task.FromResult<RemoteImage?>(null);
+        }
+
+        return _images.GetAsync(uri, MaxBytes, authority, allowPrivateNetworks: true, ct);
+    }
 
     public void Dispose() => _http.Dispose();
 }

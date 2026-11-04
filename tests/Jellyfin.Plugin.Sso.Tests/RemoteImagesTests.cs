@@ -21,6 +21,11 @@ public sealed class RemoteImagesTests
 
     private static Uri Url(string path = "/picture.png") => new("https://idp.example.com" + path);
 
+    // Passed as the authority throughout: these tests are about what the fetcher does with
+    // a response, and the rules about which addresses may be fetched at all are tested in
+    // OutboundAddressesTests. Naming the host as the provider's own skips a DNS lookup
+    // that would otherwise decide the outcome of every case here.
+
     // ─── What it will fetch at all ────────────────────────────────────────────
 
     [Theory]
@@ -43,7 +48,7 @@ public sealed class RemoteImagesTests
     {
         _handler.Respond(HttpStatusCode.OK, "image/png", Png);
 
-        var image = await Images().GetAsync(Url(), Cap);
+        var image = await Images().GetAsync(Url(), Cap, Url());
 
         Assert.NotNull(image);
         Assert.Equal(Png, image!.Bytes);
@@ -59,7 +64,7 @@ public sealed class RemoteImagesTests
     {
         _handler.Respond(HttpStatusCode.OK, type, Png);
 
-        Assert.NotNull(await Images().GetAsync(Url(), Cap));
+        Assert.NotNull(await Images().GetAsync(Url(), Cap, Url()));
     }
 
     [Theory]
@@ -72,7 +77,7 @@ public sealed class RemoteImagesTests
     {
         _handler.Respond(HttpStatusCode.OK, type, Png);
 
-        Assert.Null(await Images().GetAsync(Url(), Cap));
+        Assert.Null(await Images().GetAsync(Url(), Cap, Url()));
     }
 
     [Fact]
@@ -80,7 +85,7 @@ public sealed class RemoteImagesTests
     {
         _handler.Respond(HttpStatusCode.OK, "image/png", new byte[Cap + 1]);
 
-        Assert.Null(await Images().GetAsync(Url(), Cap));
+        Assert.Null(await Images().GetAsync(Url(), Cap, Url()));
     }
 
     [Fact]
@@ -90,7 +95,7 @@ public sealed class RemoteImagesTests
         // bounds nothing — and reading the response whole buffers it all first.
         _handler.RespondChunked("image/png", Cap * 8);
 
-        Assert.Null(await Images().GetAsync(Url(), Cap));
+        Assert.Null(await Images().GetAsync(Url(), Cap, Url()));
 
         Assert.True(
             _handler.BytesDelivered < Cap * 4,
@@ -102,7 +107,7 @@ public sealed class RemoteImagesTests
     {
         _handler.Respond(HttpStatusCode.NotFound, "image/png", []);
 
-        Assert.Null(await Images().GetAsync(Url(), Cap));
+        Assert.Null(await Images().GetAsync(Url(), Cap, Url()));
     }
 
     [Fact]
@@ -110,7 +115,7 @@ public sealed class RemoteImagesTests
     {
         _handler.Respond(HttpStatusCode.OK, "image/png", []);
 
-        Assert.Null(await Images().GetAsync(Url(), Cap));
+        Assert.Null(await Images().GetAsync(Url(), Cap, Url()));
     }
 
     [Fact]
@@ -118,7 +123,7 @@ public sealed class RemoteImagesTests
     {
         _handler.Throw(new HttpRequestException("no route to host"));
 
-        Assert.Null(await Images().GetAsync(Url(), Cap));
+        Assert.Null(await Images().GetAsync(Url(), Cap, Url()));
     }
 
     [Fact]
@@ -129,7 +134,50 @@ public sealed class RemoteImagesTests
         await cancelled.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => Images().GetAsync(Url(), Cap, cancelled.Token));
+            () => Images().GetAsync(Url(), Cap, Url(), false, cancelled.Token));
+    }
+
+    /// <summary>
+    /// A redirect chain is the cheapest way to turn one allowed address into a walk around
+    /// the server's network, so each hop is held to the same rule as the first. The fetcher
+    /// used to let the handler follow them, which meant nothing looked at the second
+    /// address.
+    /// </summary>
+    [Fact]
+    public async Task A_redirect_to_somewhere_else_inside_the_network_is_not_followed()
+    {
+        _handler.RedirectThrough("http://169.254.169.254/latest/meta-data/");
+
+        Assert.Null(await Images().GetAsync(Url(), Cap, Url()));
+
+        // The first request went out; the second never did.
+        Assert.Equal([Url()], _handler.Requested);
+    }
+
+    [Fact]
+    public async Task A_redirect_within_the_providers_own_host_is_followed()
+    {
+        _handler.RedirectThrough("https://idp.example.com/media/real.png");
+        _handler.Respond(HttpStatusCode.OK, "image/png", new byte[32]);
+
+        Assert.NotNull(await Images().GetAsync(Url(), Cap, Url()));
+        Assert.Equal(
+            [Url(), new Uri("https://idp.example.com/media/real.png")],
+            _handler.Requested);
+    }
+
+    [Fact]
+    public async Task A_chain_that_never_ends_is_given_up_on()
+    {
+        _handler.RedirectThrough(
+            "https://idp.example.com/1.png",
+            "https://idp.example.com/2.png",
+            "https://idp.example.com/3.png",
+            "https://idp.example.com/4.png",
+            "https://idp.example.com/5.png");
+
+        Assert.Null(await Images().GetAsync(Url(), Cap, Url()));
+        Assert.Equal(4, _handler.Requested.Count);
     }
 
     /// <summary>A server's answer, without a server.</summary>
@@ -154,6 +202,15 @@ public sealed class RemoteImagesTests
 
         public void Throw(Exception ex) => _throw = ex;
 
+        /// <summary>Where each request is sent, in order, so a test can see the walk.</summary>
+        public List<Uri> Requested { get; } = [];
+
+        private Queue<string>? _redirects;
+
+        /// <summary>Answers the next requests with 302s to these addresses, in turn.</summary>
+        public void RedirectThrough(params string[] locations)
+            => _redirects = new Queue<string>(locations);
+
         /// <summary>A body with no declared length, as a chunked response has.</summary>
         public void RespondChunked(string contentType, int bytes)
         {
@@ -167,9 +224,18 @@ public sealed class RemoteImagesTests
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            Requested.Add(request.RequestUri!);
+
             if (_throw is not null)
             {
                 return Task.FromException<HttpResponseMessage>(_throw);
+            }
+
+            if (_redirects is { Count: > 0 })
+            {
+                var moved = new HttpResponseMessage(HttpStatusCode.Found);
+                moved.Headers.Location = new Uri(_redirects.Dequeue());
+                return Task.FromResult(moved);
             }
 
             var response = new HttpResponseMessage(_status)
