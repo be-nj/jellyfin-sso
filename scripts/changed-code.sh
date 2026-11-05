@@ -38,6 +38,12 @@ fi
 
 while IFS= read -r file; do
   case "$file" in
+    # This script decides whether the tests run, so a change to it is a change the tests
+    # should run on. Listed before the documentation cases on purpose: it is never prose.
+    scripts/changed-code.sh)
+      echo "code=true"
+      exit 0
+      ;;
     *.md | LICENSE | docs/* | scripts/demo-clip.sh) ;;
     *)
       echo "code=true"
