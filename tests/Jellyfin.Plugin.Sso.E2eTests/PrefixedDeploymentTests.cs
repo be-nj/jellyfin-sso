@@ -76,7 +76,8 @@ public sealed class PrefixedDeploymentTests : IAsyncLifetime
         var (dashboard, page) = await DashboardAsync(requests);
         await using var owned = dashboard;
 
-        await page.GotoAsync(
+        await BrowserSupport.GotoAsync(
+            page,
             $"{_proxy.BaseUrl}/web/index.html#/configurationpage?name=SSO%20Authentication");
 
         // A provider card only renders once the configuration fetch has come back.
@@ -128,7 +129,10 @@ public sealed class PrefixedDeploymentTests : IAsyncLifetime
         var console = new List<string>();
         page.Console += (_, m) => console.Add($"{m.Type}: {m.Text}");
 
-        var landed = await page.GotoAsync($"{_proxy.BaseUrl}/sso/oidc/start");
+        // Through the retrying helper: this class starts a container of its own moments
+        // before navigating, and Docker rearranging its networks abandons a navigation in
+        // flight with ERR_NETWORK_CHANGED. One of three matrix jobs failed exactly there.
+        var landed = await BrowserSupport.GotoAsync(page, $"{_proxy.BaseUrl}/sso/oidc/start");
 
         try
         {

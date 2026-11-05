@@ -91,6 +91,30 @@ any unexpected console error is a real option and would have caught at least one
 sub-path defects earlier. It needs an allowlist for the noise Jellyfin's own client makes,
 which is why it is a note rather than a change.
 
+## The first failure after this landed, and what the trace was worth
+
+The CI run of this very change failed — `e2e (12.1)`, one of three matrix jobs, while the
+other two passed:
+
+```
+Microsoft.Playwright.PlaywrightException : net::ERR_NETWORK_CHANGED
+  at https://host.docker.internal:28732/jellyfin/sso/oidc/start
+```
+
+Chromium abandons a navigation in flight when the host's network interfaces change under
+it, and starting a container does exactly that: a bridge network appears and firewall rules
+are rewritten. `PrefixedDeploymentTests` starts a proxy container moments before it
+navigates, so it is the one class in the suite that races with Docker rather than with the
+server. Two hundred and thirty-seven milliseconds in, and nothing to do with the plugin.
+
+`BrowserSupport.GotoAsync` now retries that navigation, for the named errors only and with
+anything else raised at once — a retry of one operation that failed for a stated reason,
+which is a different thing from waiting a while and hoping.
+
+The artifact from that failed job is the other half of the point: it carried eight traces,
+including the failing test's own. The mechanism this change adds proved itself on the first
+failure it saw, which is more than the change claimed for it.
+
 ## A mistake worth keeping
 
 Adopting `TracedContext` broke one test, and the break is instructive. The context creation
