@@ -58,7 +58,7 @@ public sealed class PermissionSync
         var libraryIds = matched
             .SelectMany(m => m.LibraryIds)
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(id => Guid.TryParse(id, out var parsed) ? parsed : (Guid?)Warn(id))
+            .Select(ParsedLibraryId)
             .OfType<Guid>()
             .ToArray();
 
@@ -230,9 +230,19 @@ public sealed class PermissionSync
         return matched.Max(m => m.MaxParentalRating);
     }
 
-    /// <summary>Says which configured id is not a library, and grants nothing for it.</summary>
-    private Guid? Warn(string libraryId)
+    /// <summary>
+    /// A configured library id as a Guid, or null with a line saying which entry grants
+    /// nothing. A method rather than a conditional in the query above, where it was a
+    /// ternary whose second branch was called for its side effect — and needed a cast to
+    /// Guid? that the compiler then pointed out was redundant.
+    /// </summary>
+    private Guid? ParsedLibraryId(string libraryId)
     {
+        if (Guid.TryParse(libraryId, out var parsed))
+        {
+            return parsed;
+        }
+
         _logger.LogWarning(
             "A group mapping names '{LibraryId}', which is not a Jellyfin library id. That "
             + "entry grants nothing; correct it on the plugin's configuration page.",
