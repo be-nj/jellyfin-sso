@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Sockets;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.Sso.Web;
@@ -63,6 +65,49 @@ public sealed class RemoteImages : IDisposable
             // a chain was never looked at.
             AllowAutoRedirect = false,
             ConnectTimeout = TimeSpan.FromSeconds(5),
+
+            // The last word on an address, and the only one that cannot be overtaken by a
+            // second name lookup. Checking a name and then handing the URL to HttpClient
+            // left a gap: a short time-to-live can answer publicly to the check and
+            // privately to the connect, and nothing pinned the two together.
+            ConnectCallback = async (context, ct) =>
+            {
+                var host = context.DnsEndPoint.Host;
+                context.InitialRequestMessage.Options.TryGetValue(
+                    OutboundAddresses.Rules, out var rules);
+
+                var addresses = IPAddress.TryParse(host, out var literal)
+                    ? [literal]
+                    : await Dns.GetHostAddressesAsync(host, ct).ConfigureAwait(false);
+
+                var allowed = addresses
+                    .Where(a => OutboundAddresses.AddressAllowed(
+                        a, host, rules.Authority, rules.AllowPrivate))
+                    .ToArray();
+
+                if (allowed.Length == 0)
+                {
+                    throw new HttpRequestException(
+                        $"Refusing to connect to {host}: not an address this plugin may reach.");
+                }
+
+                var socket = new Socket(SocketType.Stream, ProtocolType.Tcp)
+                {
+                    NoDelay = true,
+                };
+
+                try
+                {
+                    await socket.ConnectAsync(allowed, context.DnsEndPoint.Port, ct)
+                        .ConfigureAwait(false);
+                    return new NetworkStream(socket, ownsSocket: true);
+                }
+                catch
+                {
+                    socket.Dispose();
+                    throw;
+                }
+            },
         };
 
         // Six seconds. A profile picture is fetched while somebody is waiting to be let
@@ -210,8 +255,12 @@ public sealed class RemoteImages : IDisposable
 
             // Headers first. Reading the response whole — the default — buffers whatever
             // the host sends before anything looks at its size.
+            using var request = new HttpRequestMessage(HttpMethod.Get, target);
+            request.Options.Set(
+                OutboundAddresses.Rules, (authority, allowPrivateNetworks));
+
             var response = await _http
-                .GetAsync(target, HttpCompletionOption.ResponseHeadersRead, ct)
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
                 .ConfigureAwait(false);
 
             if ((int)response.StatusCode is < 300 or > 399 || response.Headers.Location is null)

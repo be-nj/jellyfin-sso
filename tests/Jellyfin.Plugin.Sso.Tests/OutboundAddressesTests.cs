@@ -52,9 +52,9 @@ public sealed class OutboundAddressesTests
     /// </summary>
     [Theory]
     [InlineData("https://idp.example.com/media/avatar.png")]
-    [InlineData("http://idp.example.com:9000/x.png")]
+    [InlineData("https://idp.example.com:443/x.png")]
     [InlineData("https://IDP.EXAMPLE.COM/x.png")]
-    public async Task The_providers_own_host_is_allowed(string url)
+    public async Task The_providers_own_address_is_allowed(string url)
         => Assert.True(await OutboundAddresses.AllowedAsync(
             new Uri(url), Authority, allowPrivateNetworks: false));
 
@@ -86,4 +86,64 @@ public sealed class OutboundAddressesTests
     public async Task With_no_provider_in_hand_only_public_addresses_remain()
         => Assert.False(await OutboundAddresses.AllowedAsync(
             new Uri("http://192.168.1.50/x.png"), authority: null, allowPrivateNetworks: false));
+
+    /// <summary>
+    /// A dual-stack network gives LAN hosts global unicast addresses — that is how SLAAC
+    /// normally works — so "not loopback, not link-local, not unique-local" called the
+    /// router's admin page and the neighbouring container public.
+    /// </summary>
+    [Theory]
+    [InlineData("2001:db8::1")]          // documentation range
+    [InlineData("100::1")]               // discard-only
+    [InlineData("3fff::1")]              // documentation range (RFC 9637)
+    [InlineData("64:ff9b::7f00:1")]      // NAT64 carrying 127.0.0.1
+    [InlineData("64:ff9b::c0a8:1")]      // NAT64 carrying 192.168.0.1
+    [InlineData("2002:c0a8:1::1")]       // 6to4 tunnelling to 192.168.0.1
+    [InlineData("::c0a8:1")]             // deprecated IPv4-compatible 192.168.0.1
+    public void An_IPv6_address_that_is_not_out_on_the_internet_is_refused(string ip)
+        => Assert.False(OutboundAddresses.IsPublic(IPAddress.Parse(ip)));
+
+    [Theory]
+    [InlineData("2606:4700::1111")]
+    [InlineData("2a00:1450:4001::200e")]
+    [InlineData("64:ff9b::0808:0808")]   // NAT64 carrying 8.8.8.8
+    [InlineData("2002:0808:0808::1")]    // 6to4 tunnelling to 8.8.8.8
+    public void An_ordinary_global_IPv6_address_is_public(string ip)
+        => Assert.True(OutboundAddresses.IsPublic(IPAddress.Parse(ip)));
+
+    /// <summary>
+    /// An operator trusts a service, not every port on a machine. Comparing the host alone
+    /// let a user-editable picture claim reach another port on the provider's own host —
+    /// whatever the private-network switch said, because the exemption fired first.
+    /// </summary>
+    [Theory]
+    [InlineData("https://idp.example.com:9200/_cat/indices")]
+    [InlineData("http://idp.example.com/x.png")]
+    public async Task Another_port_or_scheme_on_the_providers_host_is_not_the_provider(string url)
+        => Assert.False(await OutboundAddresses.AllowedAsync(
+            new Uri(url), Authority, allowPrivateNetworks: false));
+
+    /// <summary>
+    /// The connect-time check is the one that cannot be overtaken by a second name lookup.
+    /// It judges the address the socket is about to use, so a name that answered publicly
+    /// to the first lookup and privately to the second is refused at the socket.
+    /// </summary>
+    [Theory]
+    [InlineData("127.0.0.1", false)]
+    [InlineData("192.168.1.50", false)]
+    [InlineData("169.254.169.254", false)]
+    [InlineData("1.1.1.1", true)]
+    public void The_connect_check_judges_the_address_not_the_name(string ip, bool allowed)
+        => Assert.Equal(
+            allowed,
+            OutboundAddresses.AddressAllowed(
+                IPAddress.Parse(ip), "rebind.example", Authority, allowPrivateNetworks: false));
+
+    /// <summary>The provider's own host stays reachable wherever it points.</summary>
+    [Fact]
+    public void The_connect_check_still_allows_the_providers_own_host()
+        => Assert.True(OutboundAddresses.AddressAllowed(
+            IPAddress.Parse("192.168.1.10"), "idp.example.com", Authority,
+            allowPrivateNetworks: false));
+
 }

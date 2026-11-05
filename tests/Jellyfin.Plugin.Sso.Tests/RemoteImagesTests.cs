@@ -142,6 +142,10 @@ public sealed class RemoteImagesTests
     /// the server's network, so each hop is held to the same rule as the first. The fetcher
     /// used to let the handler follow them, which meant nothing looked at the second
     /// address.
+    ///
+    /// These run with the arguments the logo path actually passes. The first version of
+    /// this test took the allowPrivateNetworks default while the shipping caller passed
+    /// true, so it proved a property the caller had opted out of.
     /// </summary>
     [Fact]
     public async Task A_redirect_to_somewhere_else_inside_the_network_is_not_followed()

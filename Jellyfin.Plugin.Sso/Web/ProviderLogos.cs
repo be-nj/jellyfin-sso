@@ -94,7 +94,7 @@ public sealed partial class ProviderLogos : IDisposable
         var origin = new Uri(authority.GetLeftPart(UriPartial.Authority));
 
         // Authentik publishes the brand its users see, including a custom logo.
-        var brand = await TextAsync(new Uri(origin, "/api/v3/core/brands/current/"), ct)
+        var brand = await TextAsync(new Uri(origin, "/api/v3/core/brands/current/"), authority, ct)
             .ConfigureAwait(false);
         if (brand is not null)
         {
@@ -111,7 +111,7 @@ public sealed partial class ProviderLogos : IDisposable
         }
 
         // Anything else: the icon its own login page declares, then the conventional one.
-        var html = await TextAsync(origin, ct).ConfigureAwait(false);
+        var html = await TextAsync(origin, authority, ct).ConfigureAwait(false);
         if (html is not null && IconLink.Match(html) is { Success: true } link
             && LinkHref.Match(link.Value) is { Success: true } href
             && Uri.TryCreate(origin, href.Groups[1].Value, out var declared))
@@ -152,10 +152,12 @@ public sealed partial class ProviderLogos : IDisposable
     /// a bare HttpClient instead — fifty redirects by default, and a Content-Length header
     /// taken on trust. The redirect chain was a second way to leave the configured host.
     /// </summary>
-    private async Task<string?> TextAsync(Uri uri, CancellationToken ct)
+    private async Task<string?> TextAsync(Uri uri, Uri authority, CancellationToken ct)
     {
+        // The provider's own address, not the target as its own authority — that made the
+        // first-hop check a tautology and waived the rules for the rest of the chain.
         var bytes = await _images
-            .GetBytesAsync(uri, MaxBytes, authority: uri, allowPrivateNetworks: true, ct: ct)
+            .GetBytesAsync(uri, MaxBytes, authority, allowPrivateNetworks: false, ct: ct)
             .ConfigureAwait(false);
 
         return bytes is null ? null : System.Text.Encoding.UTF8.GetString(bytes);
@@ -178,7 +180,11 @@ public sealed partial class ProviderLogos : IDisposable
             return Task.FromResult<RemoteImage?>(null);
         }
 
-        return _images.GetAsync(uri, MaxBytes, authority, allowPrivateNetworks: true, ct);
+        // Not allowPrivateNetworks. That flag short-circuits the address rules before
+        // anything is resolved, so it waived them for every redirect hop as well — and
+        // the host check above only ever looks at the first URL. A provider on the LAN is
+        // covered by the authority exemption instead, which is its exact address.
+        return _images.GetAsync(uri, MaxBytes, authority, allowPrivateNetworks: false, ct);
     }
 
     public void Dispose() => _http.Dispose();
