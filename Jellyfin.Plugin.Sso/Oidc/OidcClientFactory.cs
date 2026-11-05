@@ -90,8 +90,7 @@ public sealed class OidcClientFactory : IDisposable
             provider.Authority,
             ("jwks_uri", doc.JwksUri),
             ("token_endpoint", doc.TokenEndpoint),
-            ("userinfo_endpoint", doc.UserInfoEndpoint),
-            ("end_session_endpoint", doc.EndSessionEndpoint));
+            ("userinfo_endpoint", doc.UserInfoEndpoint));
 
         _cache[cacheKey] = new CacheEntry(doc, DateTimeOffset.UtcNow.Add(CacheTtl));
         return doc;

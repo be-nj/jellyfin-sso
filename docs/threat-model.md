@@ -10,7 +10,7 @@ reader who trusts neither the author nor a model can check the claims one by one
 - **The identity provider**, for who a person is and which groups they hold. The plugin
   verifies that the statement came from that provider and was meant for this server; it
   cannot judge whether the provider's answer is correct.
-- **TLS to the provider.** Discovery and JWKS are fetched over the configured issuer URL, and the discovery document cannot move them elsewhere: its issuer has to match the authority, and its keys, token, userinfo and end-session endpoints have to be on the authority's own host. The paths are the provider's business — Authentik's differ from its issuer by design — the host is not.
+- **TLS to the provider.** Discovery and JWKS are fetched over the configured issuer URL, and the discovery document cannot move them elsewhere: its issuer has to match the authority, and its keys, token and userinfo endpoints — the ones the server itself calls — have to be on the authority's own host. The paths are the provider's business — Authentik's differ from its issuer by design — the host is not.
   A provider reached over plain HTTP, or with a certificate the server does not trust, is
   outside what this plugin can repair.
 - **Jellyfin's own enforcement** of the user policy this plugin writes.
