@@ -35,10 +35,25 @@ jobs:
         with:
           fetch-depth: 0
 
+      # The filter decides whether the four required checks run anything at all, so it
+      # must not come from the branch being checked: a pull request that rewrote this
+      # script to print code=false made test and all three e2e jobs report success with
+      # no steps executed, and those four are the only gate on main. The base commit's
+      # copy decides instead — a change to the filter is reviewed before it can skip the
+      # suite that would have run on it.
       - id: filter
         env:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-        run: scripts/changed-code.sh "$BASE" >> "$GITHUB_OUTPUT"
+        run: |
+          filter="$RUNNER_TEMP/changed-code.sh"
+          if git cat-file -e "$BASE:scripts/changed-code.sh" 2>/dev/null; then
+            git show "$BASE:scripts/changed-code.sh" > "$filter"
+          else
+            # No base copy — a new branch, a force push, the first commit. The filter's own
+            # rule for an unreadable change applies: treat it as code and run everything.
+            echo 'echo "code=true"' > "$filter"
+          fi
+          bash "$filter" "$BASE" >> "$GITHUB_OUTPUT"
 
   test:
     needs: changes

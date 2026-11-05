@@ -112,7 +112,10 @@ back off a bad release needs; anything older stays installable from the ZIP on i
 crowds the list. `MANIFEST_KEEP=<n> scripts/update-manifest.sh …` changes the number.
 
 Tags must be four-part or three-part (`v1.12.1` becomes `1.12.1.0`) and must point at a
-commit on `main`.
+commit on `main`. The tag is also checked against digits and dots before anything
+uses it, and reaches every script through the environment rather than through workflow
+interpolation — a tag is a string somebody chose, and the release job can write releases
+and sign attestations.
 
 ---
 

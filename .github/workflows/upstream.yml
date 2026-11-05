@@ -86,10 +86,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: scripts/upstream-authentik-image.sh >> "$GITHUB_OUTPUT"
 
+      # Through the environment and quoted. ${{ }} is substituted into the script before
+      # a shell sees it, and this value is a tag name read from somebody else's releases —
+      # git refnames allow ; | $ ` ( ), so an unquoted splice here was a command injection
+      # from whoever can publish a release in that repository, fired weekly and unattended.
       - name: Check the images exist before testing against them
+        env:
+          AUTHENTIK_IMAGE: ${{ steps.authentik.outputs.image }}
         run: >
           scripts/upstream-check-images.sh
-          ${{ steps.authentik.outputs.image }}
+          "$AUTHENTIK_IMAGE"
           quay.io/keycloak/keycloak:latest
           ghcr.io/authelia/authelia:latest
 
