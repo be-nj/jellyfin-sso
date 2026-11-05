@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.Playwright;
 
 namespace Jellyfin.Plugin.Sso.E2eTests;
@@ -42,12 +43,8 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
         await _env.PatchConfigAsync(config =>
             config["Providers"]!.AsArray()[0]!["Name"] = "Fake IdP");
 
-        var context = await _browser.NewContextAsync(new BrowserNewContextOptions
-        {
-            BaseURL = _env.BaseUrl,
-            IgnoreHTTPSErrors = true,
-            ViewportSize = new ViewportSize { Width = 1100, Height = 900 },
-        });
+        await using var traced = await TracedContext.StartAsync(_browser, LayoutContext());
+        var context = traced.Context;
         var page = await context.NewPageAsync();
         await page.GotoAsync("/web/index.html#/login.html");
 
@@ -150,7 +147,8 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
                 : $".sso-login-button[data-provider=\"{JellyfinEnvironment.ProviderId}\"]{{--sso-mark:",
             TimeSpan.FromSeconds(30));
 
-        await using var context = await NewPageContextAsync();
+        await using var traced = await NewPageContextAsync();
+        var context = traced.Context;
         var page = await ShowLoginPageAsync(context);
 
         var painted = await page.EvaluateAsync<string[]>(
@@ -188,7 +186,8 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
     /// </summary>
     private async Task<string> JellyfinButtonBackgroundAsync()
     {
-        await using var context = await NewPageContextAsync();
+        await using var traced = await NewPageContextAsync();
+        var context = traced.Context;
         var page = await ShowLoginPageAsync(context);
 
         return await page.EvaluateAsync<string>(
@@ -239,13 +238,16 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
         return at < 0 ? css : css[at..Math.Min(css.Length, at + 220)];
     }
 
-    private Task<IBrowserContext> NewPageContextAsync()
-        => _browser.NewContextAsync(new BrowserNewContextOptions
-        {
-            BaseURL = _env.BaseUrl,
-            IgnoreHTTPSErrors = true,
-            ViewportSize = new ViewportSize { Width = 1100, Height = 900 },
-        });
+    /// <summary>A traced context at the width these layout assertions are written for.</summary>
+    private Task<TracedContext> NewPageContextAsync([CallerMemberName] string name = "layout")
+        => TracedContext.StartAsync(_browser, LayoutContext(), name);
+
+    private BrowserNewContextOptions LayoutContext() => new()
+    {
+        BaseURL = _env.BaseUrl,
+        IgnoreHTTPSErrors = true,
+        ViewportSize = new ViewportSize { Width = 1100, Height = 900 },
+    };
 
     private static async Task<IPage> ShowLoginPageAsync(IBrowserContext context)
     {

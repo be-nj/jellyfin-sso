@@ -200,10 +200,17 @@ the suites hold. Only this one is mutation tested (70 %, floor 65, over the file
   the sentence describing what *Refuse logins that match no mapping* revokes was wrong
   until somebody read it properly. Treat the figure as "who held the keyboard", not "who
   decided".
-- **Nobody outside has read it.** CodeQL, the test matrix and mutation testing stand in
-  for a reviewer and are not the same thing, and `docs/reviews/` was written by the model
-  that wrote the code. Counting approving pull-request reviews would say little: 9p4 has
-  none either across 56, which measures push rights rather than reading.
+- **No person outside has read it.** On 5 November 2026 something outside did: GitHub's
+  Copilot was pointed at the repository and filed eight findings, and all eight were real
+  — two of them invariants the threat model asserts, which held only as long as nobody
+  logged in at the same moment as somebody else
+  ([the review](docs/reviews/2026-11-05-outside-review.md)). Three were in code written
+  that morning. That is a second reader rather than a second pair of eyes, and the
+  difference matters, but "nobody outside" is no longer the honest word. The rest still
+  stands: CodeQL, the test matrix and mutation testing are not a reviewer, and the other
+  documents under `docs/reviews/` were written by the model that wrote the code. Counting
+  approving pull-request reviews would say little either way: 9p4 has none across 56,
+  which measures push rights rather than reading.
 - **No SAML**, and only Authentik, Keycloak and Authelia are set up and tested. There is
   a guide for [Tinyauth](docs/tinyauth.md) as well, written against a login walked by
   hand; it is not in the test matrix, and that page says what it costs.

@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Playwright;
@@ -16,6 +17,7 @@ public sealed class ConfigPageTests : IAsyncLifetime
     private readonly JellyfinEnvironment _env;
     private IPlaywright _playwright = null!;
     private IBrowser _browser = null!;
+    private readonly List<TracedContext> _traced = [];
 
     public ConfigPageTests(JellyfinEnvironment env)
     {
@@ -31,6 +33,13 @@ public sealed class ConfigPageTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
+        // The traces are written here, because the helper below hands a page to the test
+        // and keeps the context alive for as long as the test needs it.
+        foreach (var traced in _traced)
+        {
+            await traced.DisposeAsync();
+        }
+
         await _browser.DisposeAsync();
         _playwright.Dispose();
     }
@@ -224,13 +233,18 @@ public sealed class ConfigPageTests : IAsyncLifetime
     /// Opens the plugin's page inside the dashboard with a seeded admin session, and fails
     /// with the page's own console output if the page never initialises.
     /// </summary>
-    private async Task<IPage> OpenConfigPageAsync()
+    private async Task<IPage> OpenConfigPageAsync([CallerMemberName] string name = "config-page")
     {
-        var context = await _browser.NewContextAsync(new BrowserNewContextOptions
-        {
-            BaseURL = _env.BaseUrl,
-            IgnoreHTTPSErrors = true,
-        });
+        var traced = await TracedContext.StartAsync(
+            _browser,
+            new BrowserNewContextOptions
+            {
+                BaseURL = _env.BaseUrl,
+                IgnoreHTTPSErrors = true,
+            },
+            name);
+        _traced.Add(traced);
+        var context = traced.Context;
 
         var credentials = new JsonObject
         {

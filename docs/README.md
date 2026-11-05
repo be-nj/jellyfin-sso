@@ -25,7 +25,10 @@ The [README](../README.md) installs the plugin and walks the setup. The detail i
 
 - [Threat model](threat-model.md) — what the plugin trusts, and the test that holds each
   claim
-- [Reviews](reviews/) — what the last review found, and how it was done
+- [Reviews](reviews/) — what each review found, and how it was done. The newest are the
+  [hardening pass](reviews/2026-11-05-hardening.md), the
+  [outside review](reviews/2026-11-05-outside-review.md) — the first by something that did
+  not write this plugin — and the [test practices audit](reviews/2026-11-05-test-practices.md)
 
 - [Architecture decision records](adr/) — the authentication bridge, Quick Connect for
   native clients, IdP groups as the source of truth, no stored client secret

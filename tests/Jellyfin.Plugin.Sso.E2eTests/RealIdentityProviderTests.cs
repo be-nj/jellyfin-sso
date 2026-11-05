@@ -140,12 +140,14 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
     /// </summary>
     private protected async Task<string> AttemptRefusedLoginAsync(RealIdentityUser user)
     {
-        await using var context = await _browser!.NewContextAsync(new BrowserNewContextOptions
-        {
-            BaseURL = _idp.ServerBaseUrl ?? _env.BaseUrl,
-            IgnoreHTTPSErrors = true,
-        });
-        var page = await context.NewPageAsync();
+        await using var traced = await TracedContext.StartAsync(
+            _browser!,
+            new BrowserNewContextOptions
+            {
+                BaseURL = _idp.ServerBaseUrl ?? _env.BaseUrl,
+                IgnoreHTTPSErrors = true,
+            });
+        var page = await traced.NewPageAsync();
         await page.GotoAsync("/sso/oidc/start");
 
         // The form may never arrive: a provider that refuses the authorization request
@@ -216,12 +218,14 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
     /// <summary>One attempt, from an empty browser context to a signed-in web client.</summary>
     private async Task<IPage> SignInOnceAsync(RealIdentityUser user)
     {
-        await using var context = await _browser!.NewContextAsync(new BrowserNewContextOptions
-        {
-            BaseURL = _idp.ServerBaseUrl ?? _env.BaseUrl,
-            IgnoreHTTPSErrors = true,
-        });
-        var page = await context.NewPageAsync();
+        await using var traced = await TracedContext.StartAsync(
+            _browser!,
+            new BrowserNewContextOptions
+            {
+                BaseURL = _idp.ServerBaseUrl ?? _env.BaseUrl,
+                IgnoreHTTPSErrors = true,
+            });
+        var page = await traced.NewPageAsync();
 
         var consoleErrors = new List<string>();
         page.Console += (_, message) =>
