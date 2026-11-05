@@ -44,12 +44,20 @@ public sealed class SessionRevoker
         if (config is null)
             return 0;
 
-        var userIds = config.Links
-            .Where(l => string.Equals(l.ProviderId, providerId, StringComparison.Ordinal)
-                && string.Equals(l.Sub, sub, StringComparison.Ordinal))
-            .Select(l => l.JellyfinUserId)
-            .Distinct()
-            .ToList();
+        // Under the lock and materialised: Links is a plain List, writers add and remove
+        // under this lock, and enumerating it while that happens throws "Collection was
+        // modified" — which the callback above turns into a misleading refusal for a
+        // login that was fine.
+        List<Guid> userIds;
+        lock (Plugin.ConfigurationLock)
+        {
+            userIds = config.Links
+                .Where(l => string.Equals(l.ProviderId, providerId, StringComparison.Ordinal)
+                    && string.Equals(l.Sub, sub, StringComparison.Ordinal))
+                .Select(l => l.JellyfinUserId)
+                .Distinct()
+                .ToList();
+        }
 
         foreach (var userId in userIds)
         {

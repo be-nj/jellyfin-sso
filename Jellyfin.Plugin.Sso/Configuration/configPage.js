@@ -143,8 +143,12 @@ function save(view) {
     var cfg = {
         Providers: providers,
         GroupMappings: collectMappings(view),
-        Links: (_config && _config.Links) || [],
-        SeenGroups: (_config && _config.SeenGroups) || [],
+        // Not sent. The server keeps the live lists whatever arrives here, because this
+        // page holds the snapshot it loaded with and both lists change underneath it —
+        // a login links an account, the Links tab removes one. Sending them wrote the
+        // snapshot back and resurrected removed links.
+        Links: [],
+        SeenGroups: [],
         RequireMappedGroup: getChk(view, 'RequireMappedGroup'),
         PreserveAdminPermissions: getChk(view, 'PreserveAdminPermissions'),
         SignOutOfIdentityProvider: getChk(view, 'SignOutOfIdentityProvider'),

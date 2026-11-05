@@ -342,4 +342,69 @@ public sealed class ConfigPageTests : IAsyncLifetime
         Assert.Null(saved["Providers"]!.AsArray()[0]!["ConfidentialSecretRef"]?.GetValue<string?>());
     }
 
+
+    /// <summary>
+    /// The page posts the configuration it loaded with, and both the links and the seen
+    /// groups change underneath it — a login links an account, the Links tab removes one.
+    /// Saving a provider therefore used to write that snapshot back: a removed link
+    /// reappeared and the identity it belonged to signed into that account again. The
+    /// server keeps its own lists whatever the body says.
+    /// </summary>
+    [Fact]
+    public async Task Saving_the_configuration_cannot_rewrite_the_links()
+    {
+        var login = await _env.StartWebLoginAsync(
+            new FakeUser("sub-keepme", "keepmeuser", ["media"]));
+        Assert.True(login.Succeeded, login.Body);
+
+        var link = Assert.Single((await _env.PluginConfigAsync())["Links"]!.AsArray());
+        var sub = link!["Sub"]!.GetValue<string>();
+
+        // A save that carries a link nobody asked for, and drops the one that exists.
+        var result = await _env.TrySaveConfigAsync(config =>
+        {
+            config["Links"] = new JsonArray(new JsonObject
+            {
+                ["ProviderId"] = JellyfinEnvironment.ProviderId,
+                ["Sub"] = "sub-invented",
+                ["JellyfinUserId"] = Guid.NewGuid().ToString(),
+            });
+            config["SeenGroups"] = new JsonArray("invented-group");
+        });
+
+        Assert.Equal(System.Net.HttpStatusCode.OK, result.Status);
+
+        var saved = await _env.PluginConfigAsync();
+        var kept = Assert.Single(saved["Links"]!.AsArray());
+        Assert.Equal(sub, kept!["Sub"]!.GetValue<string>());
+        Assert.DoesNotContain(
+            "invented-group",
+            saved["SeenGroups"]!.AsArray().Select(g => g!.GetValue<string>()));
+    }
+
+    /// <summary>
+    /// The other direction, which is what an administrator would actually hit: remove a
+    /// link, then save a provider from the page that still remembers it.
+    /// </summary>
+    [Fact]
+    public async Task A_link_removed_while_the_page_is_open_stays_removed()
+    {
+        var login = await _env.StartWebLoginAsync(
+            new FakeUser("sub-gone", "goneuser", ["media"]));
+        Assert.True(login.Succeeded, login.Body);
+
+        var stale = await _env.PluginConfigAsync();
+        var userId = Guid.Parse(
+            stale["Links"]!.AsArray()[0]!["JellyfinUserId"]!.GetValue<string>());
+
+        await _env.RemoveLinkAsync(userId);
+        Assert.Empty((await _env.PluginConfigAsync())["Links"]!.AsArray());
+
+        // The page saves with the links it loaded with, which still contain the removed one.
+        var result = await _env.TrySaveConfigAsync(config => config["Links"] = stale["Links"]!.DeepClone());
+
+        Assert.Equal(System.Net.HttpStatusCode.OK, result.Status);
+        Assert.Empty((await _env.PluginConfigAsync())["Links"]!.AsArray());
+    }
+
 }

@@ -115,6 +115,16 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
     /// </summary>
     public async Task ResetAsync()
     {
+        // Links go through their own endpoint, the way the Links tab does. The plugin's
+        // generic save deliberately ignores links in the body — the configuration page
+        // posts the snapshot it loaded with, and writing that back resurrected links an
+        // administrator had removed — so clearing them here has to mean what it says.
+        foreach (var link in (JsonNode.Parse(
+            await _admin.GetStringAsync("/sso/admin/links")) as JsonArray)!)
+        {
+            await RemoveLinkAsync(Guid.Parse(link!["JellyfinUserId"]!.GetValue<string>()));
+        }
+
         foreach (var user in await ListUsersAsync())
         {
             var name = user!["Name"]!.GetValue<string>();
@@ -147,6 +157,8 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
                 Mapping("kids", admin: false, KidsLibraryId),
                 Mapping("jellyfin-admins", admin: true),
             },
+            // Both are ignored by the server and cleared above; sent as empty so the
+            // shape of this body still matches what the page posts.
             ["Links"] = new JsonArray(),
             ["SeenGroups"] = new JsonArray(),
             // Every test in this suite reaches the server from the same address, and a
@@ -315,6 +327,13 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
         var config = await PluginConfigAsync();
         change(config);
         var response = await _admin.PostAsJsonAsync("/sso/admin/config", config);
+        response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>Removes a link the way the Links tab does.</summary>
+    public async Task RemoveLinkAsync(Guid jellyfinUserId)
+    {
+        using var response = await _admin.DeleteAsync($"/sso/admin/links/{jellyfinUserId}");
         response.EnsureSuccessStatusCode();
     }
 

@@ -28,10 +28,23 @@ public sealed class UserProvisioner
     /// ask before anything is created.
     /// </summary>
     public static Guid? LinkedUserId(ProviderConfig provider, OidcIdentity identity)
-        => Plugin.Instance?.Configuration.Links
-            .FirstOrDefault(l => l.ProviderId == provider.Id
-                && string.Equals(l.Sub, identity.Sub, StringComparison.Ordinal))
-            ?.JellyfinUserId;
+    {
+        var config = Plugin.Instance?.Configuration;
+        if (config is null)
+        {
+            return null;
+        }
+
+        // Under the lock, for the same reason as the revoker: a plain List being written
+        // by another request throws rather than answering.
+        lock (Plugin.ConfigurationLock)
+        {
+            return config.Links
+                .FirstOrDefault(l => l.ProviderId == provider.Id
+                    && string.Equals(l.Sub, identity.Sub, StringComparison.Ordinal))
+                ?.JellyfinUserId;
+        }
+    }
 
     public async Task<(Guid UserId, string Username)> ResolveAsync(
         ProviderConfig provider,

@@ -61,7 +61,27 @@ public sealed class AdminController : ControllerBase
             }
         }
 
-        Plugin.Instance!.UpdateConfiguration(config);
+        lock (Plugin.ConfigurationLock)
+        {
+            // Links and seen groups are not the page's to send. They have their own
+            // endpoints, they change while a page is open — a login links an account, an
+            // administrator removes a link on the other tab — and the page posts the
+            // snapshot it loaded with. Saving a provider therefore used to write that
+            // snapshot back: a link removed on the Links tab reappeared, and the identity
+            // it belonged to signed into that account again; a link created while the page
+            // was open vanished, and that person's next login was refused as a username
+            // collision until somebody linked them by hand. Whatever arrives in the body,
+            // the live lists win.
+            var live = Plugin.Instance!.Configuration;
+            config.Links = live.Links;
+            config.SeenGroups = live.SeenGroups;
+
+            // Inside the lock, because this replaces the whole configuration object and
+            // every other writer mutates the live one under this lock. Outside it, a
+            // self-service unlink could remove a link from an object that had just been
+            // swapped away, report success, and leave the link in place.
+            Plugin.Instance.UpdateConfiguration(config);
+        }
 
         // The login buttons live in Jellyfin's branding, so they are rewritten here —
         // this is the only place a provider is ever enabled, renamed or disabled.
@@ -111,13 +131,20 @@ public sealed class AdminController : ControllerBase
     public IActionResult GetLinks()
     {
         var config = Plugin.Instance!.Configuration;
-        return Ok(config.Links.Select(l => new
+
+        // Materialised inside the lock. Select is lazy, so this used to be enumerated by
+        // MVC while serialising the response — after the action had returned, with no lock
+        // held, over a list another request may be adding to.
+        lock (Plugin.ConfigurationLock)
         {
-            l.ProviderId,
-            l.Sub,
-            l.JellyfinUserId,
-            Username = _userManager.GetUserById(l.JellyfinUserId)?.Username ?? "(deleted)",
-        }));
+            return Ok(config.Links.Select(l => new
+            {
+                l.ProviderId,
+                l.Sub,
+                l.JellyfinUserId,
+                Username = _userManager.GetUserById(l.JellyfinUserId)?.Username ?? "(deleted)",
+            }).ToList());
+        }
     }
 
     /// <summary>
