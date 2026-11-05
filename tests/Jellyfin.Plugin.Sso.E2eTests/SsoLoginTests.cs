@@ -440,4 +440,49 @@ public sealed class SsoLoginTests : IAsyncLifetime
         Assert.Contains("this browser started", await response.Content.ReadAsStringAsync());
     }
 
+
+    /// <summary>
+    /// A provider that rotates its signing keys used to stop every login on the server
+    /// for up to half an hour: the discovery document and its keys are cached, nothing
+    /// invalidated them, and the resulting failure escaped as a 500 rather than a refusal
+    /// — each attempt having already spent its pending state. One refetch on an unknown
+    /// key makes it heal itself.
+    /// </summary>
+    [Fact]
+    public async Task A_rotated_signing_key_does_not_stop_logins()
+    {
+        var first = await _env.StartWebLoginAsync(
+            new FakeUser("sub-rotate", "rotateuser", ["media"]));
+        Assert.True(first.Succeeded, first.Body);
+
+        _env.Idp.RotateSigningKey();
+
+        var second = await _env.StartWebLoginAsync(
+            new FakeUser("sub-rotate", "rotateuser", ["media"]));
+
+        Assert.True(second.Succeeded, second.Body);
+    }
+
+    /// <summary>
+    /// A token that does not validate is a refusal, not a server fault. The exception
+    /// middleware used to answer 500 and put its message in the body.
+    /// </summary>
+    [Fact]
+    public async Task A_token_signed_by_nobody_is_refused_in_words()
+    {
+        _env.Idp.SignWithAStrangersKey = true;
+        try
+        {
+            var login = await _env.StartWebLoginAsync(
+                new FakeUser("sub-stranger", "strangeruser", ["media"]));
+
+            Assert.Equal(HttpStatusCode.BadRequest, login.CallbackStatus);
+            Assert.Contains("could not be verified", login.Body!);
+        }
+        finally
+        {
+            _env.Idp.SignWithAStrangersKey = false;
+        }
+    }
+
 }

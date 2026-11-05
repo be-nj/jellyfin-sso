@@ -35,8 +35,18 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
 {
     private const string KeyId = "fake-idp-key";
 
-    private readonly RSA _rsa = RSA.Create(2048);
-    private readonly RsaSecurityKey _signingKey;
+    private RSA _rsa = RSA.Create(2048);
+    private RsaSecurityKey _signingKey;
+
+    /// <summary>
+    /// A key nobody publishes. Set this and the next ID token is signed by a stranger,
+    /// which is what a token the plugin must refuse looks like.
+    /// </summary>
+    private readonly RsaSecurityKey _strangersKey =
+        new(RSA.Create(2048)) { KeyId = "a-stranger" };
+
+    /// <summary>Signs the next token with a key that is not in the published key set.</summary>
+    public bool SignWithAStrangersKey { get; set; }
     private readonly WebApplication _app;
     private readonly ConcurrentDictionary<string, PendingCode> _codes = new();
     private readonly ConcurrentDictionary<string, FakeUser> _accessTokens = new();
@@ -48,6 +58,17 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
         string CodeChallenge,
         FakeUser User,
         string? PictureUrl);
+
+    /// <summary>
+    /// Replaces the signing key and publishes the new one, the way a provider rotating
+    /// its keys does. Tokens signed before this are then signed by a key the published
+    /// set no longer carries.
+    /// </summary>
+    public void RotateSigningKey()
+    {
+        _rsa = RSA.Create(2048);
+        _signingKey = new RsaSecurityKey(_rsa) { KeyId = KeyId + "-rotated" };
+    }
 
     private FakeIdentityProvider(int port, TestCertificate certificate)
     {
@@ -328,7 +349,9 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
             claims: claims,
             notBefore: now.AddSeconds(-5),
             expires: now.AddMinutes(5),
-            signingCredentials: new SigningCredentials(_signingKey, SecurityAlgorithms.RsaSha256));
+            signingCredentials: new SigningCredentials(
+                SignWithAStrangersKey ? _strangersKey : _signingKey,
+                SecurityAlgorithms.RsaSha256));
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }

@@ -71,12 +71,19 @@ public sealed class PermissionSync
             // every field this plugin does not own to the type's default — IsDisabled,
             // IsHidden, BlockedTags, remote access, session limits — which would mean an
             // SSO login could silently re-enable an account an administrator disabled.
-            // A newly provisioned account already got its policy from the provisioner, so
-            // skipping is safe; the login continues either way.
+            //
+            // The cost of skipping is the other direction, and it is deliberate: a user
+            // whose administrator group was taken away at the provider keeps the flag
+            // through this login, because the line that clears it is one of the lines that
+            // does not run. Of the two, re-enabling a disabled account undoes an explicit
+            // decision an administrator made and nothing brings it back, while a retained
+            // flag is corrected by the next login that reads a policy. So the sync stops,
+            // and the log says both halves rather than only the reassuring one.
             _logger.LogWarning(
                 "Skipping the SSO permission sync for user {Id}: the current policy could "
-                + "not be read, and writing a fresh one would reset settings this plugin "
-                + "does not own.",
+                + "not be read. No libraries, groups or administrator rights were applied "
+                + "this login — including any that should have been taken away. The next "
+                + "login applies them if the policy can be read by then.",
                 userId);
             return;
         }

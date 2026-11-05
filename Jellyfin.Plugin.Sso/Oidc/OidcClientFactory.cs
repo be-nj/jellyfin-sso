@@ -17,6 +17,11 @@ public sealed class OidcClientFactory : IDisposable
     /// How long a discovery document — and with it the provider's signing keys — is
     /// reused. A provider that rotates its keys would otherwise fail every login until
     /// Jellyfin restarts.
+    ///
+    /// Half an hour is still half an hour of failed logins when a rotation happens inside
+    /// the window, which is why <see cref="Forget"/> exists: a token signed by a key this
+    /// document does not contain is the one signal that says the document is stale, and
+    /// the caller uses it to fetch once more rather than wait out the clock.
     /// </summary>
     private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(30);
 
@@ -128,6 +133,21 @@ public sealed class OidcClientFactory : IDisposable
                     $"The discovery document for {authorityUrl} puts its {name} on another "
                     + "host. Refusing it: that endpoint decides whether a login is genuine.");
             }
+        }
+    }
+
+    /// <summary>
+    /// Drops the cached document for one provider, so the next call fetches it again.
+    /// Called when a token arrives signed by a key the cached document does not know,
+    /// which is what a key rotation looks like from here.
+    /// </summary>
+    public void Forget(ProviderConfig provider)
+    {
+        if (_cache.TryRemove($"{provider.Id}|{provider.Authority}", out _))
+        {
+            _logger.LogInformation(
+                "Dropped the cached discovery document for {Name}; it will be fetched again.",
+                provider.Name);
         }
     }
 
