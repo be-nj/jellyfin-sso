@@ -16,6 +16,12 @@ public sealed class RecordingLogger<T> : ILogger<T>
     public IReadOnlyList<string> Messages(LogLevel level)
         => _lines.Where(l => l.Level == level).Select(l => l.Message).ToList();
 
+    /// <summary>
+    /// Everything that was logged, at every level, as one string. For the tests that are
+    /// about what a line may not contain rather than which line it was.
+    /// </summary>
+    public string Text => string.Join('\n', _lines.Select(l => l.Message));
+
     public IDisposable? BeginScope<TState>(TState state)
         where TState : notnull
         => null;

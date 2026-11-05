@@ -344,6 +344,32 @@ public sealed class ConfigPageTests : IAsyncLifetime
 
 
     /// <summary>
+    /// A library is named by its Jellyfin id, and the permission sync parses those ids on
+    /// every login. One that is not a GUID therefore broke every SSO login on the server
+    /// with a 500 — from a value only this endpoint can introduce. It is refused here, and
+    /// the sync skips one that got in some other way.
+    /// </summary>
+    [Theory]
+    [InlineData("not-a-library-id")]
+    [InlineData("")]
+    [InlineData("12345")]
+    public async Task A_library_id_that_is_not_one_is_refused_at_the_door(string libraryId)
+    {
+        var result = await _env.TrySaveConfigAsync(config =>
+            JellyfinEnvironment.Mapping(config, "media")["LibraryIds"] =
+                new System.Text.Json.Nodes.JsonArray { libraryId });
+
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.Status);
+        Assert.Contains("is not a library id", result.Body);
+
+        var saved = await _env.PluginConfigAsync();
+        Assert.DoesNotContain(
+            libraryId,
+            JellyfinEnvironment.Mapping(saved, "media")["LibraryIds"]!.AsArray()
+                .Select(id => id!.GetValue<string>()));
+    }
+
+    /// <summary>
     /// The page posts the configuration it loaded with, and both the links and the seen
     /// groups change underneath it — a login links an account, the Links tab removes one.
     /// Saving a provider therefore used to write that snapshot back: a removed link

@@ -2,6 +2,7 @@ using Jellyfin.Data;
 using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.Sso.Configuration;
+using Jellyfin.Plugin.Sso.Logging;
 using Jellyfin.Plugin.Sso.Oidc;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Users;
@@ -49,17 +50,23 @@ public sealed class PermissionSync
 
         var isAdmin = ResolveAdmin(matched, userId, config);
 
+        // Parsed defensively, not because the admin endpoint lets a bad id through — it
+        // refuses one — but because a configuration file is a file: an id edited by hand,
+        // or left behind by an older version, would otherwise throw here, and a
+        // FormatException from this line is not a type the callback catches. Every login
+        // on the server answered 500. A bad id now grants nothing and says so.
         var libraryIds = matched
             .SelectMany(m => m.LibraryIds)
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(id => Guid.ParseExact(id, "N"))
+            .Select(id => Guid.TryParse(id, out var parsed) ? parsed : (Guid?)Warn(id))
+            .OfType<Guid>()
             .ToArray();
 
         var enableAll = isAdmin; // admins see everything
 
         _logger.LogInformation(
             "SSO sync for user {Id}: admin={Admin}, libraries={Count}, groups={Groups}",
-            userId, isAdmin, libraryIds.Length, string.Join(", ", identity.Groups));
+            userId, isAdmin, libraryIds.Length, Loggable.OneLine(identity.Groups));
 
         // Only the fields this plugin claims are touched. A policy built from scratch here
         // would quietly reset everything an administrator set elsewhere — blocked tags,
@@ -207,7 +214,7 @@ public sealed class PermissionSync
                 "SSO group mapping '{Mapping}' does not match the group '{Arrived}' the "
                 + "provider sent: {Reason}, and matching is exact.",
                 mapping,
-                arrived,
+                Loggable.OneLine(arrived),
                 reason);
         }
     }
@@ -221,6 +228,16 @@ public sealed class PermissionSync
         }
 
         return matched.Max(m => m.MaxParentalRating);
+    }
+
+    /// <summary>Says which configured id is not a library, and grants nothing for it.</summary>
+    private Guid? Warn(string libraryId)
+    {
+        _logger.LogWarning(
+            "A group mapping names '{LibraryId}', which is not a Jellyfin library id. That "
+            + "entry grants nothing; correct it on the plugin's configuration page.",
+            Loggable.OneLine(libraryId));
+        return null;
     }
 
     private bool OtherAdministratorsExist(Guid userId)

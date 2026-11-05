@@ -353,15 +353,54 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
             $"Client=\"e2e-tests\", Device=\"xunit\", DeviceId=\"{Guid.NewGuid():N}\", "
             + $"Version=\"1.0.0.0\", Token=\"{token}\"");
 
-    /// <summary>An HTTP client that accepts the fake provider's self-signed certificate.</summary>
+    /// <summary>
+    /// An HTTP client that accepts the fake provider's self-signed certificate, and that
+    /// can reach the provider under the name the provider publishes.
+    ///
+    /// That name is <see cref="TestCertificate.HostName"/>, which resolves inside the
+    /// Jellyfin container and nowhere else — the browser is launched with a resolver rule
+    /// for it, and this is the same rule for the test process. A client that could not
+    /// follow a redirect to it was fine for as long as the provider published a second
+    /// name for browser-facing endpoints; it stopped being fine when the plugin began
+    /// requiring one host for everything it hands something to, which is what every real
+    /// provider publishes.
+    /// </summary>
     public static HttpClient TrustingClient(bool followRedirects = true, bool useCookies = true)
-        => new(new HttpClientHandler
+        => new(new SocketsHttpHandler
         {
-            ServerCertificateCustomValidationCallback = (_, _, _, _) => true,
+            SslOptions = new System.Net.Security.SslClientAuthenticationOptions
+            {
+                RemoteCertificateValidationCallback = (_, _, _, _) => true,
+            },
             AllowAutoRedirect = followRedirects,
             // A prefixed walk carries cookies by hand, and the handler's own jar would
             // scope them to the stripped path and drop the manual header.
             UseCookies = useCookies,
+            ConnectCallback = async (context, ct) =>
+            {
+                var host = string.Equals(
+                    context.DnsEndPoint.Host, TestCertificate.HostName, StringComparison.Ordinal)
+                    ? "127.0.0.1"
+                    : context.DnsEndPoint.Host;
+
+                var socket = new System.Net.Sockets.Socket(
+                    System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp)
+                {
+                    NoDelay = true,
+                };
+
+                try
+                {
+                    await socket.ConnectAsync(host, context.DnsEndPoint.Port, ct)
+                        .ConfigureAwait(false);
+                    return new System.Net.Sockets.NetworkStream(socket, ownsSocket: true);
+                }
+                catch
+                {
+                    socket.Dispose();
+                    throw;
+                }
+            },
         });
 
     /// <summary>Redeems an ephemeral secret on Jellyfin's native auth path.</summary>

@@ -64,6 +64,26 @@ public sealed class ClaimsExtractor
                 return new OidcIdentity(sub, preferredUsername, groups, picture);
             }
 
+            // OIDC Core §5.3.2: the sub in a userinfo response must be verified against
+            // the one in the ID token, and where they differ the response must not be
+            // used. The access token is this login's own, so a mismatch means the
+            // provider answered about somebody else — and what is read from here decides
+            // a user's groups, which is to say their libraries and their administrator
+            // flag. A picture is not worth failing a login over, so a login that only
+            // wanted one carries on without it.
+            var userInfoSubject = StringClaim(userInfo.Json, "sub");
+            if (!string.Equals(userInfoSubject, sub, StringComparison.Ordinal))
+            {
+                if (!required)
+                {
+                    return new OidcIdentity(sub, preferredUsername, groups, picture);
+                }
+
+                throw new SecurityTokenException(
+                    "The userinfo endpoint answered about a different subject than the ID "
+                    + "token names, so its claims were not used.");
+            }
+
             if (provider.GroupsFromUserInfo)
             {
                 groups = ExtractGroupsFromElement(userInfo.Json, provider.GroupsClaim);
@@ -72,8 +92,8 @@ public sealed class ClaimsExtractor
             if (nameMissing)
             {
                 preferredUsername =
-                    StringClaim(userInfo.Json, "preferred_username")
-                    ?? StringClaim(userInfo.Json, "name")
+                    Name(StringClaim(userInfo.Json, "preferred_username"))
+                    ?? Name(StringClaim(userInfo.Json, "name"))
                     ?? preferredUsername;
             }
 
@@ -110,6 +130,7 @@ public sealed class ClaimsExtractor
             ValidIssuer = issuer,
             ValidAudience = provider.ClientId,
             IssuerSigningKeys = signingKeys,
+            ValidAlgorithms = OidcClientFactory.AsymmetricSigningAlgorithms,
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromSeconds(60),
         };
@@ -120,17 +141,19 @@ public sealed class ClaimsExtractor
         if (!string.Equals(nonce, expectedNonce, StringComparison.Ordinal))
             throw new SecurityTokenException("ID token nonce mismatch.");
 
+        RequireThisClientIsTheParty(principal, provider.ClientId);
+
         // Blank, not merely absent. A provider whose subject comes from a mapper pointed
         // at an attribute that is empty for some users sends "sub": "", and an empty
         // string is a perfectly good dictionary key: the first such login would create
         // the link, and every later one would match it and sign in to that account.
-        var sub = Trimmed(PlainString(principal, "sub"))
+        var sub = Blankless(PlainString(principal, "sub"))
             ?? throw new SecurityTokenException(
                 "The ID token's 'sub' claim is missing, empty, or not a single value. The "
                 + "subject is what this plugin matches an account on, so check which "
                 + "attribute the provider maps to 'sub'.");
-        var username = Trimmed(PlainString(principal, "preferred_username"))
-            ?? Trimmed(PlainString(principal, "name"))
+        var username = Name(PlainString(principal, "preferred_username"))
+            ?? Name(PlainString(principal, "name"))
             ?? sub;
 
         // A picture is one string where groups are many, but both arrive the same way —
@@ -139,6 +162,34 @@ public sealed class ClaimsExtractor
         var picture = First(GroupsFromClaims(principal, PictureClaim(provider)));
 
         return (sub, username, GroupsFromClaims(principal, provider.GroupsClaim), picture);
+    }
+
+    /// <summary>
+    /// A token whose <c>aud</c> names more than this client has to say which one it was
+    /// issued for.
+    ///
+    /// The audience check above passes as soon as this client is one of the names in
+    /// <c>aud</c>. A provider can be configured to put a second client's id in a token's
+    /// audience — Keycloak does it through an audience mapper — and such a token was then
+    /// accepted here as if it had been issued for this one. OIDC Core §3.1.3.7 covers this
+    /// with <c>azp</c>: where there are several audiences, the authorized party must be
+    /// this client.
+    /// </summary>
+    private static void RequireThisClientIsTheParty(ClaimsPrincipal principal, string clientId)
+    {
+        var audiences = principal.FindAll("aud").Take(2).Count();
+        if (audiences < 2)
+        {
+            return;
+        }
+
+        var authorizedParty = PlainString(principal, "azp");
+        if (!string.Equals(authorizedParty, clientId, StringComparison.Ordinal))
+        {
+            throw new SecurityTokenException(
+                "The ID token names several audiences and its 'azp' claim does not name "
+                + "this client, so it was not issued for this application.");
+        }
     }
 
     private static string PictureClaim(ProviderConfig provider)
@@ -183,12 +234,28 @@ public sealed class ClaimsExtractor
     }
 
     /// <summary>
-    /// Null for a value that is absent or only whitespace. The logout token validator has
-    /// always treated a blank subject as no subject; this is the same rule on the login
-    /// side, which is where it was missing.
+    /// Null for a value that is absent or only whitespace, and otherwise the value
+    /// unchanged. The logout token validator has always treated a blank subject as no
+    /// subject; this is the same rule on the login side, which is where it was missing.
+    ///
+    /// It does not trim, and the subject must not be trimmed: it is an opaque identifier
+    /// this plugin compares byte for byte against a stored link, and quietly changing it
+    /// would break every account whose provider pads it.
     /// </summary>
-    private static string? Trimmed(string? value)
+    private static string? Blankless(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value;
+
+    /// <summary>
+    /// A name a Jellyfin account can be called, or null.
+    ///
+    /// Unlike the subject, this one is trimmed. The name is what an account is created
+    /// under and what the collision check looks up, and the two have to agree: a provider
+    /// sending " admin" found no collision with the existing "admin" — Jellyfin's own
+    /// lookup does not pad — and then asked Jellyfin to create a second account whose
+    /// name reads the same in every list it appears in.
+    /// </summary>
+    private static string? Name(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     internal static List<string> GroupsFromClaims(ClaimsPrincipal principal, string claim)
     {

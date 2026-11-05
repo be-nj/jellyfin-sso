@@ -21,9 +21,11 @@ The details:
   to the plugin's configuration file — the API refuses a value that is not one of those
   two forms, so this is a check and not a convention
   ([how](configuration.md#confidential-clients)).
-- Full ID-token validation: JWKS signature, `iss`, `aud`, `exp`, `nonce`. `iat` is
-  checked on the back-channel logout token, where freshness is the replay control. Each
-  rejection has its own test.
+- Full ID-token validation: JWKS signature with the acceptable algorithms named and
+  asymmetric, `iss`, `aud` — and `azp` where a token names several audiences — `exp` and
+  `nonce`. Where claims come from the userinfo endpoint, its `sub` has to match the ID
+  token's. `iat` is checked on the back-channel logout token, where freshness is the
+  replay control. Each rejection has its own test.
 - A login can only be finished in the browser that started it. The `state` makes a
   callback single-use and pins it to one provider; the browser is established separately,
   by a cookie minted when the login starts and compared when the callback arrives — a
@@ -33,3 +35,12 @@ The details:
   page that spends it.
 - Identity is matched by `(provider, sub)`, never by username
   ([why](linking.md#identity-matching-and-the-idp-subject)).
+- Unlinking an account ends its sessions, whether the person does it themselves or an
+  administrator does it on the Links tab. Back-channel logout finds an account through its
+  link and nothing else, so a link removed without that would leave tokens nobody can end.
+- What the plugin fetches from the provider is fetched from the provider: the discovery
+  document's keys, token, userinfo and end-session endpoints have to be on the authority's
+  own host, and redirects are not followed, so none of those calls can be moved afterwards.
+- Names and group names from a token reach the log on one line, with control characters
+  replaced. They are the one class of logged value that cannot be mapped to a closed set,
+  and a name carrying a newline would otherwise write a line of its own into the log.

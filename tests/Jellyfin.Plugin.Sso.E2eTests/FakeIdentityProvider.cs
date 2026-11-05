@@ -168,6 +168,20 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
     public bool UserInfoFails { get; set; }
 
     /// <summary>
+    /// When true the discovery document puts the end-session endpoint on another host,
+    /// which no real provider does and a tampered document would. A logout sends the
+    /// user's ID token there, so the plugin has to refuse the document.
+    /// </summary>
+    public bool EndSessionElsewhere { get; set; }
+
+    /// <summary>
+    /// When true the userinfo endpoint answers about a different subject than the ID token
+    /// named. OIDC Core forbids using such a response, because what is read from it
+    /// decides a user's groups.
+    /// </summary>
+    public bool UserInfoAnswersAboutSomebodyElse { get; set; }
+
+    /// <summary>
     /// When set, the next authorize call reports this OAuth error instead of issuing a
     /// code — what a provider does when the user cancels or the client is misconfigured.
     /// </summary>
@@ -197,8 +211,12 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
             ["token_endpoint"] = $"{ContainerAuthority}/token",
             ["userinfo_endpoint"] = $"{ContainerAuthority}/userinfo",
             ["jwks_uri"] = $"{ContainerAuthority}/jwks",
-            // Browser-facing like authorize: the user's browser is sent here to sign out.
-            ["end_session_endpoint"] = $"{BrowserAuthority}/endsession",
+            // On the authority's host, as every real provider's is: the plugin sends a
+            // user's ID token here as a logout hint and refuses a document that moves it
+            // elsewhere. EndSessionElsewhere is how a test watches it refuse.
+            ["end_session_endpoint"] = EndSessionElsewhere
+                ? $"https://localhost:{Port}/endsession"
+                : $"{ContainerAuthority}/endsession",
             ["response_types_supported"] = new[] { "code" },
             ["subject_types_supported"] = new[] { "public" },
             ["id_token_signing_alg_values_supported"] = new[] { "RS256" },
@@ -359,7 +377,7 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
 
             return Results.Json(new Dictionary<string, object>
             {
-                ["sub"] = user.Sub,
+                ["sub"] = UserInfoAnswersAboutSomebodyElse ? "sub-somebody-else" : user.Sub,
                 ["preferred_username"] = user.PreferredUsername,
                 ["groups"] = user.Groups,
             });

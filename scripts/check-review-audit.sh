@@ -16,7 +16,11 @@ DOC="$REPO_ROOT/docs/reviews/2026-10-19-security-and-quality.md"
 # The threat model names a test beside every mitigation, for the same reason the review
 # does, and rots the same way: #124 renamed a test and left the citation pointing at a
 # name no longer in the sources.
-CITING=("$DOC" "$REPO_ROOT/docs/threat-model.md")
+CITING=(
+    "$DOC"
+    "$REPO_ROOT/docs/reviews/2026-11-05-hardening.md"
+    "$REPO_ROOT/docs/threat-model.md"
+)
 failures=0
 
 for doc in "${CITING[@]}"; do

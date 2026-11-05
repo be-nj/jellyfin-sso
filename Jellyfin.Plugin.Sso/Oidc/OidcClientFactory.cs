@@ -33,9 +33,20 @@ public sealed class OidcClientFactory : IDisposable
 
     public OidcClientFactory(ILogger<OidcClientFactory> logger)
     {
+        // Redirects are not followed. Every address this client calls was either
+        // configured by an administrator or published by the provider and checked against
+        // the authority's host below, and a redirect is a way to move the call after that
+        // check has happened: the authorization code and the code verifier are in the body
+        // of the token request, and a 307 to another host resends the body there. Nothing
+        // this plugin talks to needs one — the three providers it is tested against answer
+        // their published endpoints directly.
+        //
         // A provider that accepts the connection and then says nothing must not hold a
         // login page open for the default hundred seconds.
-        _http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+        _http = new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false })
+        {
+            Timeout = TimeSpan.FromSeconds(20),
+        };
         _http.DefaultRequestHeaders.UserAgent.Add(
             new ProductInfoHeaderValue("Jellyfin.Plugin.Sso", "1.0"));
         _logger = logger;
@@ -95,7 +106,19 @@ public sealed class OidcClientFactory : IDisposable
             provider.Authority,
             ("jwks_uri", doc.JwksUri),
             ("token_endpoint", doc.TokenEndpoint),
-            ("userinfo_endpoint", doc.UserInfoEndpoint));
+            ("userinfo_endpoint", doc.UserInfoEndpoint),
+            // The one that was written down, tested, and then not passed in. A logout
+            // sends the user's own ID token to this address as an id_token_hint, so it
+            // belongs with the three above: these are the addresses the plugin hands
+            // something to.
+            //
+            // The authorize endpoint is deliberately not among them. Nothing is handed to
+            // it — the browser goes there, with a state and a nonce that are useless to
+            // anyone else — and where a provider puts the form people type into is its own
+            // arrangement: a login UI on its own hostname is a layout several products
+            // offer. There is nothing to win either, since whoever can write this document
+            // can serve a form on the authority's own host just as easily.
+            ("end_session_endpoint", doc.EndSessionEndpoint));
 
         _cache[cacheKey] = new CacheEntry(doc, DateTimeOffset.UtcNow.Add(CacheTtl));
         return doc;
@@ -205,6 +228,26 @@ public sealed class OidcClientFactory : IDisposable
     }
 
     /// <summary>
+    /// The algorithms a token from a provider may be signed with: the asymmetric ones, and
+    /// nothing else.
+    ///
+    /// Left unpinned, the set of acceptable algorithms is whatever the library will take
+    /// against the keys it was handed. A JWKS that carries a symmetric key — an <c>oct</c>
+    /// entry, which a provider has no reason to publish and every reason not to — would
+    /// make that key's bytes an HMAC secret, and a JWKS is a public document. Naming the
+    /// algorithms means a token has to be signed by somebody holding a private key, which
+    /// is the whole assumption underneath every other check.
+    /// </summary>
+    internal static readonly string[] AsymmetricSigningAlgorithms =
+    [
+        SecurityAlgorithms.RsaSha256, SecurityAlgorithms.RsaSha384, SecurityAlgorithms.RsaSha512,
+        SecurityAlgorithms.RsaSsaPssSha256, SecurityAlgorithms.RsaSsaPssSha384,
+        SecurityAlgorithms.RsaSsaPssSha512,
+        SecurityAlgorithms.EcdsaSha256, SecurityAlgorithms.EcdsaSha384,
+        SecurityAlgorithms.EcdsaSha512,
+    ];
+
+    /// <summary>
     /// The signing keys out of a provider's JWKS. Both the ID token and the back-channel
     /// logout token are checked against these.
     /// </summary>
@@ -237,7 +280,23 @@ public sealed class OidcClientFactory : IDisposable
         if (secretRef.StartsWith("file:", StringComparison.Ordinal))
         {
             var path = secretRef["file:".Length..];
-            return File.ReadAllText(path).Trim();
+            try
+            {
+                return File.ReadAllText(path).Trim();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                or NotSupportedException or ArgumentException)
+            {
+                // Said without the path and without the reason. Everything above this is
+                // reached from the anonymous callback, where an exception type the callback
+                // does not expect becomes a 500 with its message in the body — and that
+                // message named a file inside the container. An InvalidOperationException
+                // is what the callback already turns into "ask the operator to read the
+                // log", and the log is where the detail goes.
+                throw new InvalidOperationException(
+                    "The confidential client secret could not be read from the file named "
+                    + "in ConfidentialSecretRef: " + ex.GetType().Name, ex);
+            }
         }
 
         // Deliberately without the value. On a server where this was filled in by hand

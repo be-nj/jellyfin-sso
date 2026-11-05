@@ -10,7 +10,7 @@ reader who trusts neither the author nor a model can check the claims one by one
 - **The identity provider**, for who a person is and which groups they hold. The plugin
   verifies that the statement came from that provider and was meant for this server; it
   cannot judge whether the provider's answer is correct.
-- **TLS to the provider.** Discovery and JWKS are fetched over the configured issuer URL, and the discovery document cannot move them elsewhere: its issuer has to match the authority, and its keys, token and userinfo endpoints — the ones the server itself calls — have to be on the authority's own host. The paths are the provider's business — Authentik's differ from its issuer by design — the host is not.
+- **TLS to the provider.** Discovery and JWKS are fetched over the configured issuer URL, and the discovery document cannot move them elsewhere: its issuer has to match the authority, and its keys, token, userinfo and end-session endpoints — the ones the plugin hands something to, the last of them a user's own ID token — have to be on the authority's own host. Redirects are not followed, so none of those calls can be moved after the check. The authorize endpoint is not among them, and the reason is at the call: nothing is handed to it, and where a provider puts the form people type into is its own arrangement. The paths are the provider's business — Authentik's differ from its issuer by design — the host is not.
   A provider reached over plain HTTP, or with a certificate the server does not trust, is
   outside what this plugin can repair.
 - **Jellyfin's own enforcement** of the user policy this plugin writes.
@@ -26,8 +26,8 @@ its signature is checked, and the group names that arrive with it.
 
 | Attack | What stops it | Test |
 |---|---|---|
-| Forged ID token | Signature checked against the provider's JWKS | `A_token_signed_by_an_untrusted_key_is_rejected`, `An_unsigned_token_is_rejected` |
-| Token minted for another application | `aud` must equal this provider's client id | `A_token_for_another_client_is_rejected` |
+| Forged ID token | Signature checked against the provider's JWKS, with the acceptable algorithms named and asymmetric: a JWKS is public, so a symmetric key in one must not be able to decide whether a token is genuine | `A_token_signed_by_an_untrusted_key_is_rejected`, `An_unsigned_token_is_rejected`, `A_token_signed_with_a_symmetric_key_from_the_key_set_is_rejected` |
+| Token minted for another application | `aud` must name this provider's client id, and where it names several, `azp` must name this one — a provider can be configured to cross audiences, and such a token was issued for the other client | `A_token_for_another_client_is_rejected`, `A_token_naming_several_audiences_without_azp_is_rejected` |
 | Token from a different provider | `iss` must equal the issuer from discovery | `A_token_from_another_issuer_is_rejected` |
 | Replayed token from an earlier login | `nonce` must equal the one this login issued | `A_replayed_token_from_another_login_is_rejected`, `A_token_without_a_nonce_is_rejected` |
 | Expired token | Lifetime checked, 60 s skew | `An_expired_token_is_rejected` |
@@ -42,7 +42,9 @@ its signature is checked, and the group names that arrive with it.
 | Claims smuggled under another name | Only the configured groups claim is read | `Claims_under_a_different_name_are_not_read_as_groups` |
 | Forged log lines through a crafted provider id | Only configured ids and the fixed RFC 6749 error codes are logged | `LoggableTests` |
 | Provider name injecting markup into the login page | Names are HTML-escaped, ids URL-encoded | `A_provider_name_cannot_inject_markup` |
-| Someone else's identity linked to your account | A link to an identity another account holds is refused | `SessionAndLinkingTests` |
+| Someone else's identity linked to your account | A link to an identity another account holds is refused | `SessionAndLinkingTests`, `SelfServiceLinkTests` |
+| A userinfo answer about somebody else deciding your groups | The `sub` in a userinfo response must match the ID token's, as OIDC Core §5.3.2 requires; where it does not, the answer is not used | `A_userinfo_answer_about_somebody_else_is_not_used` |
+| An unlinked account keeping tokens nobody can end | Both unlinks — the user's own and the administrator's — end that account's sessions, because back-channel logout finds an account through its link and nothing else | `Unlinking_ends_the_sessions_it_would_otherwise_orphan`, `An_administrators_unlink_ends_the_sessions_too` |
 | Your identity linked to someone else's account | A login can only be finished in the browser that started it: a cookie is minted when the flow begins and has to come back with the callback. Without that, an account holder could ask for an authorize URL carrying their own user id and get somebody in an administrator group to complete it — the link would attach the victim's subject to the asking account, and the victim's next login would write their groups, administrator flag included, onto it | `A_link_flow_finished_in_another_browser_is_refused`, `A_state_presented_by_another_browser_is_refused` |
 | A login completed in your browser by somebody else | The same cookie. A stranger holding a `code` and a `state` cannot have your browser spend them, so they cannot sign you in as themselves | `A_login_callback_opened_in_another_browser_is_refused` |
 | Forged back-channel logout ending a session | The logout token is checked against the provider's JWKS, issuer and audience | `A_token_signed_by_nobody_the_provider_knows_is_refused`, `A_token_signed_by_somebody_else_is_rejected` |
@@ -57,13 +59,16 @@ its signature is checked, and the group names that arrive with it.
 
 ## Known gaps
 
-- **This model was written by the same model that wrote the code**, and a review of the
-  whole plugin in November 2026 found thirteen things it had not accounted for — one of
-  them a way for any account holder to end up an administrator
-  ([#126](https://github.com/be-nj/jellyfin-sso/issues/126)). Every one is fixed and
-  tested, and the rows above were corrected where they had claimed more than the code
-  did. That is the honest status of this document: it is a record of what has been thought
-  about, not evidence that enough has been.
+- **This model was written by the same model that wrote the code**, and two reviews of the
+  whole plugin have found things it had not accounted for: thirteen in early November 2026 —
+  one of them a way for any account holder to end up an administrator
+  ([#126](https://github.com/be-nj/jellyfin-sso/issues/126)) — and twelve more on the 5th,
+  including a host check this document claimed that the code had been written for, tested
+  for, and never actually called
+  ([the hardening review](reviews/2026-11-05-hardening.md)). Every one is fixed and tested,
+  and the rows above were corrected where they had claimed more than the code did. That is
+  the honest status of this document: it is a record of what has been thought about, not
+  evidence that enough has been.
 - **A group change waits for the next login.** Removing someone from a group at the
   provider changes their permissions only when they sign in again. A session *ended* at
   the provider now ends in Jellyfin too, where the provider sends back-channel logout
@@ -96,7 +101,7 @@ its signature is checked, and the group names that arrive with it.
 
 ## How the claims are kept honest
 
-- 498 unit tests and 121 browser-driven end-to-end tests run on every push, against
+- 550 unit tests and 127 browser-driven end-to-end tests run on every push, against
   Jellyfin 12.0, 12.1 and 12.2.
 - Every release signs in through real Authentik, Keycloak and Authelia containers.
 - CodeQL runs on every push, and Scorecard rates the repository from outside. Alerts that

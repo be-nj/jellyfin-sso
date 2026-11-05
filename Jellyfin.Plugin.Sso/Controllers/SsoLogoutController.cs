@@ -53,6 +53,12 @@ public sealed class SsoLogoutController : SsoControllerBase
     [HttpGet("oidc/logout")]
     [HttpGet("oidc/logout/{providerId}")]
     [AllowAnonymous]
+    // Behind the limiter like the other anonymous endpoints, which this one was not. A
+    // logout fetches the provider's discovery document when the cache has none, and a
+    // failed fetch is not cached, so an anonymous caller in a loop against a provider
+    // that is down had the server open an outbound request per call and wait twenty
+    // seconds for each. Sixty a minute is far more than a person pressing sign out.
+    [ServiceFilter<RateLimitFilter>]
     public async Task<IActionResult> Logout(string? providerId, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";

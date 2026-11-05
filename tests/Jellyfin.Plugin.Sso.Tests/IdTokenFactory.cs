@@ -181,5 +181,29 @@ internal sealed class IdTokenFactory : IDisposable
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
+    /// <summary>
+    /// A logout token whose <c>iat</c> is whatever a test says, including numbers no clock
+    /// produces. <see cref="MintLogoutToken"/> can only write real times.
+    /// </summary>
+    public string MintRawLogoutToken(long issuedAt)
+    {
+        var payload = new JwtPayload
+        {
+            { "iss", Issuer },
+            { "aud", Audience },
+            { "sub", "ben" },
+            { "jti", Guid.NewGuid().ToString("N") },
+            { "iat", issuedAt },
+            {
+                "events", new Dictionary<string, object>
+                {
+                    [LogoutTokenValidator.EventName] = new Dictionary<string, object>(),
+                }
+            },
+        };
+
+        return MintRaw(payload);
+    }
+
     public void Dispose() => _rsa.Dispose();
 }

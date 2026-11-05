@@ -1,4 +1,5 @@
 using Jellyfin.Plugin.Sso.Configuration;
+using Jellyfin.Plugin.Sso.Logging;
 using Jellyfin.Plugin.Sso.Oidc;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Users;
@@ -65,7 +66,7 @@ public sealed class UserProvisioner
             {
                 _logger.LogWarning(
                     "Link exists for sub={Sub} but Jellyfin user {Id} not found — removing stale link.",
-                    identity.Sub, existing.JellyfinUserId);
+                    Loggable.OneLine(identity.Sub), existing.JellyfinUserId);
                 lock (Plugin.ConfigurationLock)
                 {
                     config.Links.Remove(existing);
@@ -87,13 +88,16 @@ public sealed class UserProvisioner
             _logger.LogWarning(
                 "SSO JIT blocked: username '{Name}' already exists. " +
                 "To link manually: ProviderId={ProviderId} Sub={Sub} JellyfinUserId={UserId}",
-                identity.PreferredUsername, provider.Id, identity.Sub, collision.Id);
+                Loggable.OneLine(identity.PreferredUsername), Loggable.KnownProviderId(provider.Id),
+                Loggable.OneLine(identity.Sub), collision.Id);
             throw new InvalidOperationException(
                 $"Username '{identity.PreferredUsername}' already exists. " +
                 "An administrator must manually link this account.");
         }
 
-        _logger.LogInformation("SSO JIT: creating new Jellyfin user '{Name}'.", identity.PreferredUsername);
+        _logger.LogInformation(
+            "SSO JIT: creating new Jellyfin user '{Name}'.",
+            Loggable.OneLine(identity.PreferredUsername));
         var newUser = await _userManager.CreateUserAsync(identity.PreferredUsername).ConfigureAwait(false);
 
         // Set auth provider so the user can only log in via SSO.
