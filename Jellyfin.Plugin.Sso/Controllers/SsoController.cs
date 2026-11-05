@@ -364,9 +364,10 @@ public sealed class SsoController : ControllerBase
 
         // Freshness is not a replay control on its own: the same token stays valid for as
         // long as its iat is young, and anybody who can read one in flight could otherwise
-        // post it again for the rest of that window. Checked after validation, so an
-        // unsigned or forged token cannot fill the ledger.
-        if (!_logoutTokens.Accept(provider.Id, subject.Jti, logoutToken))
+        // post it again for the rest of that window. Asked after validation, so an
+        // unsigned or forged token cannot fill the ledger — and only asked, not recorded:
+        // the record is written once the sessions are actually gone.
+        if (_logoutTokens.AlreadyActedOn(provider.Id, subject.Jti, logoutToken))
         {
             _logger.LogWarning(
                 "Rejected a back-channel logout for provider {Id}: this logout token has "
@@ -385,7 +386,29 @@ public sealed class SsoController : ControllerBase
             return Ok();
         }
 
-        var revoked = await _revoker.RevokeAsync(provider.Id, subject.Sub, ct).ConfigureAwait(false);
+        int revoked;
+        try
+        {
+            revoked = await _revoker.RevokeAsync(provider.Id, subject.Sub, ct)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Nothing is recorded, so the provider's retry is a retry and not a replay.
+            // This endpoint exists to end sessions; refusing the second attempt because
+            // the first one broke is the one direction it must not fail in.
+            _logger.LogError(
+                ex, "A back-channel logout from provider {Id} could not end the sessions "
+                + "it named; the provider may retry.", KnownProviderId(provider.Id));
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                "The sessions could not be ended. Please retry.");
+        }
+
+        // Recorded now that the work is done. Recording it first meant a failure between
+        // the two turned the provider's standards-compliant retry into a refused replay,
+        // and the sessions the provider had ended lived on — Jellyfin's tokens do not
+        // expire by themselves.
+        _logoutTokens.Remember(provider.Id, subject.Jti, logoutToken);
 
         _logger.LogInformation(
             "Back-channel logout from provider {Id} ended the sessions of {Count} account(s).",

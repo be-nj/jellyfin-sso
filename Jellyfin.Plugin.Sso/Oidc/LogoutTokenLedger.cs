@@ -45,18 +45,29 @@ public sealed class LogoutTokenLedger
     }
 
     /// <summary>
-    /// True the first time this token is presented, false every time after. The key is the
-    /// token's own <c>jti</c> where it has one, and a hash of the token where it does not —
-    /// the whole token, so two tokens that differ only in signature are two records.
+    /// Whether this token has already been acted on. Asking does not record: a caller
+    /// checks first, does the work, and only then remembers — so a failure in between
+    /// leaves the provider's retry a retry rather than a refused replay.
     /// </summary>
-    public bool Accept(string providerId, string? jti, string logoutToken, DateTimeOffset? now = null)
+    public bool AlreadyActedOn(
+        string providerId, string? jti, string logoutToken, DateTimeOffset? now = null)
     {
         var at = now ?? DateTimeOffset.UtcNow;
         Purge(at);
 
-        var key = jti is { Length: > 0 }
-            ? $"{providerId}\njti\n{jti}"
-            : $"{providerId}\nhash\n{Hash(logoutToken)}";
+        return _seen.ContainsKey(Key(providerId, jti, logoutToken));
+    }
+
+    /// <summary>
+    /// Records a token as acted on. True the first time, false if something else got
+    /// there first — two simultaneous posts of the same token both do the work, which is
+    /// idempotent, and only one records it.
+    /// </summary>
+    public bool Remember(
+        string providerId, string? jti, string logoutToken, DateTimeOffset? now = null)
+    {
+        var at = now ?? DateTimeOffset.UtcNow;
+        Purge(at);
 
         if (_seen.Count >= MaxRemembered)
         {
@@ -68,8 +79,18 @@ public sealed class LogoutTokenLedger
             }
         }
 
-        return _seen.TryAdd(key, at.Add(_retention));
+        return _seen.TryAdd(Key(providerId, jti, logoutToken), at.Add(_retention));
     }
+
+    /// <summary>
+    /// The token's own <c>jti</c> where it has one, and a hash of the whole token where it
+    /// does not, so two tokens that differ only in signature are two records. Scoped per
+    /// provider, because two providers may both mint a token called "1".
+    /// </summary>
+    private static string Key(string providerId, string? jti, string logoutToken)
+        => jti is { Length: > 0 }
+            ? $"{providerId}\njti\n{jti}"
+            : $"{providerId}\nhash\n{Hash(logoutToken)}";
 
     private static string Hash(string token)
         => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
