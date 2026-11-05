@@ -99,6 +99,30 @@ E2E_KEYCLOAK_IMAGE=quay.io/keycloak/keycloak:latest \
 git tag v1.12.1 && git push origin v1.12.1
 ```
 
+#### What a release body has to contain
+
+**The bullet list comes first, and every line links to its pull request.** One line per
+change, in plain language, with the PR number and the issue number where there is one:
+
+```markdown
+## Changes
+
+- The last two administrators can no longer both be demoted by two logins at once (#198, #207)
+- Quick Connect works again on a server with more than one provider (#201, #207)
+- A failed unlink no longer leaves sessions nobody can end (#203, #207)
+```
+
+Prose after that, and only where somebody has to decide something: an upgrade that cannot
+wait, a setting that has to change, a behaviour that is now different. The release bodies
+of 1.12.17 and 1.12.18 are each a thousand words of reasoning, and a page that long buries
+the one thing its reader came for — whether to update now, and what they get if they do.
+The reasoning is worth writing; it belongs in [a review](docs/reviews/) or in the pull
+request, both of which the bullet links reach in one click.
+
+Two rules of thumb. If the bullet list does not fit on a phone screen, the release is too
+large, not the notes. And if a change cannot be stated in one line, that line should say
+what an operator notices and link to where it is explained — not try to explain it.
+
 The `Release` workflow builds the ZIP, attaches it to a GitHub release and appends the
 version to `manifest.json` on `main`, which is what servers poll. The `targetAbi` written
 into the manifest is derived from the `Jellyfin.Controller` reference in the csproj, so a
