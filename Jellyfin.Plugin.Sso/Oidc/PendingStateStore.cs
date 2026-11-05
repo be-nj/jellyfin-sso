@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -20,16 +22,18 @@ public sealed class PendingStateStore
     internal const int MaxPending = 10_000;
 
     private readonly TimeSpan _ttl;
+    private readonly ILogger<PendingStateStore> _logger;
 
-    public PendingStateStore()
-        : this(DefaultTtl)
+    public PendingStateStore(ILogger<PendingStateStore> logger)
+        : this(DefaultTtl, logger)
     {
     }
 
     /// <summary>Lets a test watch a login expire without waiting ten minutes.</summary>
-    internal PendingStateStore(TimeSpan ttl)
+    internal PendingStateStore(TimeSpan ttl, ILogger<PendingStateStore>? logger = null)
     {
         _ttl = ttl;
+        _logger = logger ?? NullLogger<PendingStateStore>.Instance;
     }
 
     public sealed record PendingState(
@@ -75,12 +79,23 @@ public sealed class PendingStateStore
 
         if (_store.Count >= MaxPending)
         {
-            // Drop the oldest rather than refuse the newest: a burst of abandoned logins
-            // must not keep the household from signing in.
-            foreach (var oldest in _store.OrderBy(e => e.Value.Expiry).Take(_store.Count - MaxPending + 1))
-            {
-                _store.TryRemove(oldest.Key, out _);
-            }
+            // Refuse the newest rather than drop the oldest, which is the other way round
+            // from how this started. Every entry has the same ten-minute life, so expiry
+            // order is arrival order, and dropping the oldest dropped the login that had
+            // been in flight longest — the person still typing their password at the
+            // provider. Anyone can start a login, so that was a way to throw a chosen
+            // person out of a flow they were in the middle of, at a chosen moment, and
+            // have it look to them like their own mistake.
+            //
+            // Refusing instead makes a flood deny only logins that have not started yet,
+            // and the flood has to be sustained: entries expire. The caller gets a 503
+            // with words rather than a login that dies later at the callback.
+            _logger.LogWarning(
+                "Refusing to start a login: {Count} are already in flight, which is the "
+                + "cap. In-flight logins are kept; this one has to start again.",
+                _store.Count);
+
+            throw new TooManyPendingLoginsException();
         }
 
         _store[state] = pending;
@@ -142,5 +157,17 @@ public sealed class PendingStateStore
         foreach (var (key, val) in _store)
             if (val.Expiry <= now)
                 _store.TryRemove(key, out _);
+    }
+
+    /// <summary>
+    /// Thrown when the store is full. The caller answers "try again" rather than taking
+    /// somebody else's place in the queue.
+    /// </summary>
+    public sealed class TooManyPendingLoginsException : Exception
+    {
+        public TooManyPendingLoginsException()
+            : base("Too many logins are in flight.")
+        {
+        }
     }
 }

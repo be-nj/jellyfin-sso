@@ -11,9 +11,19 @@ namespace Jellyfin.Plugin.Sso.Auth;
 /// that can be reached without a Jellyfin token and that cost the server real work, and
 /// answers 429 with a Retry-After once a caller is past the limit.
 ///
-/// The address is the one the connection came from, which is what Jellyfin's own
-/// forwarded-headers handling has already resolved — a header the caller writes itself is
-/// no basis for a limit.
+/// The address is the one the connection came from. That is the caller's address only
+/// where Jellyfin's own forwarded-headers handling has resolved it, which needs the proxy
+/// registered as a known proxy in Jellyfin's network settings. Without that — a proxy in
+/// a second container is the ordinary case — every anonymous request from everybody
+/// arrives from the proxy's address and shares one bucket, so sixty requests can keep a
+/// household from logging in for the rest of the minute, and the provider's back-channel
+/// logout posts are refused along with them.
+///
+/// The alternative is worse: a limit keyed on a header the caller writes is a limit the
+/// caller can reset per request. So this stays as it is, the documentation says what a
+/// proxy deployment has to configure for the limit to mean one person, and the cap on
+/// in-flight logins no longer lets a flood evict anybody — which was the part that could
+/// be aimed.
 /// </summary>
 public sealed class RateLimitFilter : IActionFilter
 {

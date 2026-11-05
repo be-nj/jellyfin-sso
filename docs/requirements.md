@@ -37,9 +37,18 @@ your household uses: `https://jellyfin.example.com` or `http://192.168.1.10:8096
 your own network: access tokens travel unencrypted. HTTPS through a reverse proxy (Caddy,
 Traefik, nginx) fixes that and is worth doing eventually.
 
-Behind a reverse proxy nothing extra is needed — the plugin honours `X-Forwarded-Proto`,
-`X-Forwarded-Host` and `X-Forwarded-Prefix`, and a server published under a sub-path
-(Jellyfin's *Base URL*) keeps that sub-path in its redirect URI.
+Behind a reverse proxy the addresses work without extra configuration — the plugin
+honours `X-Forwarded-Proto`, `X-Forwarded-Host` and `X-Forwarded-Prefix`, and a server
+published under a sub-path (Jellyfin's *Base URL*) keeps that sub-path in its redirect
+URI.
+
+One thing does need configuring, and it is Jellyfin's setting rather than the plugin's:
+register the proxy under **Networking → Known proxies**. The login rate limit counts the
+address a connection came from, and until Jellyfin trusts the proxy that address is the
+*proxy* for everybody — so the limit becomes one shared bucket, and sixty requests from
+anybody can keep the household out for the rest of the minute. The plugin deliberately
+does not read `X-Forwarded-For` for this: a limit keyed on a header the caller writes is
+a limit the caller resets at will.
 
 ## An identity provider you administer
 

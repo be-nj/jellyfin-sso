@@ -8,7 +8,7 @@ namespace Jellyfin.Plugin.Sso.Tests;
 /// </summary>
 public sealed class PendingStateStoreTests
 {
-    private readonly PendingStateStore _store = new();
+    private readonly PendingStateStore _store = new(TimeSpan.FromMinutes(10));
 
     /// <summary>A browser id of the shape the cookie carries: 32 bytes, url-safe base64.</summary>
     private const string Browser = "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVphYmNkZWY";
@@ -80,19 +80,47 @@ public sealed class PendingStateStoreTests
         Assert.Equal(Expected, PendingStateStore.CodeChallenge(Verifier));
     }
 
+    /// <summary>
+    /// At the cap the store keeps what it has and refuses what is new. It used to drop the
+    /// oldest, and every entry has the same ten-minute life — so expiry order is arrival
+    /// order and the oldest is the person still typing their password at the provider.
+    /// Anybody can start a login, which made that a way to throw a chosen person out of a
+    /// flow they were in the middle of, at a chosen moment, looking like their own
+    /// mistake. A flood now denies only logins that have not started.
+    /// </summary>
     [Fact]
-    public void The_store_stops_growing_at_its_cap()
+    public void A_full_store_keeps_the_logins_it_has_and_refuses_new_ones()
     {
-        var store = new PendingStateStore();
+        var store = new PendingStateStore(TimeSpan.FromMinutes(10));
 
-        for (var i = 0; i < PendingStateStore.MaxPending + 50; i++)
+        var (first, _) = store.Issue("provider-1", "https://jf.example.com/callback", Browser);
+
+        for (var i = 1; i < PendingStateStore.MaxPending; i++)
         {
-            store.Issue("provider-1", "https://jellyfin.example.com/sso/oidc/callback/p1", Browser);
+            store.Issue("provider-1", "https://jf.example.com/callback", OtherBrowser);
         }
 
-        var (state, _) = store.Issue("provider-1", "https://jellyfin.example.com/sso/oidc/callback/p1", Browser);
+        Assert.Throws<PendingStateStore.TooManyPendingLoginsException>(
+            () => store.Issue("provider-1", "https://jf.example.com/callback", OtherBrowser));
 
-        // The newest login still works — the cap drops the oldest, not the caller's own.
+        // The login that was already in flight is still there, which is the point.
+        Assert.NotNull(store.Consume(first, Browser));
+    }
+
+    /// <summary>Room freed by expiry is room again; the refusal is not permanent.</summary>
+    [Fact]
+    public void A_store_that_has_emptied_accepts_logins_again()
+    {
+        var store = new PendingStateStore(TimeSpan.FromMilliseconds(1));
+
+        for (var i = 0; i < PendingStateStore.MaxPending; i++)
+        {
+            store.Issue("provider-1", "https://jf.example.com/callback", Browser);
+        }
+
+        Thread.Sleep(20);
+
+        var (state, _) = store.Issue("provider-1", "https://jf.example.com/callback", Browser);
         Assert.NotNull(store.Consume(state, Browser));
     }
 

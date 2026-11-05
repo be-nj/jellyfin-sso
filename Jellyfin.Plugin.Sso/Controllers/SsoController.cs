@@ -599,8 +599,25 @@ public sealed class SsoController : ControllerBase
         if (config.Links.Any(l => l.ProviderId == provider.Id && l.JellyfinUserId == userId))
             return Conflict("This account is already linked for that provider.");
 
-        var authorizeUrl = await AuthorizeUrlAsync(provider, ct, linkUserId: userId)
-            .ConfigureAwait(false);
+        string authorizeUrl;
+        try
+        {
+            authorizeUrl = await AuthorizeUrlAsync(provider, ct, linkUserId: userId)
+                .ConfigureAwait(false);
+        }
+        catch (PendingStateStore.TooManyPendingLoginsException)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                "Too many logins are in progress on this server right now. Please try "
+                + "again in a moment.");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(
+                ex, "Could not start a link at provider {Id}", KnownProviderId(provider.Id));
+            return BadRequestText(
+                "This provider could not be reached or is not configured correctly.");
+        }
 
         _logger.LogInformation(
             "Self-service link started by user {UserId} for provider {Id}",
@@ -686,6 +703,14 @@ public sealed class SsoController : ControllerBase
         {
             return Redirect(
                 await AuthorizeUrlAsync(provider, ct, quickConnectCode).ConfigureAwait(false));
+        }
+        catch (PendingStateStore.TooManyPendingLoginsException)
+        {
+            // The store is full and keeps the logins already in it. Somebody else's flow
+            // is not this request's to take.
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                "Too many logins are in progress on this server right now. Please try "
+                + "again in a moment.");
         }
         catch (InvalidOperationException ex)
         {
