@@ -77,6 +77,18 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool AllowSelfServiceLinking { get; set; } = true;
 
     /// <summary>
+    /// Whether a profile picture may be fetched from an address that is not public and not
+    /// the provider's own host — loopback, a private range, a container name.
+    ///
+    /// Off, because on many identity providers the picture is an attribute the user can
+    /// edit: the address is theirs, the request is the server's, and what comes back is
+    /// readable as their profile picture. The provider's own host is always allowed, which
+    /// is where avatars normally live. Turn this on for a setup that serves them from a
+    /// second machine on the same network.
+    /// </summary>
+    public bool AllowPrivateNetworkPictures { get; set; }
+
+    /// <summary>
     /// Jellyfin users whose permissions are managed by hand. They can still log in via
     /// SSO, but their policy is left exactly as an administrator set it.
     /// </summary>

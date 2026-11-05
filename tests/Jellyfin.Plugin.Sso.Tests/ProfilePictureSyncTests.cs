@@ -58,13 +58,26 @@ public sealed class ProfilePictureSyncTests : IDisposable
 
     // ─── What it will fetch at all ────────────────────────────────────────────
 
+    /// <summary>
+    /// The provider the picture is attributed to. Its host is the one the avatar sits on,
+    /// which is the ordinary case and the one the address rules allow without a lookup;
+    /// which addresses may be fetched at all is tested in OutboundAddressesTests.
+    /// </summary>
+    private static readonly Configuration.ProviderConfig Idp = new()
+    {
+        Id = "p1",
+        Name = "Test",
+        Authority = "https://idp.example.com",
+        ClientId = "jellyfin",
+    };
+
     [Fact]
     public async Task Nothing_happens_while_the_setting_is_off()
     {
         _harness.Configuration.SyncProfilePictures = false;
         _handler.Respond(HttpStatusCode.OK, "image/png", Png);
 
-        await Sync().SyncAsync(_userId, "https://idp.example.com/avatar.png");
+        await Sync().SyncAsync(_userId, "https://idp.example.com/avatar.png", Idp);
 
         Assert.Equal(0, _handler.Requests);
         Assert.Equal(0, await SavedImages());
@@ -76,7 +89,7 @@ public sealed class ProfilePictureSyncTests : IDisposable
         _harness.Configuration.SyncExcludedUserIds.Add(_userId);
         _handler.Respond(HttpStatusCode.OK, "image/png", Png);
 
-        await Sync().SyncAsync(_userId, "https://idp.example.com/avatar.png");
+        await Sync().SyncAsync(_userId, "https://idp.example.com/avatar.png", Idp);
 
         Assert.Equal(0, _handler.Requests);
     }
@@ -86,7 +99,7 @@ public sealed class ProfilePictureSyncTests : IDisposable
     {
         _handler.Respond(HttpStatusCode.OK, "image/png", Png);
 
-        await Sync().SyncAsync(_userId, "https://idp.example.com/avatar.png");
+        await Sync().SyncAsync(_userId, "https://idp.example.com/avatar.png", Idp);
 
         Assert.Equal(1, await SavedImages());
         var user = _userManager.GetUserById(_userId)!;
@@ -106,7 +119,7 @@ public sealed class ProfilePictureSyncTests : IDisposable
             .When(p => p.SaveImage(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>()))
             .Throw(new IOException("disk full"));
 
-        await Sync().SyncAsync(_userId, "https://idp.example.com/avatar.png");
+        await Sync().SyncAsync(_userId, "https://idp.example.com/avatar.png", Idp);
 
         // Not cleared, not repointed at a file that was never written.
         await _userManager.DidNotReceiveWithAnyArgs().ClearProfileImageAsync(default!);
@@ -118,7 +131,7 @@ public sealed class ProfilePictureSyncTests : IDisposable
     {
         _handler.Respond(HttpStatusCode.NotFound, "image/png", []);
 
-        await Sync().SyncAsync(_userId, "https://idp.example.com/gone.png");
+        await Sync().SyncAsync(_userId, "https://idp.example.com/gone.png", Idp);
 
         Assert.Equal(0, await SavedImages());
     }
@@ -132,7 +145,7 @@ public sealed class ProfilePictureSyncTests : IDisposable
             .Throw(new ArgumentException("not an image this server will take"));
 
         // No throw: the account keeps the picture it had and the login carries on.
-        await Sync().SyncAsync(_userId, "https://idp.example.com/avatar.png");
+        await Sync().SyncAsync(_userId, "https://idp.example.com/avatar.png", Idp);
 
         Assert.Contains(_log.Warnings, w => w.Contains("profile picture", StringComparison.Ordinal));
     }
@@ -144,7 +157,7 @@ public sealed class ProfilePictureSyncTests : IDisposable
 
         // No throw, nothing written, and the account keeps whatever it had. What the
         // fetch itself refuses is RemoteImagesTests' business.
-        await Sync().SyncAsync(_userId, "https://idp.example.com/avatar.png");
+        await Sync().SyncAsync(_userId, "https://idp.example.com/avatar.png", Idp);
 
         Assert.Equal(0, await SavedImages());
         Assert.Null(_userManager.GetUserById(_userId)!.ProfileImage);
@@ -158,8 +171,8 @@ public sealed class ProfilePictureSyncTests : IDisposable
         _handler.Respond(HttpStatusCode.OK, "image/png", Png);
         var sync = Sync();
 
-        await sync.SyncAsync(_userId, "https://idp.example.com/avatar.png");
-        await sync.SyncAsync(_userId, "https://idp.example.com/avatar.png");
+        await sync.SyncAsync(_userId, "https://idp.example.com/avatar.png", Idp);
+        await sync.SyncAsync(_userId, "https://idp.example.com/avatar.png", Idp);
 
         // Fetched both times — the provider is the one who knows whether it changed — but
         // written once, so the image cache and the client's tag stay put.
@@ -172,10 +185,10 @@ public sealed class ProfilePictureSyncTests : IDisposable
     {
         var sync = Sync();
         _handler.Respond(HttpStatusCode.OK, "image/png", Png);
-        await sync.SyncAsync(_userId, "https://idp.example.com/avatar.png");
+        await sync.SyncAsync(_userId, "https://idp.example.com/avatar.png", Idp);
 
         _handler.Respond(HttpStatusCode.OK, "image/jpeg", [1, 2, 3, 4, 5]);
-        await sync.SyncAsync(_userId, "https://idp.example.com/avatar.png");
+        await sync.SyncAsync(_userId, "https://idp.example.com/avatar.png", Idp);
 
         Assert.Equal(2, await SavedImages());
         await _userManager.Received(1).ClearProfileImageAsync(Arg.Any<User>());

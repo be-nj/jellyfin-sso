@@ -41,6 +41,9 @@ public sealed class RemoteImages : IDisposable
         ["image/vnd.microsoft.icon"] = ".ico",
     };
 
+    /// <summary>Three hops. A picture that needs more is not worth the walk.</summary>
+    private const int MaxRedirects = 3;
+
     private readonly HttpClient _http;
     private readonly ILogger _logger;
 
@@ -55,8 +58,10 @@ public sealed class RemoteImages : IDisposable
         _logger = logger;
         handler ??= new SocketsHttpHandler
         {
-            AllowAutoRedirect = true,
-            MaxAutomaticRedirections = 3,
+            // Followed by hand below, so every hop is checked against the same rules as
+            // the first. Letting the handler follow them would mean the second address in
+            // a chain was never looked at.
+            AllowAutoRedirect = false,
             ConnectTimeout = TimeSpan.FromSeconds(5),
         };
 
@@ -100,15 +105,21 @@ public sealed class RemoteImages : IDisposable
     /// except when <paramref name="ct"/> is cancelled, which is the caller going away
     /// rather than the picture failing.
     /// </summary>
-    public async Task<RemoteImage?> GetAsync(Uri uri, int maxBytes, CancellationToken ct = default)
+    public async Task<RemoteImage?> GetAsync(
+        Uri uri,
+        int maxBytes,
+        Uri? authority = null,
+        bool allowPrivateNetworks = false,
+        CancellationToken ct = default)
     {
         try
         {
-            // Headers first. Reading the response whole — the default — buffers whatever
-            // the host sends before anything looks at its size.
-            using var response = await _http
-                .GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ct)
+            using var response = await SendAsync(uri, authority, allowPrivateNetworks, ct)
                 .ConfigureAwait(false);
+            if (response is null)
+            {
+                return null;
+            }
 
             var mediaType = response.Content.Headers.ContentType?.MediaType;
             if (!response.IsSuccessStatusCode
@@ -140,6 +151,83 @@ public sealed class RemoteImages : IDisposable
     /// a response that declares no length — every chunked one — would otherwise arrive in
     /// full before any limit applied to it.
     /// </summary>
+    /// <summary>
+    /// The bytes at <paramref name="uri"/> whatever type they are, or null. For the
+    /// documents the plugin reads from a provider — a brand description, a login page —
+    /// which need the same address rules, redirect cap and counted body as a picture, and
+    /// used to have none of them.
+    /// </summary>
+    public async Task<byte[]?> GetBytesAsync(
+        Uri uri,
+        int maxBytes,
+        Uri? authority = null,
+        bool allowPrivateNetworks = false,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            using var response = await SendAsync(uri, authority, allowPrivateNetworks, ct)
+                .ConfigureAwait(false);
+            if (response is null
+                || !response.IsSuccessStatusCode
+                || response.Content.Headers.ContentLength > maxBytes)
+            {
+                return null;
+            }
+
+            return await ReadCappedAsync(response, maxBytes, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "SSO: could not fetch {Url}.", uri);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Fetches, following at most three redirects and checking every address on the way.
+    /// A chain is the cheapest way to turn one allowed address into a walk around the
+    /// server's network, so the last hop is held to the same rule as the first.
+    /// </summary>
+    private async Task<HttpResponseMessage?> SendAsync(
+        Uri uri, Uri? authority, bool allowPrivateNetworks, CancellationToken ct)
+    {
+        for (var hop = 0; hop <= MaxRedirects; hop++)
+        {
+            if (!Fetchable(uri.ToString(), out var target)
+                || !await OutboundAddresses
+                    .AllowedAsync(target, authority, allowPrivateNetworks, ct)
+                    .ConfigureAwait(false))
+            {
+                _logger.LogDebug(
+                    "SSO: not fetching {Url} — not an address this plugin may reach.", uri);
+                return null;
+            }
+
+            // Headers first. Reading the response whole — the default — buffers whatever
+            // the host sends before anything looks at its size.
+            var response = await _http
+                .GetAsync(target, HttpCompletionOption.ResponseHeadersRead, ct)
+                .ConfigureAwait(false);
+
+            if ((int)response.StatusCode is < 300 or > 399 || response.Headers.Location is null)
+            {
+                return response;
+            }
+
+            var next = response.Headers.Location;
+            response.Dispose();
+            uri = next.IsAbsoluteUri ? next : new Uri(target, next);
+        }
+
+        _logger.LogDebug("SSO: gave up on {Url} after {Count} redirects.", uri, MaxRedirects);
+        return null;
+    }
+
     private static async Task<byte[]?> ReadCappedAsync(
         HttpResponseMessage response, int maxBytes, CancellationToken ct)
     {

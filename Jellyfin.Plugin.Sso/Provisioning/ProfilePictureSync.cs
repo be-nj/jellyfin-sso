@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Jellyfin.Database.Implementations.Entities;
+using Jellyfin.Plugin.Sso.Configuration;
 using Jellyfin.Plugin.Sso.Web;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Library;
@@ -58,7 +59,11 @@ public sealed class ProfilePictureSync
     /// when the address is not one we will fetch, or when the same picture is already on
     /// the account.
     /// </summary>
-    public async Task SyncAsync(Guid userId, string? pictureUrl, CancellationToken ct = default)
+    public async Task SyncAsync(
+        Guid userId,
+        string? pictureUrl,
+        ProviderConfig? provider = null,
+        CancellationToken ct = default)
     {
         var config = Plugin.Instance?.Configuration;
         if (config is not { SyncProfilePictures: true })
@@ -79,7 +84,7 @@ public sealed class ProfilePictureSync
 
         try
         {
-            await ApplyAsync(userId, uri, ct).ConfigureAwait(false);
+            await ApplyAsync(userId, uri, provider, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -98,7 +103,8 @@ public sealed class ProfilePictureSync
         }
     }
 
-    private async Task ApplyAsync(Guid userId, Uri uri, CancellationToken ct)
+    private async Task ApplyAsync(
+        Guid userId, Uri uri, ProviderConfig? provider, CancellationToken ct)
     {
         var user = _userManager.GetUserById(userId);
         if (user is null)
@@ -106,7 +112,23 @@ public sealed class ProfilePictureSync
             return;
         }
 
-        var picture = await _images.GetAsync(uri, MaxBytes, ct).ConfigureAwait(false);
+        // On many providers the picture claim is an attribute the user can edit, so the
+        // address is theirs, not the operator's. The provider's own host is allowed —
+        // that is where avatars usually live and the operator chose it — and anything
+        // else has to be a public address unless the operator opted in.
+        var authority = provider?.Authority is { Length: > 0 } authorityUrl
+            && Uri.TryCreate(authorityUrl, UriKind.Absolute, out var parsed)
+                ? parsed
+                : null;
+
+        var picture = await _images
+            .GetAsync(
+                uri,
+                MaxBytes,
+                authority,
+                Plugin.Instance?.Configuration.AllowPrivateNetworkPictures ?? false,
+                ct)
+            .ConfigureAwait(false);
         if (picture is null)
         {
             return;

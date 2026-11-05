@@ -442,7 +442,7 @@ public sealed class SsoController : ControllerBase
                 .ConfigureAwait(false);
 
             await _permissions.SyncAsync(userId, identity, ct).ConfigureAwait(false);
-            await _pictures.SyncAsync(userId, identity.PictureUrl, ct).ConfigureAwait(false);
+            await _pictures.SyncAsync(userId, identity.PictureUrl, provider, ct).ConfigureAwait(false);
 
             if (pending.QuickConnectCode is not null)
                 return AskToApproveQuickConnect(userId, username, pending.QuickConnectCode);
