@@ -188,4 +188,78 @@ public sealed class IdTokenValidationTests : IDisposable
     }
 
     public void Dispose() => _idp.Dispose();
+
+    /// <summary>
+    /// The identity claims in shapes `UserInfoClaimsTests` has always treated as routine
+    /// for the other transport: an array where a string belongs, an object, a number, the
+    /// same claim twice. Mint could only emit strings, so none of this had ever reached
+    /// the ID-token path — which is the asymmetry that let a blank subject through.
+    ///
+    /// What matters is that each one is refused or resolved deliberately, never that it
+    /// throws some particular exception: a provider sending a strange shape must not end
+    /// up signing somebody in as somebody else.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_subject_that_is_not_one_value_is_not_an_identity(bool asArray)
+    {
+        var payload = IdTokenFactory.ValidPayload();
+        payload["sub"] = asArray
+            ? new[] { "ben", "mallory" }
+            : new Dictionary<string, string> { ["id"] = "ben" };
+
+        // The library refuses the token before this plugin sees it — a structure where a
+        // registered claim belongs is not a token it will parse. The property is that no
+        // identity comes out, not which exception says so, which is why this does not
+        // pin the type.
+        Assert.ThrowsAny<Exception>(() => Validate(_idp.MintRaw(payload)));
+    }
+
+    /// <summary>
+    /// A number is a legitimate JSON value and some providers do send numeric subjects, so
+    /// this one resolves rather than throwing — and it must resolve to the number.
+    /// </summary>
+    [Fact]
+    public void A_numeric_subject_is_read_as_its_digits()
+    {
+        var payload = IdTokenFactory.ValidPayload();
+        payload["sub"] = 90210;
+
+        var (sub, _, _, _) = Validate(_idp.MintRaw(payload));
+
+        Assert.Equal("90210", sub);
+    }
+
+    [Fact]
+    public void A_username_that_is_an_object_does_not_become_the_username()
+    {
+        var payload = IdTokenFactory.ValidPayload();
+        payload["preferred_username"] = new Dictionary<string, string> { ["given"] = "ben" };
+
+        var (sub, username, _, _) = Validate(_idp.MintRaw(payload));
+
+        // The subject stands in, because a structure is not a name. Before this, the
+        // account was called {"given":"ben"} — the claim's JSON text, verbatim.
+        Assert.Equal("ben", sub);
+        Assert.Equal("ben", username);
+    }
+
+    /// <summary>
+    /// A groups claim that is one string rather than an array. Some providers send a
+    /// space-delimited list, and the plugin must not read it as a single group with a
+    /// space in it — or, if it does, the mapping simply never matches, which is the safe
+    /// direction. Either way, no group is invented.
+    /// </summary>
+    [Fact]
+    public void A_space_delimited_groups_claim_does_not_invent_groups()
+    {
+        var payload = IdTokenFactory.ValidPayload();
+        payload["groups"] = "media jellyfin-admins";
+
+        var (_, _, groups, _) = Validate(_idp.MintRaw(payload));
+
+        Assert.DoesNotContain("jellyfin-admins", groups);
+    }
+
 }

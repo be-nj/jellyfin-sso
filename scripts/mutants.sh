@@ -6,6 +6,16 @@
 # This wrapper exists for the output path: Stryker writes to ./StrykerOutput next to the
 # project, and takes a different one only on the command line — stryker-config.json has no
 # setting for it. Everything a test run produces belongs under tests/runs/.
+#
+# What the score covers, because the number is quoted in the README and deserves its
+# footnote: the unit suite only, and the files in stryker-config.json's `mutate` list.
+# The controllers are not in it — SsoController is a thousand lines of action methods that
+# no unit test can reach, and the end-to-end suite is not wired to Stryker at all. A
+# review in November 2026 found thirteen defects and eight of them were in the part this
+# number does not measure, which is worth knowing before trusting it. The honest way to
+# widen it is to keep lifting decisions out of the actions into classes a unit test can
+# call — each of OutboundAddresses, LogoutTokenLedger and the discovery host check came
+# out that way, and each is in the list now.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

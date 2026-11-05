@@ -81,6 +81,28 @@ public sealed class SsoPagesTests
         // text spliced into one — see the hostile-prefix tests below.
         Assert.Contains("\"/jellyfin\" + '/sso/link/start?providerId='", page, StringComparison.Ordinal);
         Assert.Contains("<option value=\"p1\">Authentik</option>", page, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The sink the #135 fix changed and shipped without a test: the option's value used
+    /// to come from the JSON escaper, which supplies its own quotes and writes a double
+    /// quote as a backslash and a quote — which an HTML parser reads as a backslash and
+    /// then the end of the attribute. Reverting that line left all 469 tests green, which
+    /// is how this gap was found.
+    /// </summary>
+    [Theory]
+    [InlineData("p1\" onmouseover=alert(1) x=\"")]
+    [InlineData("p1\"><script>alert(1)</script>")]
+    [InlineData("p1' onfocus='alert(1)")]
+    public void A_provider_id_cannot_add_an_attribute_to_its_own_option(string id)
+    {
+        var page = SsoPages.SelfServiceLink("/jellyfin", [Provider(id, "Authentik")]);
+
+        // The property is the markup, not the absence of alarming words: the value sits
+        // inside the attribute's own quotes in escaped form, so the quote that would have
+        // ended the attribute is an entity and nothing after it is markup.
+        Assert.Contains($"<option value=\"{SsoPages.Html(id)}\">", page, StringComparison.Ordinal);
+        Assert.DoesNotContain(id, page, StringComparison.Ordinal);
         Assert.Contains("MediaBrowser Token=", page, StringComparison.Ordinal);
     }
 

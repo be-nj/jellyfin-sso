@@ -64,7 +64,7 @@ Against real software, not mocks. Every push runs:
 | **119 end-to-end tests** | Throwaway Jellyfin container, an OIDC provider built for the suite, real browser |
 | **Three Jellyfin versions** | The same build against 12.0, 12.1 and 12.2 |
 | **16 real-provider logins** | Authentik, Keycloak and Authelia, through their own forms — including the misconfigurations their guides warn about |
-| **Mutation testing** | Stryker breaks the code to see whether the tests notice: 70 %, floor 65 % |
+| **Mutation testing** | Stryker breaks the code to see whether the tests notice: 70 %, floor 65 % — over the files the unit suite can reach, which is most of the plugin but not the controllers |
 | **CodeQL** | Every alert fixed, or dismissed with a written reason |
 | **Weekly upstream run** | The same tests again, against the newest Jellyfin and the newest Authentik, Keycloak and Authelia |
 
@@ -76,7 +76,7 @@ it is this repository's own code rather than somebody else's product, and it nev
 authenticates anybody. There is no login form and no user directory; `/authorize`
 redirects straight back with a code for whichever identity the test named, which is what
 keeps the end-to-end tests fast and deterministic. Logging in for real — a form, a password, a
-provider nobody here controls — is what the nine real-provider logins do, in containers
+provider nobody here controls — is what the sixteen real-provider logins do, in containers
 running Authentik, Keycloak and Authelia. The clips above are those containers too.
 
 The provider guides are the configuration those containers get. What the plugin trusts,
@@ -186,7 +186,7 @@ same way for each of the four, this one included.
 throughout here, Opus 4.6 to 5 in Ezeqielle's. Three commits here came from GitHub's
 Copilot agent instead, and K0lin's trailers are all Renovate's, which is why that cell
 says what it says rather than "none". *Tests* counts unit + end-to-end cases, every case
-the suites hold. Only this one is mutation tested (70 %, floor 65) and scanned by CodeQL.
+the suites hold. Only this one is mutation tested (70 %, floor 65, over the files the unit suite reaches) and scanned by CodeQL.
 
 ### What that means for this one
 

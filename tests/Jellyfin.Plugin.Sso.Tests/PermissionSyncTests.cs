@@ -410,65 +410,48 @@ public sealed class PermissionSyncTests : IDisposable
         Assert.Empty(CapturedPolicy().EnabledFolders);
     }
 
-    [Fact]
-    public async Task A_mapping_that_differs_only_in_case_says_so_in_the_log()
+    /// <summary>
+    /// A near miss has two halves: the group does not match — so no library is granted —
+    /// and the log says which pair nearly did, because the symptom tells an operator
+    /// nothing about the cause. A test that asserts only the sentence passes while the
+    /// permissions are wrong, so both are asserted here.
+    /// </summary>
+    [Theory]
+    // The mapping, what the provider sent, and the phrase that has to be in the warning.
+    [InlineData("Media", "media", "differ only in case")]
+    [InlineData("media", "/media", "Full group path")]
+    [InlineData("media", "/household/media", "Full group path")]
+    public async Task A_near_miss_grants_nothing_and_says_which_pair_it_was(
+        string mapping, string arrived, string because)
     {
-        Map("Media", false, MoviesId);
+        Map(mapping, false, MoviesId);
 
-        await _sync.SyncAsync(_userId, Identity("media"));
-
-        Assert.Contains(
-            _log.Warnings,
-            line => line.Contains("'Media'", StringComparison.Ordinal)
-                && line.Contains("'media'", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public async Task A_mapping_that_names_only_the_last_part_of_a_path_says_so_in_the_log()
-    {
-        // What Keycloak sends with "Full group path" left on, against the mapping a
-        // reader of its guide would have typed.
-        Map("media", false, MoviesId);
-
-        await _sync.SyncAsync(_userId, Identity("/media"));
+        await _sync.SyncAsync(_userId, Identity(arrived));
 
         Assert.Empty(CapturedPolicy().EnabledFolders);
         Assert.Contains(
             _log.Warnings,
-            line => line.Contains("'media'", StringComparison.Ordinal)
-                && line.Contains("'/media'", StringComparison.Ordinal)
-                && line.Contains("Full group path", StringComparison.Ordinal));
+            line => line.Contains($"'{mapping}'", StringComparison.Ordinal)
+                && line.Contains($"'{arrived}'", StringComparison.Ordinal)
+                && line.Contains(because, StringComparison.Ordinal));
     }
 
-    [Fact]
-    public async Task A_deeper_path_is_the_same_near_miss()
+    /// <summary>
+    /// Two groups that are simply different, which must not be dressed up as a typo: a
+    /// warning for every unmatched pair would be noise, and noise is what gets ignored
+    /// when a real near miss appears.
+    /// </summary>
+    [Theory]
+    [InlineData("media", "multimedia")]
+    [InlineData("downloaders", "media")]
+    public async Task Groups_that_are_merely_different_produce_no_warning(
+        string mapping, string arrived)
     {
-        Map("media", false, MoviesId);
+        Map(mapping, false, MoviesId);
 
-        await _sync.SyncAsync(_userId, Identity("/household/media"));
+        await _sync.SyncAsync(_userId, Identity(arrived));
 
-        Assert.Contains(
-            _log.Warnings,
-            line => line.Contains("'/household/media'", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public async Task A_group_that_merely_ends_in_the_same_letters_is_not_a_near_miss()
-    {
-        Map("media", false, MoviesId);
-
-        await _sync.SyncAsync(_userId, Identity("multimedia"));
-
-        Assert.Empty(_log.Warnings);
-    }
-
-    [Fact]
-    public async Task A_mapping_nobody_sent_is_not_worth_a_warning()
-    {
-        Map("downloaders", false, MoviesId);
-
-        await _sync.SyncAsync(_userId, Identity("media"));
-
+        Assert.Empty(CapturedPolicy().EnabledFolders);
         Assert.Empty(_log.Warnings);
     }
 

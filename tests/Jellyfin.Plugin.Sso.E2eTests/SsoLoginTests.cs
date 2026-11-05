@@ -485,4 +485,46 @@ public sealed class SsoLoginTests : IAsyncLifetime
         }
     }
 
+
+    /// <summary>
+    /// The whole flow behind a sub-path, the way a proxy presents one. Every address the
+    /// plugin hands out has to carry the prefix exactly once, and the provider now refuses
+    /// a redirect URI it has not been told about — which is how a real one behaves and is
+    /// why the doubled post-logout path went unnoticed for weeks.
+    /// </summary>
+    [Fact]
+    public async Task A_login_works_behind_a_sub_path()
+    {
+        _env.RegisterPrefixedRedirectUris("/jellyfin");
+
+        var login = await _env.StartWebLoginAsync(
+            new FakeUser("sub-prefixed", "prefixeduser", ["media"]),
+            forwardedPrefix: "/jellyfin");
+
+        Assert.True(login.Succeeded, $"{login.CallbackStatus}: {login.Body}");
+
+        // The page the callback returns builds its own URLs from the prefix.
+        Assert.Contains("const base = \"/jellyfin\";", login.Body!);
+
+        var auth = await _env.AuthenticateAsync("prefixeduser", login.Secret!);
+        Assert.Equal(HttpStatusCode.OK, auth.StatusCode);
+    }
+
+    /// <summary>
+    /// And the provider's refusal is real: without the registration, the same walk is
+    /// turned away at the authorize endpoint rather than quietly accepted.
+    /// </summary>
+    [Fact]
+    public async Task A_redirect_uri_the_provider_does_not_know_is_refused()
+    {
+        var refusedBefore = _env.Idp.UnregisteredRedirectsRefused;
+
+        var login = await _env.StartWebLoginAsync(
+            new FakeUser("sub-unregistered", "unregistereduser", ["media"]),
+            forwardedPrefix: "/not-registered");
+
+        Assert.False(login.Succeeded);
+        Assert.Equal(refusedBefore + 1, _env.Idp.UnregisteredRedirectsRefused);
+    }
+
 }

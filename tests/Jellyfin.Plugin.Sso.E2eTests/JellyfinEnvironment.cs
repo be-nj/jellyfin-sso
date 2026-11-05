@@ -170,6 +170,24 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
 
         var save = await _admin.PostAsJsonAsync("/sso/admin/config", config);
         save.EnsureSuccessStatusCode();
+
+        // What this deployment will send, told to the provider the way an operator tells
+        // a real one. With these registered, the fake refuses anything else — which is
+        // what makes a wrong redirect URI a failing test rather than a passing one.
+        Idp.RegisteredRedirectUris.Clear();
+        Idp.RegisteredRedirectUris.Add($"{BaseUrl}/sso/oidc/callback/{ProviderId}");
+        Idp.RegisteredRedirectUris.Add($"{BaseUrl}/sso/oidc/callback/{SecondProviderId}");
+        Idp.RegisteredRedirectUris.Add($"{BaseUrl}/web/index.html");
+    }
+
+    /// <summary>
+    /// Registers the addresses a deployment under <paramref name="prefix"/> would send, so
+    /// a test can drive the whole flow behind a sub-path the way a proxy presents one.
+    /// </summary>
+    public void RegisterPrefixedRedirectUris(string prefix)
+    {
+        Idp.RegisteredRedirectUris.Add($"{BaseUrl}{prefix}/sso/oidc/callback/{ProviderId}");
+        Idp.RegisteredRedirectUris.Add($"{BaseUrl}{prefix}/web/index.html");
     }
 
     private static JsonObject Mapping(string group, bool admin, params string[] libraryIds)
@@ -199,10 +217,16 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
         FakeUser user,
         HttpClient? client = null,
         string? providerId = null,
-        string? quickConnectCode = null)
+        string? quickConnectCode = null,
+        string? forwardedPrefix = null)
     {
         Idp.NextUser = user;
-        client ??= TrustingClient();
+        // On a prefixed walk the loop below follows the chain itself, because it has to
+        // rewrite each address and carry the cookie by hand. Leaving the handler to follow
+        // redirects would take those hops out of reach and drop the cookie with them.
+        client ??= forwardedPrefix is null
+            ? TrustingClient()
+            : TrustingClient(followRedirects: false, useCookies: false);
 
         // Redirects are followed by hand: the chain crosses from the server (http) to the
         // provider (https) and back, and HttpClient refuses to follow a downgrade.
@@ -213,10 +237,55 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
             (_, null) => $"{BaseUrl}/sso/oidc/start/{providerId}",
             _ => $"{BaseUrl}/sso/oidc/start/{providerId}/qc?code={quickConnectCode}",
         };
+        // Carried by hand on a prefixed walk, and only there. The plugin scopes its
+        // cookie to the path a browser sees — "/jellyfin/sso" — while this harness talks
+        // to the server directly and so uses the stripped path. A browser behind a real
+        // proxy sees the prefixed path and the scope matches; here it would not, and the
+        // cookie the login depends on would silently not be sent.
+        var carried = new Dictionary<string, string>(StringComparer.Ordinal);
+
         HttpResponseMessage response;
         for (var hop = 0; ; hop++)
         {
-            response = await client.GetAsync(url);
+            // Stand in for the proxy: it strips the prefix from the path and tells the
+            // server about it in a header. Without the stripping, the address the plugin
+            // hands the provider comes back as a path this server does not serve — which
+            // is a proxy's whole job and the reason a sub-path deployment is worth a test.
+            var target = url;
+            if (forwardedPrefix is not null
+                && target.StartsWith(BaseUrl + forwardedPrefix, StringComparison.Ordinal))
+            {
+                target = BaseUrl + target[(BaseUrl.Length + forwardedPrefix.Length)..];
+            }
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, target);
+            if (forwardedPrefix is not null && target.StartsWith(BaseUrl, StringComparison.Ordinal))
+            {
+                // Only on the hops that reach Jellyfin: the provider is a different server
+                // and has no business being told about our proxy.
+                request.Headers.Add("X-Forwarded-Prefix", forwardedPrefix);
+
+                if (carried.Count > 0)
+                {
+                    request.Headers.Add(
+                        "Cookie",
+                        string.Join("; ", carried.Select(c => $"{c.Key}={c.Value}")));
+                }
+            }
+
+            response = await client.SendAsync(request);
+
+            if (forwardedPrefix is not null
+                && response.Headers.TryGetValues("Set-Cookie", out var setCookies))
+            {
+                foreach (var pair in setCookies
+                    .Select(c => c.Split(';', 2)[0])
+                    .Select(c => c.Split('=', 2))
+                    .Where(c => c.Length == 2))
+                {
+                    carried[pair[0]] = pair[1];
+                }
+            }
             if (response.Headers.Location is null || hop == 10)
             {
                 break;
@@ -285,11 +354,15 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
             + $"Version=\"1.0.0.0\", Token=\"{token}\"");
 
     /// <summary>An HTTP client that accepts the fake provider's self-signed certificate.</summary>
-    public static HttpClient TrustingClient(bool followRedirects = true) => new(new HttpClientHandler
-    {
-        ServerCertificateCustomValidationCallback = (_, _, _, _) => true,
-        AllowAutoRedirect = followRedirects,
-    });
+    public static HttpClient TrustingClient(bool followRedirects = true, bool useCookies = true)
+        => new(new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback = (_, _, _, _) => true,
+            AllowAutoRedirect = followRedirects,
+            // A prefixed walk carries cookies by hand, and the handler's own jar would
+            // scope them to the stripped path and drop the manual header.
+            UseCookies = useCookies,
+        });
 
     /// <summary>Redeems an ephemeral secret on Jellyfin's native auth path.</summary>
     public async Task<HttpResponseMessage> AuthenticateAsync(string username, string secret)

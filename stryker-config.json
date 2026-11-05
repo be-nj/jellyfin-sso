@@ -21,6 +21,9 @@
       "Web/LoginButtonMarkup.cs",
       "Web/LoginBranding.cs",
       "Web/ForwardedPaths.cs",
+      "Web/OutboundAddresses.cs",
+      "Web/SsoPages.cs",
+      "Web/ProviderIcons.cs",
       "Configuration/PluginConfiguration.cs"
     ],
     "report-file-name": "mutation-report",
