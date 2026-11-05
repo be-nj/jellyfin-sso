@@ -105,6 +105,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: scripts/check-review-audit.sh
 
+      # The manifest is what Jellyfin servers poll, and nothing else here looked at it.
+      # Not gated on `changes` for the same reason as the line above: a documentation-only
+      # change can edit a URL just as well as a code change can.
+      - name: Check the manifest against its own assets
+        run: scripts/check-manifest.sh
+
   # The plugin is built against the oldest server it claims to support, and the same
   # build is run against every server in that range. The claim in the README is this
   # job's result, not an assumption about ABI stability.
