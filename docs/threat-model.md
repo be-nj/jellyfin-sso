@@ -96,7 +96,7 @@ its signature is checked, and the group names that arrive with it.
 
 ## How the claims are kept honest
 
-- 469 unit tests and 112 browser-driven end-to-end tests run on every push, against
+- 498 unit tests and 121 browser-driven end-to-end tests run on every push, against
   Jellyfin 12.0, 12.1 and 12.2.
 - Every release signs in through real Authentik, Keycloak and Authelia containers.
 - CodeQL runs on every push, and Scorecard rates the repository from outside. Alerts that
