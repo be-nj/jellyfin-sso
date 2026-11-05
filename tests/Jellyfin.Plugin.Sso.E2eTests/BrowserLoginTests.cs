@@ -38,13 +38,13 @@ public sealed class BrowserLoginTests : IAsyncLifetime
     {
         _env.Idp.NextUser = new FakeUser("sub-browser", "browseruser", ["media"]);
 
-        await using var context = await _browser.NewContextAsync(new BrowserNewContextOptions
+        await using var traced = await TracedContext.StartAsync(_browser, new BrowserNewContextOptions
         {
             BaseURL = _env.BaseUrl,
             // The fake provider's certificate is self-signed.
             IgnoreHTTPSErrors = true,
         });
-        var page = await context.NewPageAsync();
+        var page = await traced.NewPageAsync();
 
         var consoleErrors = new List<string>();
         page.Console += (_, message) =>
@@ -83,12 +83,12 @@ public sealed class BrowserLoginTests : IAsyncLifetime
         await _env.PatchConfigAsync(config =>
             config["Providers"]!.AsArray()[0]!["Name"] = "Fake IdP");
 
-        await using var context = await _browser.NewContextAsync(new BrowserNewContextOptions
+        await using var traced = await TracedContext.StartAsync(_browser, new BrowserNewContextOptions
         {
             BaseURL = _env.BaseUrl,
             IgnoreHTTPSErrors = true,
         });
-        var page = await context.NewPageAsync();
+        var page = await traced.NewPageAsync();
 
         var consoleErrors = new List<string>();
         page.Console += (_, message) =>
@@ -110,9 +110,18 @@ public sealed class BrowserLoginTests : IAsyncLifetime
         });
         var markup = await button.EvaluateAsync<string>("el => el.outerHTML");
         await button.ClickAsync();
-        await page.WaitForTimeoutAsync(2_000);
 
-        if (page.Url.Contains("login", StringComparison.OrdinalIgnoreCase))
+        // Waited for, not slept through. This was a flat two seconds, which is a guess
+        // about a redirect chain that crosses to the provider and back: too long on a
+        // laptop and not long enough on a loaded CI runner, where the test then reported
+        // "still on the login page" about a login that was merely slower than the guess.
+        try
+        {
+            await page.WaitForURLAsync(
+                url => !url.Contains("login", StringComparison.OrdinalIgnoreCase),
+                new PageWaitForURLOptions { Timeout = 30_000 });
+        }
+        catch (TimeoutException)
         {
             Assert.Fail($"still on the login page.\nurl: {page.Url}\nanchor: {markup}\n"
                 + $"console: {string.Join(" | ", consoleErrors)}");
@@ -127,13 +136,13 @@ public sealed class BrowserLoginTests : IAsyncLifetime
     {
         _env.Idp.NextUser = new FakeUser("sub-reload", "reloaduser", ["media"]);
 
-        await using var context = await _browser.NewContextAsync(new BrowserNewContextOptions
+        await using var traced = await TracedContext.StartAsync(_browser, new BrowserNewContextOptions
         {
             BaseURL = _env.BaseUrl,
             // The fake provider's certificate is self-signed.
             IgnoreHTTPSErrors = true,
         });
-        var page = await context.NewPageAsync();
+        var page = await traced.NewPageAsync();
 
         await page.GotoAsync("/sso/oidc/start");
         await WaitForWebAppAsync(page, "reload");

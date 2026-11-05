@@ -204,6 +204,31 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
     /// <summary>How often the end-session endpoint was reached.</summary>
     public int SessionsEnded { get; private set; }
 
+    /// <summary>
+    /// Puts every knob back to the behaviour of an ordinary provider.
+    ///
+    /// This provider is one object shared by every test in the collection, and each knob is
+    /// a way for one test to make it misbehave. A test that sets one and then fails before
+    /// its own cleanup leaves it set for everything that runs afterwards — and the failure
+    /// it causes there looks like a defect in the plugin rather than a test leaking state.
+    /// One rotated signing key did exactly that earlier today: six tests in another class
+    /// failed and the cause was two files away.
+    ///
+    /// So the reset lives here, next to the knobs, and a knob added without a line here is
+    /// a knob that leaks. Called from <see cref="JellyfinEnvironment.ResetAsync"/>, which
+    /// every test class already runs before each test.
+    /// </summary>
+    public void ResetBehaviour()
+    {
+        NextUser = new FakeUser("sub-default", "default-user", []);
+        ServeFavicon = true;
+        NextPictureUrl = null;
+        UserInfoFails = false;
+        EndSessionElsewhere = false;
+        UserInfoAnswersAboutSomebodyElse = false;
+        NextAuthorizeError = null;
+    }
+
     public static async Task<FakeIdentityProvider> StartAsync(TestCertificate certificate)
     {
         var idp = new FakeIdentityProvider(TestCertificate.FreePort(), certificate);

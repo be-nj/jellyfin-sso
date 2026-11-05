@@ -37,6 +37,25 @@ certificate the container is made to trust) — real discovery, JWKS, PKCE code 
 RSA-signed tokens, with no login form, because the test says who logs in next instead of
 typing it. The browser hop is driven by Playwright.
 
+Three conventions for the browser tests, each of them something that went wrong first:
+
+- **A context comes from `TracedContext`**, which records a Playwright trace named after
+  the test — every action with the DOM around it, the console, the network — into
+  `tests/runs/playwright`, which CI uploads when a job fails. A screenshot shows the end
+  state; a failure that only happens in CI needs the way there.
+- **Wait for a condition, never for a duration.** The one flat `WaitForTimeoutAsync` left
+  on a test path reported "still on the login page" about logins that were merely slower
+  than its guess. Pauses in `SignInForTheRecordingAsync` are the exception, because the
+  demo video wants them.
+- **Read a page after it has settled, not while it navigates.** Wait for the condition that
+  means the work is done — the web client holding a session, say — and read `localStorage`
+  afterwards. An evaluate that lands inside a navigation fails with "execution context was
+  destroyed", and only sometimes.
+
+A test that makes the fake provider misbehave puts it back through
+`JellyfinEnvironment.ResetAsync`, which calls `ResetBehaviour`; a knob added without a line
+there is a knob that leaks into the next class.
+
 One tier up, the suite starts **real identity providers** in containers — Keycloak from a
 realm file and Authelia from a generated config — and signs in through their own login
 forms in the browser. That is the only way to prove the groups really arrive in the claims

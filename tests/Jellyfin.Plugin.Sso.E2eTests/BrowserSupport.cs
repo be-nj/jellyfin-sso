@@ -26,6 +26,47 @@ internal static class BrowserSupport
         return await Playwright.CreateAsync();
     }
 
+    /// <summary>
+    /// The network errors a CI runner produces while Docker is still rearranging itself,
+    /// as Chromium reports them.
+    ///
+    /// Starting a container creates a bridge network and rewrites firewall rules, and a
+    /// navigation in flight while that happens is abandoned with ERR_NETWORK_CHANGED. It
+    /// says nothing about the server or the page: one of three matrix jobs failed this way
+    /// on a navigation 237 milliseconds into a test, and the other two did not.
+    /// </summary>
+    private static readonly string[] RunnerNetworkErrors =
+    [
+        "ERR_NETWORK_CHANGED",
+        "ERR_CONNECTION_REFUSED",
+        "ERR_EMPTY_RESPONSE",
+    ];
+
+    /// <summary>
+    /// Navigates, and tries again when the runner's own network moved under the request.
+    ///
+    /// For the tests that start a container of their own and then drive a browser at it.
+    /// This retries one operation that failed for a stated reason, which is a different
+    /// thing from waiting a while and hoping: anything but those errors is raised at once,
+    /// and a last attempt that fails fails the test.
+    /// </summary>
+    public static async Task<IResponse?> GotoAsync(IPage page, string url, int attempts = 3)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return await page.GotoAsync(url);
+            }
+            catch (PlaywrightException ex)
+                when (attempt < attempts
+                    && RunnerNetworkErrors.Any(e => ex.Message.Contains(e, StringComparison.Ordinal)))
+            {
+                await Task.Delay(TimeSpan.FromSeconds(attempt));
+            }
+        }
+    }
+
     /// <summary>Saves a screenshot and the page HTML under tests/runs/playwright.</summary>
     public static async Task<string> CaptureAsync(IPage page, string name)
     {

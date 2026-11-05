@@ -174,6 +174,11 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
         // What this deployment will send, told to the provider the way an operator tells
         // a real one. With these registered, the fake refuses anything else — which is
         // what makes a wrong redirect URI a failing test rather than a passing one.
+        // Every knob on the fake provider, not just the redirect URIs that used to be
+        // reset here: a test that leaves one set makes the next class fail for a reason
+        // two files away.
+        Idp.ResetBehaviour();
+
         Idp.RegisteredRedirectUris.Clear();
         Idp.RegisteredRedirectUris.Add($"{BaseUrl}/sso/oidc/callback/{ProviderId}");
         Idp.RegisteredRedirectUris.Add($"{BaseUrl}/sso/oidc/callback/{SecondProviderId}");
