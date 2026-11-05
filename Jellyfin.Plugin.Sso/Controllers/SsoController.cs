@@ -220,14 +220,34 @@ public sealed class SsoController : ControllerBase
     {
         Response.Headers.CacheControl = "no-store";
         Response.Headers["Referrer-Policy"] = "no-referrer";
+
+        // A logout is a GET, because the documented way to reach it is a navigation the
+        // operator adds to Jellyfin's own logout. That makes it drivable from another
+        // site: window.location = ".../sso/oidc/logout" would sign the visitor out of
+        // their identity provider — every application in that session — and spend the
+        // token kept for their own logout. A confirmation step is what the spec suggests,
+        // and it would break the silent sign-out the switch exists for. The browser's own
+        // account of where the request came from costs nothing and does not: it is absent
+        // on old browsers, which then behave as before, and "cross-site" only where the
+        // navigation did not start here.
+        if (string.Equals(
+                Request.Headers["Sec-Fetch-Site"].FirstOrDefault(),
+                "cross-site",
+                StringComparison.Ordinal))
+        {
+            _logger.LogInformation(
+                "Ignored a logout driven from another site; nothing was signed out.");
+            return LocalRedirect($"{BasePath()}/web/index.html");
+        }
+
         // Read and dropped before anything decides what this logout will do, on purpose:
         // somebody logging out should not leave their ID token held here, whether or not
         // the provider is told about it. The cost is that a logout which does not use the
         // hint — the switch off, or another provider named in the path — spends it anyway,
         // and the next login is what brings it back. That is the right way round: holding
         // the token longer would be the surprising half.
-        var session = _logoutSessions.Consume(Request.Cookies[LogoutSessionStore.CookieName]);
-        Response.Cookies.Delete(LogoutSessionStore.CookieName, LogoutCookieOptions());
+        var session = _logoutSessions.Consume(CookieValue(LogoutSessionStore.CookieName));
+        Response.Cookies.Delete(CookieName(LogoutSessionStore.CookieName), LogoutCookieOptions());
 
         // Local by construction: BasePath is either empty or a validated path, so this
         // is a path and never an address somewhere else. LocalRedirect enforces that.
@@ -395,7 +415,7 @@ public sealed class SsoController : ControllerBase
         if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(state))
             return BadRequestText("The provider returned neither an authorization code nor an error.");
 
-        var pending = _states.Consume(state, Request.Cookies[PendingBrowserCookie]);
+        var pending = _states.Consume(state, CookieValue(PendingBrowserCookie));
         if (pending is null)
         {
             return BadRequestText(
@@ -592,8 +612,8 @@ public sealed class SsoController : ControllerBase
         // The state travels through the provider and back, so it is not proof of who
         // started the login — anyone can hold one and hand it to somebody else. The cookie
         // is: it goes to this browser and comes back only from this browser.
-        var browserId = PendingStateStore.BrowserId(Request.Cookies[PendingBrowserCookie]);
-        Response.Cookies.Append(PendingBrowserCookie, browserId, PendingCookieOptions());
+        var browserId = PendingStateStore.BrowserId(CookieValue(PendingBrowserCookie));
+        Response.Cookies.Append(CookieName(PendingBrowserCookie), browserId, PendingCookieOptions());
 
         var (state, pending) = _states.Issue(
             provider.Id, redirectUri, browserId, quickConnectCode, linkUserId);
@@ -632,9 +652,9 @@ public sealed class SsoController : ControllerBase
 
         // Replaces whatever this browser had: one retained login per browser, and the
         // previous token stops being held the moment it stops being current.
-        _logoutSessions.Consume(Request.Cookies[LogoutSessionStore.CookieName]);
+        _logoutSessions.Consume(CookieValue(LogoutSessionStore.CookieName));
         Response.Cookies.Append(
-            LogoutSessionStore.CookieName,
+            CookieName(LogoutSessionStore.CookieName),
             _logoutSessions.Issue(provider, identityToken),
             LogoutCookieOptions());
         Response.Headers.CacheControl = "no-store";
@@ -646,14 +666,39 @@ public sealed class SsoController : ControllerBase
     /// </summary>
     private const string PendingBrowserCookie = "SsoPendingLogin";
 
+    /// <summary>
+    /// Whether this request reached the server over HTTPS, as the browser sees it.
+    /// </summary>
+    private bool Secure()
+        => ExternalBaseUri().StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The name to set a cookie under. Over HTTPS it carries the <c>__Host-</c> prefix,
+    /// which a browser only accepts from a secure origin, without a Domain attribute and
+    /// with Path=/ — and that is the point: a cookie with that prefix cannot be set for
+    /// this host by a sibling subdomain under a shared registrable domain. Without it, a
+    /// neighbour at other.example.com could plant a logout handle of their own and have
+    /// somebody else's logout end the neighbour's provider session instead of their own.
+    ///
+    /// Over plain HTTP the prefix is not allowed, so the bare name is used and the
+    /// protection is simply not available — which is true of cookies in general there.
+    /// </summary>
+    private string CookieName(string bare) => Secure() ? $"__Host-{bare}" : bare;
+
+    /// <summary>The value under either name, whichever this browser holds.</summary>
+    private string? CookieValue(string bare)
+        => Request.Cookies[$"__Host-{bare}"] ?? Request.Cookies[bare];
+
     private CookieOptions PendingCookieOptions() => new()
     {
         HttpOnly = true,
-        Secure = ExternalBaseUri().StartsWith("https://", StringComparison.OrdinalIgnoreCase),
+        Secure = Secure(),
         // Lax, not Strict: the provider redirects the browser back here from its own site,
         // and Strict would withhold the cookie on exactly that navigation.
         SameSite = SameSiteMode.Lax,
-        Path = $"{BasePath()}/sso",
+        // __Host- requires the root path. Without the prefix the narrower path is kept,
+        // because then it is the only thing limiting where the cookie goes.
+        Path = Secure() ? "/" : $"{BasePath()}/sso",
         MaxAge = TimeSpan.FromMinutes(15),
         IsEssential = true,
     };
@@ -661,15 +706,22 @@ public sealed class SsoController : ControllerBase
     private CookieOptions LogoutCookieOptions() => new()
     {
         HttpOnly = true,
-        Secure = ExternalBaseUri().StartsWith("https://", StringComparison.OrdinalIgnoreCase),
+        Secure = Secure(),
         SameSite = SameSiteMode.Lax,
-        Path = $"{BasePath()}/sso/oidc",
+        Path = Secure() ? "/" : $"{BasePath()}/sso/oidc",
         IsEssential = true,
     };
 
     private Task<IActionResult> CompleteWebLoginAsync(string username, CancellationToken ct)
     {
         var secret = _secrets.Issue(username);
+
+        // The secret is in this page's body. It is single-use and lives ninety seconds,
+        // and the page spends it immediately — but a shared cache or a browser's disk
+        // cache holding a live credential is not something to leave to chance. This used
+        // to be set only as a side effect of remembering the logout token, which happens
+        // only when the provider-logout switch is on.
+        Response.Headers.CacheControl = "no-store";
 
         return Task.FromResult<IActionResult>(
             Content(SsoPages.CompleteWebLogin(BasePath(), username, secret), "text/html"));
@@ -684,6 +736,18 @@ public sealed class SsoController : ControllerBase
         Guid userId, string username, string quickConnectCode)
     {
         var token = _approvals.Issue(userId, username, quickConnectCode);
+
+        // The approval token is in this page's body and is the whole authority for letting
+        // the waiting device in, so the page must not be stored anywhere.
+        Response.Headers.CacheControl = "no-store";
+
+        // And it must not be shown inside somebody else's page. The approval is a click,
+        // and a click can be stolen from a frame: an attacker can start Quick Connect,
+        // put this page in a hidden frame under a decoy button, and have a visitor let
+        // the attacker's device in. The plugin cannot rely on the deployment's proxy
+        // adding this.
+        Response.Headers["X-Frame-Options"] = "DENY";
+        Response.Headers["Content-Security-Policy"] = "frame-ancestors 'none'";
 
         return Content(
             SsoPages.ApproveQuickConnect(BasePath(), username, quickConnectCode, token),
