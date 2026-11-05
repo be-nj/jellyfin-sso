@@ -174,6 +174,14 @@ Same tab as the group mappings:
   matched when one did.
 - **Never remove administrator rights on login** — administrators keep the flag even when
   no admin group matches. Library access still comes from the groups.
+
+> **When the sync cannot read a policy** it applies nothing and says so in the log,
+> rather than writing a fresh one. A fresh policy would reset every field this plugin
+> does not own — including *disabled* — so a login could quietly re-enable an account an
+> administrator had switched off. The cost is the other direction: nothing is taken away
+> either, so a user who just lost their administrator group keeps it until a login that
+> can read the policy. The first failure undoes a decision nobody can see; the second
+> corrects itself.
 - **Excluded from sync** — one checkbox per Jellyfin user. They can log in via SSO, but
   their permissions are never touched. Tick your local administrator.
 

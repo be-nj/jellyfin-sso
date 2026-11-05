@@ -1,3 +1,4 @@
+using Microsoft.IdentityModel.Tokens;
 using Duende.IdentityModel.Client;
 using Jellyfin.Plugin.Sso.Auth;
 using Jellyfin.Plugin.Sso.Configuration;
@@ -180,7 +181,7 @@ public sealed class SsoController : ControllerBase
         if (provider is null)
             return NotFoundText("No such provider, or it is not enabled.");
 
-        return Redirect(await AuthorizeUrlAsync(provider, ct).ConfigureAwait(false));
+        return await StartAtProviderAsync(provider, ct).ConfigureAwait(false);
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -200,8 +201,8 @@ public sealed class SsoController : ControllerBase
         if (provider is null)
             return NotFoundText("No such provider, or it is not enabled.");
 
-        return Redirect(await AuthorizeUrlAsync(provider, ct, quickConnectCode: code)
-            .ConfigureAwait(false));
+        return await StartAtProviderAsync(provider, ct, quickConnectCode: code)
+            .ConfigureAwait(false);
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -472,11 +473,38 @@ public sealed class SsoController : ControllerBase
                     + "allowed for this application.");
             }
 
-            var identity = await _claims.ExtractAsync(
-                provider, disco,
-                tokens.IdentityToken, tokens.AccessToken ?? string.Empty,
-                pending.Nonce, ct)
-                .ConfigureAwait(false);
+            OidcIdentity identity;
+            try
+            {
+                identity = await _claims.ExtractAsync(
+                    provider, disco,
+                    tokens.IdentityToken, tokens.AccessToken ?? string.Empty,
+                    pending.Nonce, ct)
+                    .ConfigureAwait(false);
+            }
+            catch (SecurityTokenSignatureKeyNotFoundException)
+            {
+                // The provider signed this with a key the cached document does not carry,
+                // which is what a key rotation looks like from here. The document is
+                // cached for half an hour, so without this every login on the server
+                // failed for the rest of that window and each failure had already spent
+                // its pending state. Fetch once more and validate against what the
+                // provider publishes now; a token signed by nobody still fails, which is
+                // the point of trying exactly once.
+                _logger.LogInformation(
+                    "A token from {Name} was signed by an unknown key; refetching its keys.",
+                    provider.Name);
+
+                _oidc.Forget(provider);
+                var fresh = await _oidc.GetDiscoveryDocumentAsync(provider, ct)
+                    .ConfigureAwait(false);
+
+                identity = await _claims.ExtractAsync(
+                    provider, fresh,
+                    tokens.IdentityToken, tokens.AccessToken ?? string.Empty,
+                    pending.Nonce, ct)
+                    .ConfigureAwait(false);
+            }
 
             // Self-service linking stops here: it attaches the identity to the account the
             // user was already signed into, and grants nothing by itself.
@@ -511,6 +539,16 @@ public sealed class SsoController : ControllerBase
             return BadRequestText(
                 "This provider is not configured correctly, so the login could not be "
                 + "completed. The server log says what is wrong.");
+        }
+        catch (SecurityTokenException ex)
+        {
+            // A token that does not validate is a refusal, not a server fault. Without
+            // this the exception middleware answered 500 and put its message in the body.
+            _logger.LogWarning(
+                "Rejected a token from provider {Id}: {Reason}",
+                KnownProviderId(providerId), ex.Message);
+            return BadRequestText(
+                "The provider's answer could not be verified, so the login was refused.");
         }
     }
 
@@ -631,6 +669,34 @@ public sealed class SsoController : ControllerBase
     /// Every entry point — plain login, Quick Connect, self-service linking — differs only
     /// in what it writes into that state, so the request itself is built in one place.
     /// </summary>
+    /// <summary>
+    /// Sends the browser to the provider, or says why it cannot.
+    ///
+    /// Building that address fetches the discovery document and checks it, and both can
+    /// fail on a provider that is unreachable or configured wrongly. Nothing caught that
+    /// here, so the login button answered a 500 — and Jellyfin's exception middleware puts
+    /// the message in the body, which carries the configured authority to an anonymous
+    /// caller. The callback has had this treatment since the secret leak; the start path
+    /// had not.
+    /// </summary>
+    private async Task<IActionResult> StartAtProviderAsync(
+        ProviderConfig provider, CancellationToken ct, string? quickConnectCode = null)
+    {
+        try
+        {
+            return Redirect(
+                await AuthorizeUrlAsync(provider, ct, quickConnectCode).ConfigureAwait(false));
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(
+                ex, "Could not start a login at provider {Id}", KnownProviderId(provider.Id));
+            return BadRequestText(
+                "This provider could not be reached or is not configured correctly, so the "
+                + "login could not be started. The server log says what is wrong.");
+        }
+    }
+
     private async Task<string> AuthorizeUrlAsync(
         ProviderConfig provider,
         CancellationToken ct,
