@@ -16,7 +16,12 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    # Pinned, not latest. package.sh promises that anybody can rebuild a release and
+    # compare the checksum, and it pins the commit date, the path map and the SDK — but
+    # not the zip and zlib that actually emit the bytes. A runner image moving to a
+    # different deflate would break reproducibility silently, and a failed reproduction
+    # cannot be told apart from tampering.
+    runs-on: ubuntu-24.04
     permissions:
       # Creates the release and the manifest pull request.
       contents: write
@@ -29,15 +34,22 @@ jobs:
       # job fails after the release itself is already published.
       actions: write
     steps:
-      - name: Check out main
+      # The tag's own commit, not main's tip. Checking out main meant the published ZIP
+      # held whatever main had moved on to, while the provenance attestation below binds
+      # its statement to the run's github.sha — the tag commit — so a verifier would have
+      # seen a valid attestation asserting a revision the bytes did not come from. The
+      # archive timestamps come from the checked-out commit too, so even a rebuild from
+      # the tag could not reproduce the checksum.
+      - name: Check out the tagged commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: main
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Verify the tag points at main
         run: |
-          git merge-base --is-ancestor "$GITHUB_SHA" main \
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
             || { echo "tag $GITHUB_REF_NAME is not on main"; exit 1; }
 
       - name: Set up .NET

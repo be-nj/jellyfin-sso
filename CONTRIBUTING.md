@@ -104,6 +104,11 @@ version to `manifest.json` on `main`, which is what servers poll. The `targetAbi
 into the manifest is derived from the `Jellyfin.Controller` reference in the csproj, so a
 Jellyfin bump automatically applies to the next release.
 
+Every push checks the manifest against reality: each version has to point at a release
+asset of this repository, and each checksum has to be the checksum of the file at that
+address (`scripts/check-manifest.sh`). The manifest is the one file a server installs
+from, so a second record of its truth belongs in CI rather than in trust.
+
 The manifest keeps only the five newest versions. Jellyfin puts every version it finds
 there into one dropdown, and after seventeen releases that dropdown was a wall of
 near-identical numbers to scroll past for the one that matters. Five is what stepping
