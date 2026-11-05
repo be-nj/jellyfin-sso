@@ -230,13 +230,20 @@ public sealed class SsoController : ControllerBase
         // account of where the request came from costs nothing and does not: it is absent
         // on old browsers, which then behave as before, and "cross-site" only where the
         // navigation did not start here.
-        if (string.Equals(
-                Request.Headers["Sec-Fetch-Site"].FirstOrDefault(),
-                "cross-site",
-                StringComparison.Ordinal))
+        // Only this site's own navigations are honoured. Rejecting "cross-site" alone let
+        // a sibling subdomain through, because a page on evil.example.com navigating to
+        // jf.example.com sends "same-site" — and that is the same adversary the cookie
+        // prefix above is written against. An absent header is an old browser, which gets
+        // the behaviour it always had.
+        var from = Request.Headers["Sec-Fetch-Site"].FirstOrDefault();
+        if (from is { Length: > 0 }
+            && !string.Equals(from, "same-origin", StringComparison.Ordinal)
+            && !string.Equals(from, "none", StringComparison.Ordinal))
         {
             _logger.LogInformation(
-                "Ignored a logout driven from another site; nothing was signed out.");
+                "Ignored a logout the browser reports as coming from {Site}; nothing was "
+                + "signed out.",
+                from);
             return LocalRedirect($"{BasePath()}/web/index.html");
         }
 
@@ -685,9 +692,21 @@ public sealed class SsoController : ControllerBase
     /// </summary>
     private string CookieName(string bare) => Secure() ? $"__Host-{bare}" : bare;
 
-    /// <summary>The value under either name, whichever this browser holds.</summary>
-    private string? CookieValue(string bare)
-        => Request.Cookies[$"__Host-{bare}"] ?? Request.Cookies[bare];
+    /// <summary>
+    /// The value under the one name this deployment sets, and no other.
+    ///
+    /// Reading both names undid the whole point of the prefix. The bare name is exactly
+    /// what a sibling subdomain under a shared registrable domain can set for this host,
+    /// and the fallback applied whenever the browser had no prefixed cookie — which is the
+    /// normal state, since the logout cookie dies with the browser session and the pending
+    /// one lasts fifteen minutes. A planted pending cookie carrying the attacker's own
+    /// browser id would have let them finish their login in somebody else's browser, which
+    /// is the attack the browser binding exists to stop.
+    ///
+    /// The price of reading one name is that a deployment switching between HTTP and HTTPS
+    /// loses one login or one logout. That is the right price.
+    /// </summary>
+    private string? CookieValue(string bare) => Request.Cookies[CookieName(bare)];
 
     private CookieOptions PendingCookieOptions() => new()
     {

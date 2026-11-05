@@ -311,27 +311,44 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// A logout is a GET, which means another site can navigate a visitor into it. That
-    /// would sign them out of their identity provider — every application in that session
-    /// — and spend the token kept for their own logout. The browser says where the
-    /// navigation came from, and a cross-site one is ignored.
+    /// A page on a sibling subdomain reports "same-site", not "cross-site". Rejecting only
+    /// the latter left the logout drivable by exactly the adversary the cookie prefix is
+    /// written against.
     /// </summary>
-    [Fact]
-    public async Task A_logout_driven_from_another_site_is_ignored()
+    [Theory]
+    [InlineData("cross-site")]
+    [InlineData("same-site")]
+    public async Task A_logout_driven_from_anywhere_but_this_site_is_ignored(string site)
     {
         await _env.PatchConfigAsync(config => config["SignOutOfIdentityProvider"] = true);
 
         using var client = JellyfinEnvironment.TrustingClient(followRedirects: false);
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{_env.BaseUrl}/sso/oidc/logout");
-        request.Headers.Add("Sec-Fetch-Site", "cross-site");
+        request.Headers.Add("Sec-Fetch-Site", site);
 
         var endedAt = _env.Idp.SessionsEnded;
         using var response = await client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
-        // Back to Jellyfin, not to the provider's end-session endpoint.
         Assert.Equal("/web/index.html", response.Headers.Location!.ToString());
         Assert.Equal(endedAt, _env.Idp.SessionsEnded);
+    }
+
+    /// <summary>A browser's own address bar reports "none"; that is not another site.</summary>
+    [Fact]
+    public async Task A_logout_typed_into_the_address_bar_is_honoured()
+    {
+        await _env.PatchConfigAsync(config => config["SignOutOfIdentityProvider"] = true);
+
+        using var client = JellyfinEnvironment.TrustingClient(followRedirects: false);
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{_env.BaseUrl}/sso/oidc/logout");
+        request.Headers.Add("Sec-Fetch-Site", "none");
+
+        using var response = await client.SendAsync(request);
+
+        Assert.StartsWith(
+            $"{_env.Idp.BrowserAuthority}/endsession",
+            response.Headers.Location!.ToString());
     }
 
     /// <summary>The navigation the documentation describes still works.</summary>

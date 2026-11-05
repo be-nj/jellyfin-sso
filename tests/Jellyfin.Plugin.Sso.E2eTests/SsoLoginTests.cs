@@ -402,4 +402,42 @@ public sealed class SsoLoginTests : IAsyncLifetime
         Assert.Equal("no-store", page.Headers.CacheControl?.ToString());
     }
 
+
+    /// <summary>
+    /// Over HTTPS the browser-binding cookie is set under the __Host- name, and only that
+    /// name may be read. The bare name is what a sibling subdomain under a shared
+    /// registrable domain can set for this host, so honouring it as a fallback handed the
+    /// binding back: an attacker could plant their own browser id and finish their login
+    /// in somebody else's browser.
+    ///
+    /// The whole flow is not driven under a forwarded HTTPS scheme here, because the
+    /// redirect URI would then no longer match the one the test provider has registered.
+    /// What this pins down is the read: a callback whose only cookie is the bare name is
+    /// refused when the deployment is HTTPS.
+    /// </summary>
+    [Fact]
+    public async Task A_planted_cookie_under_the_bare_name_is_not_read_on_https()
+    {
+        using var client = JellyfinEnvironment.TrustingClient(followRedirects: false);
+        _env.Idp.NextUser = new FakeUser("sub-planted", "planteduser", ["media"]);
+
+        // A real login over HTTP, so a state exists and the cookie is the bare one.
+        var login = await _env.StartWebLoginAsync(
+            new FakeUser("sub-planted", "planteduser", ["media"]), client);
+        Assert.True(login.Succeeded, login.Body);
+
+        // Any callback the deployment now sees as HTTPS must look for the prefixed name,
+        // find nothing, and refuse — whatever bare cookie the caller presents.
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"{_env.BaseUrl}/sso/oidc/callback/{JellyfinEnvironment.ProviderId}?code=x&state=y");
+        request.Headers.Add("X-Forwarded-Proto", "https");
+        request.Headers.Add("Cookie", "SsoPendingLogin=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVphYmNkZWY");
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("this browser started", await response.Content.ReadAsStringAsync());
+    }
+
 }
