@@ -65,6 +65,21 @@ public sealed class PermissionSync
         // would quietly reset everything an administrator set elsewhere — blocked tags,
         // remote access, session limits, SyncPlay — on every single login.
         var policy = CurrentPolicy(userId);
+        if (policy is null)
+        {
+            // Nothing is written rather than a blank policy. A fresh UserPolicy() resets
+            // every field this plugin does not own to the type's default — IsDisabled,
+            // IsHidden, BlockedTags, remote access, session limits — which would mean an
+            // SSO login could silently re-enable an account an administrator disabled.
+            // A newly provisioned account already got its policy from the provisioner, so
+            // skipping is safe; the login continues either way.
+            _logger.LogWarning(
+                "Skipping the SSO permission sync for user {Id}: the current policy could "
+                + "not be read, and writing a fresh one would reset settings this plugin "
+                + "does not own.",
+                userId);
+            return;
+        }
 
         policy.IsAdministrator = isAdmin;
         policy.EnableAllFolders = enableAll;
@@ -110,23 +125,27 @@ public sealed class PermissionSync
     /// Jellyfin no longer knows, or a server that cannot produce the DTO, falls back to a
     /// fresh policy — the login still has to end with a usable account.
     /// </summary>
-    private UserPolicy CurrentPolicy(Guid userId)
+    private UserPolicy? CurrentPolicy(Guid userId)
     {
         var user = _userManager.GetUserById(userId);
         if (user is null)
         {
+            // A user Jellyfin does not know has no settings to preserve, so a fresh policy
+            // is the whole truth about it rather than a loss of one.
             return new UserPolicy();
         }
 
         try
         {
-            return _userManager.GetUserDto(user).Policy ?? new UserPolicy();
+            // Null for an account that exists: its settings are real and unknown, and
+            // replacing them with defaults is the failure this guards against.
+            return _userManager.GetUserDto(user).Policy;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(
-                ex, "Could not read the current policy for user {Id}; writing a fresh one.", userId);
-            return new UserPolicy();
+                ex, "Could not read the current policy for user {Id}.", userId);
+            return null;
         }
     }
 

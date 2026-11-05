@@ -54,10 +54,54 @@ public sealed class PermissionSyncTests : IDisposable
         // Registered under both ids so a test can sync either the shared id or the entity's own.
         _userManager.GetUserById(id ?? _userId).Returns(user);
         _userManager.GetUserById(user.Id).Returns(user);
+        // A real server answers with the account's current policy, so the fake does too.
+        // Tests that care about a particular field override this with their own DTO.
+        _userManager.GetUserDto(user).Returns(new MediaBrowser.Model.Dto.UserDto
+        {
+            Policy = new UserPolicy { IsAdministrator = admin },
+        });
         return user;
     }
 
     private void OtherUsers(params User[] users) => _userManager.GetUsers().Returns(users);
+
+    /// <summary>
+    /// The sync used to fall back to a blank UserPolicy when it could not read the current
+    /// one, and then write that — resetting every field the plugin does not own to the
+    /// type's default. IsDisabled defaults to false, so a login on that path could
+    /// silently re-enable an account an administrator had disabled. Nothing is written
+    /// now, and the login still goes through.
+    /// </summary>
+    [Fact]
+    public async Task A_policy_that_cannot_be_read_is_not_replaced_with_a_blank_one()
+    {
+        var user = ExistingUser(admin: false);
+        _userManager.GetUserDto(user).Returns(_ => throw new InvalidOperationException("no dto"));
+
+        Map("media", admin: false, MoviesId);
+
+        await _sync.SyncAsync(_userId, Identity("media"));
+
+        await _userManager.DidNotReceiveWithAnyArgs().UpdatePolicyAsync(default, default!);
+    }
+
+    /// <summary>
+    /// A policy the server hands back as null for an account that does exist is the same
+    /// situation as a throw: real settings, unreadable. An account Jellyfin does not know
+    /// is not — there is nothing to lose, and the sync carries on.
+    /// </summary>
+    [Fact]
+    public async Task A_policy_the_server_reports_as_null_is_not_replaced_either()
+    {
+        var user = ExistingUser(admin: false);
+        _userManager.GetUserDto(user).Returns(new MediaBrowser.Model.Dto.UserDto { Policy = null });
+
+        Map("media", admin: false, MoviesId);
+
+        await _sync.SyncAsync(_userId, Identity("media"));
+
+        await _userManager.DidNotReceiveWithAnyArgs().UpdatePolicyAsync(default, default!);
+    }
 
     [Fact]
     public async Task Settings_this_plugin_does_not_own_survive_a_sync()
