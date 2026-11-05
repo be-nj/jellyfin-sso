@@ -46,12 +46,10 @@ public sealed class AdminController : ControllerBase
         // field for it, so this arrives by hand-edited JSON — and a pasted literal secret
         // would be written to the plugin's configuration file, which the documentation
         // promises never happens. Refusing it at the door is what makes that true.
-        foreach (var provider in config.Providers)
+        foreach (var provider in config.Providers.Where(
+            p => !string.IsNullOrWhiteSpace(p.ConfidentialSecretRef)))
         {
-            if (string.IsNullOrWhiteSpace(provider.ConfidentialSecretRef))
-                continue;
-
-            if (!provider.ConfidentialSecretRef.StartsWith("env:", StringComparison.Ordinal)
+            if (!provider.ConfidentialSecretRef!.StartsWith("env:", StringComparison.Ordinal)
                 && !provider.ConfidentialSecretRef.StartsWith("file:", StringComparison.Ordinal))
             {
                 return BadRequest(

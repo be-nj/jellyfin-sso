@@ -52,5 +52,28 @@ public sealed class LoggableTests : IDisposable
         Assert.DoesNotContain('\n', code);
     }
 
+    [Theory]
+    [InlineData("same-origin")]
+    [InlineData("same-site")]
+    [InlineData("cross-site")]
+    [InlineData("none")]
+    public void A_fetch_site_the_specification_defines_is_named(string site)
+    {
+        Assert.Equal(site, SsoController.NamedFetchSite(site));
+    }
+
+    [Theory]
+    [InlineData("cross-site\n[12:00:00] [INF] Fake: an administrator logged in")]
+    [InlineData("Same-Origin")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void Any_other_fetch_site_is_not_echoed(string? site)
+    {
+        var named = SsoController.NamedFetchSite(site);
+
+        Assert.Equal("an unrecognised value", named);
+        Assert.DoesNotContain('\n', named);
+    }
+
     public void Dispose() => _harness.Dispose();
 }

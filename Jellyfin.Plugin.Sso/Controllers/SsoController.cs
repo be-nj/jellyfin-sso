@@ -244,7 +244,7 @@ public sealed class SsoController : ControllerBase
             _logger.LogInformation(
                 "Ignored a logout the browser reports as coming from {Site}; nothing was "
                 + "signed out.",
-                from);
+                NamedFetchSite(from));
             return LocalRedirect($"{BasePath()}/web/index.html");
         }
 
@@ -1149,6 +1149,27 @@ public sealed class SsoController : ControllerBase
     /// Maps the IdP's error to the fixed set from RFC 6749 §4.1.2.1, so neither the log
     /// nor the response ever carries a string the caller chose.
     /// </summary>
+    /// <summary>
+    /// The name of a <c>Sec-Fetch-Site</c> value, for the log line that explains a refused
+    /// logout.
+    ///
+    /// The header is a request header like any other, and nothing stops a client from
+    /// sending one with a newline and a line of its own invention after it. Written
+    /// straight into the log, that line reads as if the server had written it — a forged
+    /// entry in the one record an operator consults when they want to know what happened.
+    /// So the value is never echoed: it is matched against the four names the Fetch
+    /// specification defines, and each arm returns its own literal. Anything else is
+    /// "something else", because the decision above does not depend on which word it was.
+    /// </summary>
+    internal static string NamedFetchSite(string? value) => value switch
+    {
+        "same-origin" => "same-origin",
+        "same-site" => "same-site",
+        "cross-site" => "cross-site",
+        "none" => "none",
+        _ => "an unrecognised value",
+    };
+
     internal static string OAuthErrorCode(string? error) => error switch
     {
         "invalid_request" => "invalid_request",
