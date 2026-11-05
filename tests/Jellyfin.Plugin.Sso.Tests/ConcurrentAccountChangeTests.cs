@@ -156,13 +156,10 @@ public sealed class ConcurrentAccountChangeTests : IDisposable
             Thread.Sleep(200);
         }
 
-        await Task.WhenAll(first, second);
+        var decisions = await Task.WhenAll(first, second);
 
         Assert.Single(_harness.Configuration.Links);
-        Assert.Equal(
-            1,
-            new[] { first.Result, second.Result }
-                .Count(d => d.Outcome == SelfServiceLinkOutcome.Write));
+        Assert.Equal(1, decisions.Count(d => d.Outcome == SelfServiceLinkOutcome.Write));
     }
 
     /// <summary>
@@ -187,14 +184,11 @@ public sealed class ConcurrentAccountChangeTests : IDisposable
             Thread.Sleep(200);
         }
 
-        await Task.WhenAll(first, second);
+        var decisions = await Task.WhenAll(first, second);
 
         var link = Assert.Single(_harness.Configuration.Links);
         Assert.Contains(link.JellyfinUserId, new[] { alice, bob });
-        Assert.Equal(
-            1,
-            new[] { first.Result, second.Result }
-                .Count(d => d.Outcome == SelfServiceLinkOutcome.Write));
+        Assert.Equal(1, decisions.Count(d => d.Outcome == SelfServiceLinkOutcome.Write));
     }
 
     public void Dispose()
