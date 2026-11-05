@@ -17,6 +17,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<QuickConnectApprovalStore>();
         serviceCollection.AddSingleton<PendingStateStore>();
         serviceCollection.AddSingleton<LogoutSessionStore>();
+        serviceCollection.AddSingleton<LogoutTokenLedger>();
         serviceCollection.AddSingleton<LoginRateLimiter>();
 
         // Resolved per request by [ServiceFilter] on the anonymous login endpoints.

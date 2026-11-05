@@ -52,6 +52,55 @@ public sealed class BackChannelLogoutTests : IAsyncLifetime
         return response.StatusCode;
     }
 
+    /// <summary>
+    /// Freshness was the only replay control: the same token stayed valid for as long as
+    /// its iat was young, so anyone who could read one in flight — a proxy terminating
+    /// TLS, a log recording request bodies — could post it again and again, knocking the
+    /// user out each time they signed back in.
+    /// </summary>
+    [Fact]
+    public async Task The_same_logout_token_cannot_be_used_twice()
+    {
+        var first = await SignInAsync("sub-replay", "ben-replay");
+        var logoutToken = _env.Idp.MintLogoutToken("sub-replay", JellyfinEnvironment.ClientId);
+
+        using var client = JellyfinEnvironment.TrustingClient();
+        using var accepted = await client.PostAsync(Endpoint(), Form(logoutToken));
+        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, await WhoAmIAsync(first));
+
+        // The user signs back in, and the captured token is posted again.
+        var second = await SignInAsync("sub-replay", "ben-replay");
+        Assert.Equal(HttpStatusCode.OK, await WhoAmIAsync(second));
+
+        using var refused = await client.PostAsync(Endpoint(), Form(logoutToken));
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Contains("already been used", await refused.Content.ReadAsStringAsync());
+
+        // The session the replay was aimed at is untouched.
+        Assert.Equal(HttpStatusCode.OK, await WhoAmIAsync(second));
+    }
+
+    /// <summary>A second, genuine logout for the same user still works.</summary>
+    [Fact]
+    public async Task A_fresh_logout_token_for_the_same_user_still_ends_the_session()
+    {
+        await SignInAsync("sub-twice", "ben-twice");
+        using var client = JellyfinEnvironment.TrustingClient();
+
+        using var first = await client.PostAsync(
+            Endpoint(), Form(_env.Idp.MintLogoutToken("sub-twice", JellyfinEnvironment.ClientId)));
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+
+        var again = await SignInAsync("sub-twice", "ben-twice");
+        Assert.Equal(HttpStatusCode.OK, await WhoAmIAsync(again));
+
+        using var second = await client.PostAsync(
+            Endpoint(), Form(_env.Idp.MintLogoutToken("sub-twice", JellyfinEnvironment.ClientId)));
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, await WhoAmIAsync(again));
+    }
+
     [Fact]
     public async Task A_logout_the_provider_announces_ends_the_session_it_names()
     {
