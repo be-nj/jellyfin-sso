@@ -263,6 +263,32 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Unauthorized, await WhoAmIAsync(token));
     }
 
+    /// <summary>
+    /// The same reasoning as the self-service unlink above, on the endpoint the Links tab
+    /// calls — which did not do it. An administrator unlinking somebody is usually cutting
+    /// off their access, and that is the reading under which leaving their tokens alive
+    /// matters most: back-channel logout finds an account through its link, so once the
+    /// link is gone nothing can end those sessions and Jellyfin does not expire them.
+    /// </summary>
+    [Fact]
+    public async Task An_administrators_unlink_ends_the_sessions_too()
+    {
+        var login = await _env.StartWebLoginAsync(
+            new FakeUser("sub-cutoff", "cutoffuser", ["media"]));
+        Assert.True(login.Succeeded, login.Body);
+
+        var auth = await _env.AuthenticateAsync("cutoffuser", login.Secret!);
+        var token = JsonNode.Parse(await auth.Content.ReadAsStringAsync())!["AccessToken"]!
+            .GetValue<string>();
+        Assert.Equal(HttpStatusCode.OK, await WhoAmIAsync(token));
+
+        var user = await _env.FindUserAsync("cutoffuser");
+        await _env.RemoveLinkAsync(Guid.Parse(user!["Id"]!.GetValue<string>()));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, await WhoAmIAsync(token));
+        Assert.Empty((await _env.PluginConfigAsync())["Links"]!.AsArray());
+    }
+
     [Fact]
     public async Task Unlinking_needs_the_provider_named()
     {
@@ -347,7 +373,7 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
         using var response = await client.SendAsync(request);
 
         Assert.StartsWith(
-            $"{_env.Idp.BrowserAuthority}/endsession",
+            $"{_env.Idp.ContainerAuthority}/endsession",
             response.Headers.Location!.ToString());
     }
 
@@ -365,7 +391,7 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.StartsWith(
-            $"{_env.Idp.BrowserAuthority}/endsession",
+            $"{_env.Idp.ContainerAuthority}/endsession",
             response.Headers.Location!.ToString());
     }
 
@@ -379,7 +405,7 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         var location = response.Headers.Location!.ToString();
-        Assert.StartsWith($"{_env.Idp.BrowserAuthority}/endsession", location);
+        Assert.StartsWith($"{_env.Idp.ContainerAuthority}/endsession", location);
         Assert.DoesNotContain("id_token_hint", location);
         // The provider has to know where to send the user back.
         Assert.Contains($"post_logout_redirect_uri={Uri.EscapeDataString($"{_env.BaseUrl}/web/index.html")}", location);
@@ -648,6 +674,80 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
         request.Headers.Authorization = JellyfinEnvironment.TokenHeader(token);
         using var response = await client.SendAsync(request);
         return response.StatusCode;
+    }
+
+    // ─── What the provider says about itself ──────────────────────────────────
+
+    /// <summary>
+    /// A logout sends the user's own ID token to the end-session endpoint as an
+    /// id_token_hint, so that address is one the plugin hands something to — and the host
+    /// check that exists for exactly those addresses was written down, tested, and then
+    /// called with three of the four. The test passed because it exercised the rule
+    /// instead of the call. This one exercises the call: a provider whose document moves
+    /// that endpoint cannot be used at all, which is the same answer the other three give.
+    ///
+    /// Under its own provider id, because a discovery document is cached for half an hour
+    /// per id and authority — so a test that reused the suite's provider would pass or
+    /// fail depending on which test ran first.
+    /// </summary>
+    [Fact]
+    public async Task A_document_that_moves_the_end_session_endpoint_is_refused()
+    {
+        const string ProviderId = "moved-end-session";
+        _env.Idp.EndSessionElsewhere = true;
+        try
+        {
+            await _env.PatchConfigAsync(config => config["Providers"]!.AsArray().Add(
+                new JsonObject
+                {
+                    ["Id"] = ProviderId,
+                    ["Name"] = "Provider with a moved end-session endpoint",
+                    ["Enabled"] = true,
+                    ["Authority"] = _env.Idp.ContainerAuthority,
+                    ["ClientId"] = JellyfinEnvironment.ClientId,
+                    ["Scopes"] = new JsonArray { "openid", "profile", "email", "groups" },
+                    ["GroupsClaim"] = "groups",
+                }));
+
+            using var client = JellyfinEnvironment.TrustingClient(followRedirects: false);
+            var response = await client.GetAsync($"{_env.BaseUrl}/sso/oidc/start/{ProviderId}");
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Contains(
+                "could not be reached or is not configured correctly",
+                await response.Content.ReadAsStringAsync());
+        }
+        finally
+        {
+            _env.Idp.EndSessionElsewhere = false;
+        }
+    }
+
+    /// <summary>
+    /// OIDC Core §5.3.2: the sub in a userinfo response has to be verified against the one
+    /// in the ID token, and a response that names another subject must not be used. What
+    /// is read from there decides a user's groups, which is to say their libraries and
+    /// their administrator flag.
+    /// </summary>
+    [Fact]
+    public async Task A_userinfo_answer_about_somebody_else_is_not_used()
+    {
+        await _env.PatchConfigAsync(config =>
+            config["Providers"]![0]!["GroupsFromUserInfo"] = true);
+        _env.Idp.UserInfoAnswersAboutSomebodyElse = true;
+        try
+        {
+            var login = await _env.StartWebLoginAsync(
+                new FakeUser("sub-mixed-up", "mixedup", ["jellyfin-admins"]));
+
+            Assert.False(login.Succeeded, login.Body);
+            Assert.Null(await _env.FindUserAsync("mixedup"));
+            Assert.Empty((await _env.PluginConfigAsync())["Links"]!.AsArray());
+        }
+        finally
+        {
+            _env.Idp.UserInfoAnswersAboutSomebodyElse = false;
+        }
     }
 
     /// <summary>Walks a redirect chain by hand, keeping one client — and one cookie jar.</summary>

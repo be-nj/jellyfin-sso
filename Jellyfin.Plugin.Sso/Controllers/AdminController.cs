@@ -1,5 +1,6 @@
 using Jellyfin.Plugin.Sso.Auth;
 using Jellyfin.Plugin.Sso.Configuration;
+using Jellyfin.Plugin.Sso.Provisioning;
 using Jellyfin.Plugin.Sso.Web;
 using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Authorization;
@@ -19,17 +20,20 @@ public sealed class AdminController : ControllerBase
     private readonly IUserManager _userManager;
     private readonly LoginBranding _branding;
     private readonly LoginRateLimiter _limiter;
+    private readonly SessionRevoker _revoker;
 
     public AdminController(
         ILibraryManager libraryManager,
         IUserManager userManager,
         LoginBranding branding,
-        LoginRateLimiter limiter)
+        LoginRateLimiter limiter,
+        SessionRevoker revoker)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _branding = branding;
         _limiter = limiter;
+        _revoker = revoker;
     }
 
     // ─── Config ──────────────────────────────────────────────────────────────
@@ -56,6 +60,21 @@ public sealed class AdminController : ControllerBase
                     $"Provider '{provider.Id}': ConfidentialSecretRef must name where the "
                     + "secret is, as 'env:VARIABLE' or 'file:/path', not hold the secret "
                     + "itself. Nothing was saved.");
+            }
+        }
+
+        // A library is named by its Jellyfin id, and the sync parses those ids on every
+        // login. An id that is not a GUID therefore turned every SSO login on the server
+        // into a 500 — from a value that only this endpoint can introduce, and only by
+        // hand-edited JSON, which is exactly why it is checked here rather than trusted.
+        foreach (var mapping in config.GroupMappings)
+        {
+            var bad = mapping.LibraryIds.FirstOrDefault(id => !Guid.TryParse(id, out _));
+            if (bad is not null)
+            {
+                return BadRequest(
+                    $"Group mapping '{mapping.Group}': '{bad}' is not a library id. "
+                    + "Nothing was saved.");
             }
         }
 
@@ -196,9 +215,20 @@ public sealed class AdminController : ControllerBase
         return Ok();
     }
 
+    /// <summary>
+    /// Removes every link of one Jellyfin account, and ends its sessions.
+    ///
+    /// The sessions have to go with it, for the reason the self-service unlink already
+    /// says: back-channel logout finds an account through its link and nothing else, so an
+    /// account that has been unlinked keeps tokens the identity provider can no longer
+    /// end, and Jellyfin does not expire them. An administrator unlinking somebody is
+    /// usually cutting off their access, which is the one reading under which leaving the
+    /// sessions running is worst — and the self-service endpoint was fixed for this while
+    /// the administrator's was not.
+    /// </summary>
     [HttpDelete("links/{jellyfinUserId:guid}")]
     [Authorize(Policy = "RequiresElevation")]
-    public IActionResult DeleteLink(Guid jellyfinUserId)
+    public async Task<IActionResult> DeleteLink(Guid jellyfinUserId, CancellationToken ct)
     {
         var config = Plugin.Instance!.Configuration;
 
@@ -212,6 +242,8 @@ public sealed class AdminController : ControllerBase
 
             Plugin.Instance.SaveConfiguration();
         }
+
+        await _revoker.RevokeUserAsync(jellyfinUserId, ct).ConfigureAwait(false);
 
         return Ok();
     }

@@ -137,6 +137,39 @@ public sealed class PermissionSyncTests : IDisposable
         Assert.False(policy.EnableAllFolders);
     }
 
+    /// <summary>
+    /// A library is named by its Jellyfin id and those ids are parsed on every login. One
+    /// that is not a GUID — edited into the configuration file by hand, or left by an
+    /// older version — threw out of the parse, and a FormatException is not one of the
+    /// types the callback catches: every SSO login on the server answered 500. The entry
+    /// grants nothing now and says which one it was.
+    /// </summary>
+    [Fact]
+    public async Task A_library_id_that_is_not_one_grants_nothing_and_is_named()
+    {
+        _harness.Configuration.GroupMappings.Add(new GroupMappingConfig
+        {
+            Group = "media",
+            LibraryIds = ["not-a-library-id", MoviesId.ToString("N")],
+        });
+
+        await _sync.SyncAsync(_userId, Identity("media"));
+
+        var policy = CapturedPolicy();
+        Assert.Equal([MoviesId], policy.EnabledFolders);
+        Assert.Contains("not-a-library-id", _log.Text);
+    }
+
+    [Fact]
+    public async Task A_group_name_from_the_provider_cannot_forge_a_log_line()
+    {
+        Map("media", admin: false, MoviesId);
+
+        await _sync.SyncAsync(_userId, Identity("media", "x\n[12:00:00] [INF] forged"));
+
+        Assert.DoesNotContain("\n[12:00:00] [INF] forged", _log.Text);
+    }
+
     [Fact]
     public async Task Live_tv_and_downloads_come_from_the_groups()
     {

@@ -42,6 +42,44 @@ internal static class Loggable
     };
 
     /// <summary>
+    /// A value from a token, on one line and bounded in length.
+    ///
+    /// The three above belong to closed sets, so they are answered with literals. A
+    /// username and a group name are not: they are whatever the provider puts in the
+    /// token, and at a provider that lets people choose their own display name they are
+    /// whatever that person typed. Written straight into the log, a name carrying a
+    /// newline and a plausible-looking line after it reads as a second entry the server
+    /// wrote — "an administrator logged in" is two lines of typing.
+    ///
+    /// These values have to be in the log: an operator working out why somebody landed in
+    /// the wrong libraries needs the name the provider sent, not a literal. So they are
+    /// written, with every line break and control character replaced and the length cut to
+    /// something a log line can hold. One entry per event, whatever arrives.
+    /// </summary>
+    internal static string OneLine(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        var safe = string.Concat(value.Select(
+            c => char.IsControl(c) || char.IsSeparator(c) && c != ' ' ? '\uFFFD' : c));
+
+        return safe.Length <= MaxLoggedLength ? safe : safe[..MaxLoggedLength] + "…";
+    }
+
+    /// <summary>
+    /// How much of a provider-supplied value is written. Long enough for any real name or
+    /// group, short enough that a token full of them cannot fill a disk one line at a time.
+    /// </summary>
+    internal const int MaxLoggedLength = 200;
+
+    /// <summary>Every name on one line, for the log line that lists what arrived.</summary>
+    internal static string OneLine(IEnumerable<string> values)
+        => OneLine(string.Join(", ", values));
+
+    /// <summary>
     /// Maps the IdP's error to the fixed set from RFC 6749 §4.1.2.1, so neither the log
     /// nor the response ever carries a string the caller chose.
     /// </summary>

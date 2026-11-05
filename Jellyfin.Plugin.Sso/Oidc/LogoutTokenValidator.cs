@@ -57,6 +57,7 @@ public static class LogoutTokenValidator
             ValidIssuer = issuer,
             ValidAudience = provider.ClientId,
             IssuerSigningKeys = signingKeys,
+            ValidAlgorithms = OidcClientFactory.AsymmetricSigningAlgorithms,
             // A logout token carries iat and only optionally exp, so the age is checked
             // below rather than here; an exp that is there is still honoured.
             RequireExpirationTime = false,
@@ -115,6 +116,17 @@ public static class LogoutTokenValidator
 
         if (!long.TryParse(raw, out var seconds))
             throw new SecurityTokenException("The 'iat' claim is not a number.");
+
+        // Range-checked before it is converted. FromUnixTimeSeconds throws an
+        // ArgumentOutOfRangeException for a number outside the representable years, and
+        // that is not one of the types the endpoint catches: a signed token carrying
+        // "iat": 9223372036854775807 answered 500 with the library's message in the body
+        // instead of refusing the token.
+        if (seconds < DateTimeOffset.UnixEpoch.ToUnixTimeSeconds()
+            || seconds > now.AddYears(1).ToUnixTimeSeconds())
+        {
+            throw new SecurityTokenException("The 'iat' claim is not a plausible time.");
+        }
 
         var issuedAt = DateTimeOffset.FromUnixTimeSeconds(seconds);
 

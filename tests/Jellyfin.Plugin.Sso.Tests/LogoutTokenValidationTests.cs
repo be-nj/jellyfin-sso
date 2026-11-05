@@ -121,6 +121,26 @@ public sealed class LogoutTokenValidationTests : IDisposable
         Assert.Contains("too old", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// An iat outside the years a DateTimeOffset can hold used to throw an
+    /// ArgumentOutOfRangeException out of the conversion, which the endpoint does not
+    /// catch: the provider's own signed token answered 500 with the library's message in
+    /// the body instead of being refused as a token.
+    /// </summary>
+    [Theory]
+    [InlineData(long.MaxValue)]
+    [InlineData(long.MinValue)]
+    [InlineData(-1)]
+    [InlineData(253402300800)]
+    public void A_token_whose_issued_at_is_not_a_plausible_time_is_refused(long issuedAt)
+    {
+        var token = _provider.MintRawLogoutToken(issuedAt);
+
+        var ex = Assert.Throws<SecurityTokenException>(() => Validate(token));
+
+        Assert.Contains("iat", ex.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void A_token_within_the_allowed_age_is_accepted()
     {

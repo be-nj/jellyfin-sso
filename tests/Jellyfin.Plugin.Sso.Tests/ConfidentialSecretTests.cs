@@ -59,12 +59,34 @@ public sealed class ConfidentialSecretTests : IDisposable
         Assert.Equal("from-a-file", OidcClientFactory.ResolveSecret($"file:{path}"));
     }
 
+    /// <summary>
+    /// A file that cannot be read is an error the callback can report, not one that
+    /// escapes it. An IOException is not among the types the anonymous callback catches,
+    /// so this used to answer 500 with the framework's message in the body — and that
+    /// message names a path inside the container. The reason is kept, as the inner
+    /// exception, for whoever reads the log.
+    /// </summary>
     [Fact]
-    public void A_file_that_is_not_there_fails_loudly()
+    public void A_file_that_is_not_there_is_reported_without_naming_it()
     {
         var path = Path.Combine(Path.GetTempPath(), $"jellyfin-sso-missing-{Guid.NewGuid():N}");
 
-        Assert.ThrowsAny<IOException>(() => OidcClientFactory.ResolveSecret($"file:{path}"));
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => OidcClientFactory.ResolveSecret($"file:{path}"));
+
+        Assert.DoesNotContain(path, ex.Message, StringComparison.Ordinal);
+        Assert.Contains("ConfidentialSecretRef", ex.Message, StringComparison.Ordinal);
+        Assert.IsAssignableFrom<IOException>(ex.InnerException);
+    }
+
+    /// <summary>A directory, which is the other way a path can fail to be a file.</summary>
+    [Fact]
+    public void A_path_that_is_not_a_file_is_reported_the_same_way()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => OidcClientFactory.ResolveSecret($"file:{Path.GetTempPath()}"));
+
+        Assert.Contains("ConfidentialSecretRef", ex.Message, StringComparison.Ordinal);
     }
 
     [Theory]
