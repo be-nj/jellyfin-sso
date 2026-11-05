@@ -218,7 +218,8 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
         HttpClient? client = null,
         string? providerId = null,
         string? quickConnectCode = null,
-        string? forwardedPrefix = null)
+        string? forwardedPrefix = null,
+        string? startUrl = null)
     {
         Idp.NextUser = user;
         // On a prefixed walk the loop below follows the chain itself, because it has to
@@ -230,7 +231,10 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
 
         // Redirects are followed by hand: the chain crosses from the server (http) to the
         // provider (https) and back, and HttpClient refuses to follow a downgrade.
-        var url = (providerId, quickConnectCode) switch
+        // startUrl is for a walk that begins somewhere the harness did not choose — the
+        // link on the provider picker, say, which is the only way to reach the picker's
+        // own route rather than the one this method would have built.
+        var url = startUrl ?? (providerId, quickConnectCode) switch
         {
             (null, null) => $"{BaseUrl}/sso/oidc/start",
             (null, _) => $"{BaseUrl}/sso/oidc/start/qc?code={quickConnectCode}",

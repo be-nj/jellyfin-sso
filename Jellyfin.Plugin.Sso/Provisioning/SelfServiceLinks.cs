@@ -47,6 +47,41 @@ internal sealed record SelfServiceLinkDecision(SelfServiceLinkOutcome Outcome, G
 /// </summary>
 internal static class SelfServiceLinks
 {
+    /// <summary>
+    /// Decides and, where the answer is to write, writes — both under the configuration
+    /// lock, which is what makes the decision worth anything.
+    ///
+    /// <see cref="Decide"/> on its own is a reading of a moment that has passed by the time
+    /// anything acts on it. Two callbacks completing together both read "nothing holds this
+    /// identity and nothing holds this account", and both then added a link: one account
+    /// with two identities for one provider, or two accounts holding one identity, after
+    /// which which account an identity reaches depends on the order of a list. The
+    /// administrator's own linking endpoint has always done its checks inside this lock;
+    /// this is the same rule for the callback.
+    /// </summary>
+    internal static SelfServiceLinkDecision Attach(
+        PluginConfiguration config, string providerId, string sub, Guid userId)
+    {
+        lock (Plugin.ConfigurationLock)
+        {
+            var decision = Decide(config, providerId, sub, userId);
+            if (decision.Outcome != SelfServiceLinkOutcome.Write)
+            {
+                return decision;
+            }
+
+            config.Links.Add(new LinkConfig
+            {
+                ProviderId = providerId,
+                Sub = sub,
+                JellyfinUserId = userId,
+            });
+            Plugin.Instance!.SaveConfiguration();
+
+            return decision;
+        }
+    }
+
     internal static SelfServiceLinkDecision Decide(
         PluginConfiguration config, string providerId, string sub, Guid userId)
     {

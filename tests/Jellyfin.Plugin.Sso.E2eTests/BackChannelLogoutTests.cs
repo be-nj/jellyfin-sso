@@ -42,6 +42,34 @@ public sealed class BackChannelLogoutTests : IAsyncLifetime
         return payload["AccessToken"]!.GetValue<string>();
     }
 
+    /// <summary>
+    /// A provider that rotates its signing keys, on the logout side.
+    ///
+    /// The login side has had this test since a rotation stopped every login on the server
+    /// (#167), and <see cref="FakeIdentityProvider.RotateSigningKey"/> was written for it.
+    /// Pointing the same two lines at this endpoint was never done: the discovery document
+    /// is cached for half an hour and a logout token is accepted for five minutes, so a
+    /// rotation inside that window meant every logout the provider sent was refused and the
+    /// sessions it had ended stayed open.
+    /// </summary>
+    [Fact]
+    public async Task A_logout_signed_with_a_rotated_key_still_ends_the_session()
+    {
+        // Warms the cache with the old key, as a login does.
+        var token = await SignInAsync("sub-rotated", "rotateduser");
+        Assert.Equal(HttpStatusCode.OK, await WhoAmIAsync(token));
+
+        _env.Idp.RotateSigningKey();
+
+        using var client = JellyfinEnvironment.TrustingClient();
+        var response = await client.PostAsync(
+            Endpoint(),
+            Form(_env.Idp.MintLogoutToken("sub-rotated", JellyfinEnvironment.ClientId)));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, await WhoAmIAsync(token));
+    }
+
     private async Task<HttpStatusCode> WhoAmIAsync(string token)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{_env.BaseUrl}/Users/Me");

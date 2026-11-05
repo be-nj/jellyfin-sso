@@ -70,7 +70,8 @@ public sealed class SsoStartController : SsoFlowController
         if (enabled.Count == 0)
             return NotFound("No enabled SSO provider configured.");
         if (enabled.Count > 1)
-            return ProviderPicker(enabled, queryString: $"?code={Uri.EscapeDataString(code)}");
+            return ProviderPicker(
+                enabled, queryString: $"?code={Uri.EscapeDataString(code)}", quickConnect: true);
 
         return await StartWithQuickConnect(enabled[0].Id, code, ct).ConfigureAwait(false);
     }
@@ -146,6 +147,9 @@ public sealed class SsoStartController : SsoFlowController
     }
 
     /// <summary>Lets the user choose when more than one provider is enabled.</summary>
-    private IActionResult ProviderPicker(IReadOnlyList<ProviderConfig> providers, string queryString)
-        => Content(SsoPages.ProviderPicker(At.BasePath, providers, queryString), "text/html");
+    private IActionResult ProviderPicker(
+        IReadOnlyList<ProviderConfig> providers, string queryString, bool quickConnect = false)
+        => Content(
+            SsoPages.ProviderPicker(At.BasePath, providers, queryString, quickConnect),
+            "text/html");
 }
