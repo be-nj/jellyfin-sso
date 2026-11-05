@@ -31,7 +31,7 @@ a chat log: each is either fixed with a test, or filed.
 | 1 | Quick Connect approved a code without asking | 1 | fixed, `279d2a3` · [#1](https://github.com/be-nj/jellyfin-sso/issues/1) | `A_login_approves_the_code_only_after_the_person_says_so` |
 | 2 | A provider returning no ID token crashed the callback | 1 | fixed, `279d2a3` | — |
 | 3 | The provider id was echoed into error responses | 1 | fixed, `279d2a3` | — |
-| 4 | Pending logins bounded in time, not in count | 1 | fixed, `cbe616e` (cap at 10,000) | `The_store_stops_growing_at_its_cap` |
+| 4 | Pending logins bounded in time, not in count | 1 | fixed, `cbe616e` (cap at 10,000); the cap now refuses a new login instead of evicting an older one, which a later review found aimable | `A_full_store_keeps_the_logins_it_has_and_refuses_new_ones` |
 | 5 | Two admin endpoints for links; hardening on the unused one | 2 | fixed, `1c6c6f5` · [#7](https://github.com/be-nj/jellyfin-sso/issues/7) | `A_link_to_a_user_Jellyfin_does_not_have_is_refused` |
 | 6 | Unlinking removes every link of a user | 2 | documented, no change | — |
 | 7 | `/sso/link` names providers to anonymous callers | 2 | accepted, documented | — |
