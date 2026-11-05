@@ -27,6 +27,25 @@ internal interface IRealIdentityProvider : IAsyncDisposable
     /// <summary>Whether the groups have to be read from the userinfo endpoint.</summary>
     bool GroupsFromUserInfo { get; }
 
+    /// <summary>
+    /// Whether the plugin has to hold a secret for this provider. A public client is the
+    /// usual answer and the default, because a plugin inside a media server has nowhere to
+    /// keep a secret from the person running it; Tinyauth is the exception, because its
+    /// token endpoint offers no way for a client without one to authenticate. This is the
+    /// plugin's ClientType, as the number its configuration uses — the test project
+    /// installs the release ZIP and does not reference the plugin's own types.
+    /// </summary>
+    bool Confidential => false;
+
+    /// <summary>Where the secret is, in the form the plugin accepts. Null for a public client.</summary>
+    string? ConfidentialSecretRef => null;
+
+    /// <summary>
+    /// Anything that has to exist inside the server container before the provider card
+    /// names it — a secret file, for the one provider that needs one.
+    /// </summary>
+    Task PrepareServerAsync(JellyfinEnvironment environment) => Task.CompletedTask;
+
     /// <summary>A user in a group that maps to a library.</summary>
     RealIdentityUser MemberUser { get; }
 

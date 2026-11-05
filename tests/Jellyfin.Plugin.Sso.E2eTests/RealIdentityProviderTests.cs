@@ -21,6 +21,13 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
     private static IPlaywright? _playwright;
     private static IBrowser? _browser;
 
+    /// <summary>
+    /// For a test that needs the browser after the login rather than only its verdict.
+    /// <see cref="SignInAsync"/> owns its context and closes it on the way out, so the page
+    /// it returns is good for reading a URL and nothing else.
+    /// </summary>
+    private protected static IBrowser Browser => _browser!;
+
     private protected readonly JellyfinEnvironment _env;
     private protected IRealIdentityProvider _idp = null!;
 
@@ -60,6 +67,10 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
             Gate.Release();
         }
 
+        // A confidential client's secret has to be in the container before the card names
+        // the file it is in.
+        await _idp.PrepareServerAsync(_env);
+
         // Replace the fake provider so the login goes to the real one without a picker.
         await _env.PatchConfigAsync(config => config["Providers"] = new JsonArray
         {
@@ -70,6 +81,8 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
                 ["Enabled"] = true,
                 ["Authority"] = _idp.Authority,
                 ["ClientId"] = _idp.ClientId,
+                ["ClientType"] = _idp.Confidential ? 1 : 0,
+                ["ConfidentialSecretRef"] = _idp.ConfidentialSecretRef,
                 ["Scopes"] = new JsonArray(_idp.Scopes.Select(s => (JsonNode)s!).ToArray()),
                 ["GroupsClaim"] = _idp.GroupsClaim,
                 ["GroupsFromUserInfo"] = _idp.GroupsFromUserInfo,

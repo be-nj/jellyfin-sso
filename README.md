@@ -204,7 +204,9 @@ the suites hold. Only this one is mutation tested (70 %, floor 65, over the file
   for a reviewer and are not the same thing, and `docs/reviews/` was written by the model
   that wrote the code. Counting approving pull-request reviews would say little: 9p4 has
   none either across 56, which measures push rights rather than reading.
-- **No SAML**, and only Authentik, Keycloak and Authelia are set up and tested.
+- **No SAML**, and only Authentik, Keycloak and Authelia are set up and tested. There is
+  a guide for [Tinyauth](docs/tinyauth.md) as well, written against a login walked by
+  hand; it is not in the test matrix, and that page says what it costs.
 
 If that is disqualifying — it reasonably might be — K0lin's is the active fork on
 Jellyfin 12.
@@ -285,6 +287,7 @@ Errors: [Troubleshooting](docs/troubleshooting.md). Locked out:
 |---|---|
 | [Requirements and versions](docs/requirements.md) | Which build fits which Jellyfin, addresses, reachability |
 | [Authentik](docs/authentik.md) · [Keycloak](docs/keycloak.md) · [Authelia](docs/authelia.md) | The work on the provider's side |
+| [Tinyauth](docs/tinyauth.md) | A fourth provider, guided but not in the test matrix |
 | [Configuration reference](docs/configuration.md) | Every field on the plugin page |
 | [Linking accounts](docs/linking.md) | The IdP subject, manual and self-service linking |
 | [Login button and logout](docs/login-and-logout.md) | Branding button, signing out of the provider too |
