@@ -369,7 +369,6 @@ public sealed class ConfigPageTests : IAsyncLifetime
                 ["Sub"] = "sub-invented",
                 ["JellyfinUserId"] = Guid.NewGuid().ToString(),
             });
-            config["SeenGroups"] = new JsonArray("invented-group");
         });
 
         Assert.Equal(System.Net.HttpStatusCode.OK, result.Status);
@@ -377,9 +376,6 @@ public sealed class ConfigPageTests : IAsyncLifetime
         var saved = await _env.PluginConfigAsync();
         var kept = Assert.Single(saved["Links"]!.AsArray());
         Assert.Equal(sub, kept!["Sub"]!.GetValue<string>());
-        Assert.DoesNotContain(
-            "invented-group",
-            saved["SeenGroups"]!.AsArray().Select(g => g!.GetValue<string>()));
     }
 
     /// <summary>

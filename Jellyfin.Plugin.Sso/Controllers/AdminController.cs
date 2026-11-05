@@ -63,18 +63,20 @@ public sealed class AdminController : ControllerBase
 
         lock (Plugin.ConfigurationLock)
         {
-            // Links and seen groups are not the page's to send. They have their own
-            // endpoints, they change while a page is open — a login links an account, an
-            // administrator removes a link on the other tab — and the page posts the
-            // snapshot it loaded with. Saving a provider therefore used to write that
-            // snapshot back: a link removed on the Links tab reappeared, and the identity
-            // it belonged to signed into that account again; a link created while the page
-            // was open vanished, and that person's next login was refused as a username
-            // collision until somebody linked them by hand. Whatever arrives in the body,
-            // the live lists win.
-            var live = Plugin.Instance!.Configuration;
-            config.Links = live.Links;
-            config.SeenGroups = live.SeenGroups;
+            // Links are not the page's to send. They have their own endpoints, they change
+            // while a page is open — a login links an account, an administrator removes a
+            // link on the other tab — and the page posts the snapshot it loaded with.
+            // Saving a provider therefore used to write that snapshot back: a link removed
+            // on the Links tab reappeared and the identity it belonged to signed into that
+            // account again; a link created while the page was open vanished, and that
+            // person's next login was refused as a username collision until somebody
+            // linked them by hand. Whatever arrives in the body, the live links win.
+            //
+            // SeenGroups is different and stays writable. It is a list of group names the
+            // plugin has been told about, for the suggestions on this page; a save from a
+            // stale page loses a name or two, and the next login that carries them puts
+            // them back. Nothing decides anything on it.
+            config.Links = Plugin.Instance!.Configuration.Links;
 
             // Inside the lock, because this replaces the whole configuration object and
             // every other writer mutates the live one under this lock. Outside it, a

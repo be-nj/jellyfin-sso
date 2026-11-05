@@ -157,8 +157,9 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
                 Mapping("kids", admin: false, KidsLibraryId),
                 Mapping("jellyfin-admins", admin: true),
             },
-            // Both are ignored by the server and cleared above; sent as empty so the
-            // shape of this body still matches what the page posts.
+            // Links are ignored by the server and cleared above, through their own
+            // endpoint; sent as empty so this body still has the shape the page posts.
+            // SeenGroups is a suggestion list and is writable, so this does clear it.
             ["Links"] = new JsonArray(),
             ["SeenGroups"] = new JsonArray(),
             // Every test in this suite reaches the server from the same address, and a
