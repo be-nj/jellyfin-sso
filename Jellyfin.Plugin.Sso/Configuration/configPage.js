@@ -143,7 +143,11 @@ function save(view) {
     var cfg = {
         Providers: providers,
         GroupMappings: collectMappings(view),
-        Links: (_config && _config.Links) || [],
+        // Links are not sent: the server keeps the live ones whatever arrives here,
+        // because this page holds the snapshot it loaded with and links change underneath
+        // it — a login links an account, the Links tab removes one. Sending them wrote
+        // the snapshot back and resurrected removed links.
+        Links: [],
         SeenGroups: (_config && _config.SeenGroups) || [],
         RequireMappedGroup: getChk(view, 'RequireMappedGroup'),
         PreserveAdminPermissions: getChk(view, 'PreserveAdminPermissions'),
