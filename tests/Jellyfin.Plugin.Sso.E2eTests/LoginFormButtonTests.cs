@@ -73,12 +73,12 @@ public sealed class LoginFormButtonTests : IAsyncLifetime
     {
         await EnableAsync();
 
-        var context = await _browser.NewContextAsync(new BrowserNewContextOptions
+        await using var traced = await TracedContext.StartAsync(_browser, new BrowserNewContextOptions
         {
             BaseURL = _env.BaseUrl,
             IgnoreHTTPSErrors = true,
         });
-        var page = await context.NewPageAsync();
+        var page = await traced.NewPageAsync();
         await page.GotoAsync("/web/index.html#/login.html");
 
         var button = page.Locator("a.sso-form-button");
@@ -103,12 +103,12 @@ public sealed class LoginFormButtonTests : IAsyncLifetime
         await EnableAsync();
         _env.Idp.NextUser = new FakeUser("sub-form-click", "formclickuser", ["media"]);
 
-        await using var context = await _browser.NewContextAsync(new BrowserNewContextOptions
+        await using var traced = await TracedContext.StartAsync(_browser, new BrowserNewContextOptions
         {
             BaseURL = _env.BaseUrl,
             IgnoreHTTPSErrors = true,
         });
-        var page = await context.NewPageAsync();
+        var page = await traced.NewPageAsync();
         await page.GotoAsync("/web/index.html#/login.html");
 
         var button = page.Locator("a.sso-form-button").First;
@@ -144,12 +144,12 @@ public sealed class LoginFormButtonTests : IAsyncLifetime
         await EnableAsync();
         _env.Idp.NextUser = new FakeUser("sub-profile", "profileuser", ["media"]);
 
-        await using var context = await _browser.NewContextAsync(new BrowserNewContextOptions
+        await using var traced = await TracedContext.StartAsync(_browser, new BrowserNewContextOptions
         {
             BaseURL = _env.BaseUrl,
             IgnoreHTTPSErrors = true,
         });
-        var page = await context.NewPageAsync();
+        var page = await traced.NewPageAsync();
         await page.GotoAsync("/web/index.html#/login.html");
 
         var button = page.Locator("a.sso-form-button").First;

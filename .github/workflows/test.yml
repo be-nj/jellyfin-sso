@@ -154,6 +154,7 @@ jobs:
             tests/runs/dotnet/results/
             tests/runs/playwright/*.png
             tests/runs/playwright/*.html
+            tests/runs/playwright/*.trace.zip
           if-no-files-found: ignore
 
   # Real identity providers in containers: slower, and separate so a Keycloak or Authelia
@@ -190,4 +191,5 @@ jobs:
             tests/runs/dotnet/results/
             tests/runs/playwright/*.png
             tests/runs/playwright/*.html
+            tests/runs/playwright/*.trace.zip
           if-no-files-found: ignore

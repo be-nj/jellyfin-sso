@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Playwright;
@@ -72,7 +73,8 @@ public sealed class PrefixedDeploymentTests : IAsyncLifetime
     public async Task The_configuration_page_loads_under_a_sub_path()
     {
         var requests = new List<string>();
-        var page = await DashboardAsync(requests);
+        var (dashboard, page) = await DashboardAsync(requests);
+        await using var owned = dashboard;
 
         await page.GotoAsync(
             $"{_proxy.BaseUrl}/web/index.html#/configurationpage?name=SSO%20Authentication");
@@ -118,11 +120,11 @@ public sealed class PrefixedDeploymentTests : IAsyncLifetime
     {
         _env.Idp.NextUser = new FakeUser("sub-prefixed-browser", "prefixedbrowser", ["media"]);
 
-        await using var context = await _browser.NewContextAsync(new BrowserNewContextOptions
+        await using var traced = await TracedContext.StartAsync(_browser, new BrowserNewContextOptions
         {
             IgnoreHTTPSErrors = true,
         });
-        var page = await context.NewPageAsync();
+        var page = await traced.NewPageAsync();
         var console = new List<string>();
         page.Console += (_, m) => console.Add($"{m.Type}: {m.Text}");
 
@@ -169,13 +171,20 @@ public sealed class PrefixedDeploymentTests : IAsyncLifetime
         Assert.DoesNotContain("login.html", page.Url);
     }
 
-    /// <summary>The dashboard, signed in as the administrator, with its requests recorded.</summary>
-    private async Task<IPage> DashboardAsync(List<string> requests)
+    /// <summary>
+    /// The dashboard, signed in as the administrator, with its requests recorded.
+    ///
+    /// The context is handed back rather than owned here: a helper that disposed it would
+    /// hand the caller a page whose browser context is already gone, which is a confusing
+    /// way to fail and was one commit's worth of exactly that.
+    /// </summary>
+    private async Task<(TracedContext Traced, IPage Page)> DashboardAsync(
+        List<string> requests, [CallerMemberName] string name = "dashboard")
     {
-        var context = await _browser.NewContextAsync(new BrowserNewContextOptions
-        {
-            IgnoreHTTPSErrors = true,
-        });
+        var traced = await TracedContext.StartAsync(
+            _browser,
+            new BrowserNewContextOptions { IgnoreHTTPSErrors = true },
+            name);
 
         var credentials = new JsonObject
         {
@@ -194,13 +203,13 @@ public sealed class PrefixedDeploymentTests : IAsyncLifetime
             },
         };
 
-        await context.AddInitScriptAsync(
+        await traced.Context.AddInitScriptAsync(
             "window.localStorage.setItem('jellyfin_credentials', "
             + JsonSerializer.Serialize(credentials.ToJsonString()) + ");"
             + "window.localStorage.setItem('_deviceId2', 'e2e-prefixed');");
 
-        var page = await context.NewPageAsync();
+        var page = await traced.NewPageAsync();
         page.Request += (_, request) => requests.Add(request.Url);
-        return page;
+        return (traced, page);
     }
 }
