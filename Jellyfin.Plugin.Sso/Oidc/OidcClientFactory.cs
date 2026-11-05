@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net.Http.Headers;
+using Duende.IdentityModel;
 using Duende.IdentityModel.Client;
 using Microsoft.IdentityModel.Tokens;
 using Jellyfin.Plugin.Sso.Configuration;
@@ -52,16 +53,30 @@ public sealed class OidcClientFactory : IDisposable
         _logger.LogInformation("Fetching OIDC discovery for provider {Name} ({Authority})",
             provider.Name, provider.Authority);
 
-        // Authentik (and some other IdPs) use a shared authorize endpoint
-        // (e.g. /application/o/authorize/) that differs from the per-app issuer path.
-        // IdentityModel's strict endpoint validation rejects this — disable it.
+        // Authentik publishes most of its endpoints on a shared path
+        // (/application/o/token/, /application/o/authorize/ and so on) while the issuer is
+        // per-application (/application/o/<slug>/). The library's endpoint validation
+        // demands that every endpoint sit under the authority URL, which that layout fails,
+        // and both checks were switched off to get past it.
+        //
+        // That gave away far more than the paths it was about. Without endpoint validation
+        // the document may name a jwks_uri, a token endpoint and an end-session endpoint on
+        // any host at all; without issuer validation its issuer need not match the
+        // configured authority, and that same unchecked value is then used as the expected
+        // issuer when tokens are validated, which makes the check circular. Anyone able to
+        // serve the discovery document at the configured address could point the signing
+        // keys at themselves and mint tokens for any user.
+        //
+        // The issuer check is back on, because every provider this is tested against names
+        // an issuer that matches. Paths stay unvalidated, because that is the part Authentik
+        // genuinely does differently — and the host is checked instead, below, which is
+        // what the concern was actually about.
         using var request = new DiscoveryDocumentRequest
         {
             Address = provider.Authority,
             Policy = new DiscoveryPolicy
             {
                 ValidateEndpoints = false,
-                ValidateIssuerName = false,
             },
         };
 
@@ -71,8 +86,50 @@ public sealed class OidcClientFactory : IDisposable
             throw new InvalidOperationException(
                 $"OIDC discovery failed for {provider.Authority}: {doc.Error}");
 
+        RequireEndpointsOnTheAuthoritysHost(
+            provider.Authority,
+            ("jwks_uri", doc.JwksUri),
+            ("token_endpoint", doc.TokenEndpoint),
+            ("userinfo_endpoint", doc.UserInfoEndpoint),
+            ("end_session_endpoint", doc.EndSessionEndpoint));
+
         _cache[cacheKey] = new CacheEntry(doc, DateTimeOffset.UtcNow.Add(CacheTtl));
         return doc;
+    }
+
+    /// <summary>
+    /// Refuses a discovery document that moves an endpoint to another host.
+    ///
+    /// The paths are the provider's business — Authentik's differ from its issuer by
+    /// design — but the host is not. These four are where the client secret and the
+    /// authorization code are sent, where the keys that decide whether a token is genuine
+    /// come from, and where a user's ID token is sent as a logout hint. A document that
+    /// names another host for any of them is not a layout quirk.
+    /// </summary>
+    internal static void RequireEndpointsOnTheAuthoritysHost(
+        string? authorityUrl, params (string Name, string? Value)[] endpoints)
+    {
+        if (!Uri.TryCreate(authorityUrl, UriKind.Absolute, out var authority))
+        {
+            throw new InvalidOperationException(
+                $"The authority '{authorityUrl}' is not an absolute URL.");
+        }
+
+        foreach (var (name, value) in endpoints)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                continue;
+            }
+
+            if (!Uri.TryCreate(value, UriKind.Absolute, out var endpoint)
+                || !string.Equals(endpoint.Host, authority.Host, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"The discovery document for {authorityUrl} puts its {name} on another "
+                    + "host. Refusing it: that endpoint decides whether a login is genuine.");
+            }
+        }
     }
 
     /// <summary>
