@@ -133,13 +133,25 @@ provider's does.
 
 ## Still missing, and said so
 
-`ManualAddress` and the configuration page are now asserted by unit tests on the generated
-text and on the absence of a root-relative address. That is decisive for the defect and it
-is not the same evidence as running them: a browser cannot send `X-Forwarded-Prefix`, so a
-prefixed browser run needs a proxy in front of the server or Jellyfin's own base-URL
-setting inside the container.
-[#206](https://github.com/be-nj/jellyfin-sso/issues/206) holds that, as test debt with a
-name rather than a gap recorded as covered.
+`ManualAddress` and the configuration page were first held only by unit tests on the
+generated text and on the absence of a root-relative address — decisive for the defect, and
+not the same evidence as running them. That gap was filed as
+[#206](https://github.com/be-nj/jellyfin-sso/issues/206) rather than recorded as covered,
+and it is now closed: `PrefixedProxy` puts nginx in front of the Jellyfin container,
+publishing it under `/jellyfin` over TLS and stripping the prefix on the way through, and
+`PrefixedDeploymentTests` drives a browser against it. Both tests fail against the code as
+it was before this review and pass after it, which is the evidence the unit tests could not
+give.
+
+Two things that walk came out of building it. The first run was refused by the provider
+with `redirect_uri is not registered: https://host.docker.internal/jellyfin/sso/...` — no
+port. nginx's `$host` drops it where `$http_host` keeps it, and the plugin builds the
+redirect URI it registers out of that header, so the proxy has to pass the one with the
+port in it. A deployment on 443 would never have shown it. The second was a flake of the
+ordinary kind: reading `localStorage` straight after the credentials appear lands in the
+middle of the handoff's own navigation and dies with "execution context was destroyed". The
+test now waits for the web client to have adopted the session first, which is both the
+stronger assertion and the one that survives the navigation.
 
 ## Method, theirs and ours
 
