@@ -110,16 +110,29 @@ to be enabled server-side.
 - The **Session Bridge** consumes the **Ephemeral Secret** to make Jellyfin mint a token
 - First login (unknown `sub`) triggers **JIT Provisioning** of a new Jellyfin user
 - A **Link** binds one **Identity Anchor** (`sub`) to one Jellyfin UserId
-- Linking an *existing* Jellyfin account is a manual admin action only
+- Linking an *existing* Jellyfin account is either an administrator's action on the Links
+  tab or the account holder's own, through **Self-Service Linking** — never something a
+  login does by itself, because a login that adopted an account by name would be a way
+  to walk into somebody else's
 - A JIT username collision with an existing Jellyfin user → login rejected with an
   admin-facing message (never silent rename, never auto-adopt)
 - **Web Login Path** and **Quick Connect Path** are the two ways a client reaches the bridge
 - A **Group Mapping** associates one **Group** with a set of libraries
 - **Declarative Sync** applies all matching **Group Mappings** on every login, overwriting
   Jellyfin's per-user access
-- A user with no matching **Group Mapping** is still allowed in (JIT account created) but
-  sees zero libraries until a mapping exists. (Assumes the IdP gates who may reach the
-  plugin at all.)
+- A user with no matching **Group Mapping** is still allowed in by default (JIT account
+  created) but sees zero libraries until a mapping exists — the assumption being that the
+  IdP gates who may reach the plugin at all. An operator who cannot make that assumption
+  turns on *Refuse logins that match no mapping*, and then such a login is turned away
+  before an account exists
+- Removing a **Link** ends that account's Jellyfin sessions, whoever removes it.
+  Back-channel logout finds an account through its link and nothing else, so a link
+  removed without that leaves tokens the provider can no longer end and Jellyfin does not
+  expire
+- The bookkeeping half of a login — is this the last administrator, has this identity been
+  linked, does this username exist — runs one login at a time. Each of those is a question
+  followed by a change, and two logins overlapping there could both demote the last two
+  administrators or write two links for one account
 
 ## Persistence
 
@@ -130,12 +143,14 @@ Secrets** are in-memory only. No separate database.
 
 ## Build target
 
-Pins to a single Jellyfin version (`Jellyfin.Controller` must match the server's install
-version exactly or the plugin shows `NotSupported`). Target: **12.1.0** (the server on
-`diana.home`), `net10.0`. Bump in lockstep with the server.
+`Jellyfin.Controller` **12.0.0**, `net10.0`. The reference decides the `targetAbi` written
+into the manifest, and Jellyfin hides a version whose `targetAbi` is newer than the server
+— so the lowest version the plugin is built against is the widest audience it reaches, and
+the suite runs against 12.0, 12.1 and 12.2 to say that holds.
 
-Distribution: manual DLL drop during dev; a `manifest.json` + versioned zip hosted on
-gitea releases once stable (dashboard install/update).
+Distribution: a `manifest.json` plus a versioned zip on this repository's GitHub releases,
+which the dashboard installs and updates from. `jf.be-nj.net/m.json` is the same file under
+a shorter name.
 
 ## Flagged ambiguities
 

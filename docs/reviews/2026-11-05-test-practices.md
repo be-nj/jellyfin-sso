@@ -50,9 +50,13 @@ for eleven browser tests is a cheaper price than a second CI run — and they la
 `tests/runs/playwright`, which is gitignored and which CI uploads with the other artifacts
 when a job fails.
 
-Adopted in the three classes that drive a login end to end. The other five browser classes
-still open their contexts directly; that is written down as
-[#209](https://github.com/be-nj/jellyfin-sso/issues/209) rather than described as finished.
+Adopted in every browser class that drives the plugin. `ConfigPageTests` and
+`LoginButtonLayoutTests` keep a context for the length of a test and write their traces at
+teardown; `RealIdentityProviderTests` — the slowest tier, three real providers, and the one
+where a CI-only failure costs the most to chase — owns its contexts per helper.
+`ScreenshotTests` and `DemoRecordingTests` are left out on purpose: they exist to produce
+a picture and a video, a person runs them on demand and watches them do it, and a trace of
+a recording is weight without a question it answers.
 
 ## What was missing: the fixture put back as it was
 
