@@ -437,6 +437,14 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
         return Guid.Parse(created["Id"]!.GetValue<string>());
     }
 
+    /// <summary>
+    /// Writes a file inside the server container. One provider needs it: a confidential
+    /// client's secret is only ever named by path in the plugin's configuration, never
+    /// held in it, so the path has to exist on the server's own filesystem.
+    /// </summary>
+    public Task WriteServerFileAsync(string path, string content)
+        => _jellyfin.CopyAsync(System.Text.Encoding.UTF8.GetBytes(content), path);
+
     public async Task<string> ServerLogsAsync() => (await _jellyfin.GetLogsAsync()).Stdout;
 
     // ─── Setup helpers ────────────────────────────────────────────────────────

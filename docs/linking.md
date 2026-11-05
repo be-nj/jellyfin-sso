@@ -27,6 +27,12 @@ In username mode a rename at the provider breaks that person's link, and a usern
 is later given to someone else would reach the old account. It is a good fit when
 usernames in your directory are never reused, and worth avoiding otherwise.
 
+### Tinyauth: the subject moves with the username
+
+Tinyauth derives `sub` from the client id and the username, so it behaves like Authentik's
+username mode without the choice: rename somebody and their link breaks, recreate the OIDC
+client and every link breaks at once. [Tinyauth](tinyauth.md) has the rest.
+
 ## Manual linking
 
 **Account Links** tab:

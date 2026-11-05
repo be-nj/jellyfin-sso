@@ -8,6 +8,8 @@ The [README](../README.md) installs the plugin and walks the setup. The detail i
   addresses, reachability
 - [Authentik](authentik.md) · [Keycloak](keycloak.md) · [Authelia](authelia.md) — the work
   on the provider's side
+- [Tinyauth](tinyauth.md) — a fourth provider, guided but not in the test matrix, and what
+  that costs
 - [Configuration reference](configuration.md) — every field on the plugin page
 - [Linking accounts](linking.md) — the IdP subject, manual and self-service linking
 
