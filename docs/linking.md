@@ -55,8 +55,14 @@ attaches the identity. An identity already linked to a different Jellyfin accoun
 refused; only an administrator can move a link.
 
 Users cannot unlink from the web client. An administrator removes links on the **Account
-Links** tab; `DELETE /sso/link/self` with the user's own token exists, but nothing calls
-it.
+Links** tab, and a user can remove their own with
+`DELETE /sso/link/self?providerId=…` and their own token — nothing in the interface calls
+it, but it is live, so it is worth knowing what it does.
+
+Unlinking yourself ends your Jellyfin sessions. The link is how a logout announced by the
+provider finds the account, so an account without one holds tokens the provider can no
+longer end, and Jellyfin's tokens do not expire on their own. The provider has to be
+named: without one, this used to remove every link the caller had.
 
 Linking grants nothing. Libraries and the admin flag come from the groups at the next
 login.

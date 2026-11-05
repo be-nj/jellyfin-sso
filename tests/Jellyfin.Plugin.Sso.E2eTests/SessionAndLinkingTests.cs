@@ -231,13 +231,57 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
         _env.Idp.NextUser = new FakeUser("sub-unlinker", "unlinker", ["media"]);
         await FollowAsync(authorizeUrl, browser);
 
-        using var client = JellyfinEnvironment.TrustingClient();
-        using var request = new HttpRequestMessage(HttpMethod.Delete, $"{_env.BaseUrl}/sso/link/self");
-        request.Headers.Authorization = JellyfinEnvironment.TokenHeader(token);
-        var response = await client.SendAsync(request);
+        var response = await UnlinkAsync(token, JellyfinEnvironment.ProviderId);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Empty((await _env.PluginConfigAsync())["Links"]!.AsArray());
+    }
+
+    /// <summary>
+    /// Back-channel logout finds an account through its link and nothing else, so an
+    /// account that unlinked itself used to keep tokens the provider could no longer end.
+    /// One authenticated request, no administrator rights, and a disabled account at the
+    /// provider revoked "0 account(s)" while the tokens kept working — Jellyfin's do not
+    /// expire. Unlinking ends them now.
+    /// </summary>
+    [Fact]
+    public async Task Unlinking_ends_the_sessions_it_would_otherwise_orphan()
+    {
+        var login = await _env.StartWebLoginAsync(
+            new FakeUser("sub-orphan", "orphanuser", ["media"]));
+        Assert.True(login.Succeeded, login.Body);
+
+        var auth = await _env.AuthenticateAsync("orphanuser", login.Secret!);
+        var token = JsonNode.Parse(await auth.Content.ReadAsStringAsync())!["AccessToken"]!
+            .GetValue<string>();
+        Assert.Equal(HttpStatusCode.OK, await WhoAmIAsync(token));
+
+        var response = await UnlinkAsync(token, JellyfinEnvironment.ProviderId);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // The token that asked for the unlink is gone with the link.
+        Assert.Equal(HttpStatusCode.Unauthorized, await WhoAmIAsync(token));
+    }
+
+    [Fact]
+    public async Task Unlinking_needs_the_provider_named()
+    {
+        var (_, token) = await _env.CreateLocalUserWithTokenAsync("vague");
+
+        var response = await UnlinkAsync(token, providerId: null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Unlinking_is_refused_while_self_service_linking_is_off()
+    {
+        var (_, token) = await _env.CreateLocalUserWithTokenAsync("switchedoff");
+        await _env.PatchConfigAsync(config => config["AllowSelfServiceLinking"] = false);
+
+        var response = await UnlinkAsync(token, JellyfinEnvironment.ProviderId);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
@@ -525,6 +569,26 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         return JsonNode.Parse(body)!["AuthorizeUrl"]!.GetValue<string>();
+    }
+
+    private async Task<HttpResponseMessage> UnlinkAsync(string token, string? providerId)
+    {
+        var url = $"{_env.BaseUrl}/sso/link/self"
+            + (providerId is null ? string.Empty : $"?providerId={providerId}");
+
+        using var client = JellyfinEnvironment.TrustingClient();
+        using var request = new HttpRequestMessage(HttpMethod.Delete, url);
+        request.Headers.Authorization = JellyfinEnvironment.TokenHeader(token);
+        return await client.SendAsync(request);
+    }
+
+    private async Task<HttpStatusCode> WhoAmIAsync(string token)
+    {
+        using var client = JellyfinEnvironment.TrustingClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{_env.BaseUrl}/Users/Me");
+        request.Headers.Authorization = JellyfinEnvironment.TokenHeader(token);
+        using var response = await client.SendAsync(request);
+        return response.StatusCode;
     }
 
     /// <summary>Walks a redirect chain by hand, keeping one client — and one cookie jar.</summary>
