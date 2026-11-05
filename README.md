@@ -177,7 +177,7 @@ same way for each of the four, this one included.
 
 | | Since | Latest | ★ | Licence | Written by AI | Tests |
 |---|---|---|---:|---|---|---|
-| **This one** | 2026-09 | v1.12.17 · 2026-11 | 3 | MIT → GPLv3 | **144 of 172** commits | 498 + 141 |
+| **This one** | 2026-09 | v1.12.18 · 2026-11 | 3 | MIT → GPLv3 | **144 of 172** commits | 498 + 141 |
 | K0lin | 2026-06 | v5.1.1 · 2026-09 | 176 | GPL-3.0 | none from an AI | 68 |
 | Ezeqielle | 2026-05 | v1.0.10 · 2026-09 | 41 | GPL-3.0 | 33 of last 100 | 16 |
 | 9p4 | 2022-01 | v4.0.0.4 · archived | 1,453 | GPL-3.0 | none from an AI | none |
