@@ -77,6 +77,7 @@ function load(view) {
         setChk(view, 'InjectLoginButtonIntoForm', !!_config.InjectLoginButtonIntoForm);
         setChk(view, 'AllowSelfServiceLinking', !!_config.AllowSelfServiceLinking);
         setChk(view, 'SyncProfilePictures', !!_config.SyncProfilePictures);
+        setChk(view, 'AllowPrivateNetworkPictures', !!_config.AllowPrivateNetworkPictures);
         // A saved 0 means off and has to survive the round trip, so only a missing
         // value falls back to the default.
         setVal(view, 'LoginRequestsPerMinute',
@@ -152,6 +153,7 @@ function save(view) {
         InjectLoginButtonIntoForm: getChk(view, 'InjectLoginButtonIntoForm'),
         AllowSelfServiceLinking: getChk(view, 'AllowSelfServiceLinking'),
         SyncProfilePictures: getChk(view, 'SyncProfilePictures'),
+        AllowPrivateNetworkPictures: getChk(view, 'AllowPrivateNetworkPictures'),
         LoginRequestsPerMinute: rateLimit(view),
         SyncExcludedUserIds: collectExcluded(view),
     };

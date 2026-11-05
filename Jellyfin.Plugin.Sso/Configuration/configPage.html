@@ -233,6 +233,20 @@
                 excluded from group sync below keep their own picture either way.
               </div>
             </div>
+            <div class="checkboxContainer">
+              <label>
+                <input id="AllowPrivateNetworkPictures" type="checkbox" is="emby-checkbox" />
+                <span>Allow profile pictures from this network</span>
+              </label>
+              <div class="fieldDescription">
+                Off, a picture is fetched only from the provider's own address or from a
+                public one. On many providers the picture is an attribute the user can
+                edit, and the request is made by the server — so without this, a picture
+                pointing at another machine here, or at this one, is refused rather than
+                fetched and handed back. Turn it on if the household serves its avatars
+                from a second machine on the same network.
+              </div>
+            </div>
             <div class="inputContainer">
               <label class="inputLabel" for="LoginRequestsPerMinute">
                 Login requests per minute, per address
