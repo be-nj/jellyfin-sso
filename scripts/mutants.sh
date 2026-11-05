@@ -9,12 +9,13 @@
 #
 # What the score covers, because the number is quoted in the README and deserves its
 # footnote: the unit suite only, and the files in stryker-config.json's `mutate` list.
-# The controllers are not in it — SsoController is a thousand lines of action methods that
-# no unit test can reach, and the end-to-end suite is not wired to Stryker at all. A
+# The controllers are not in it — an action method needs a server around it, which only the
+# end-to-end suite provides, and that suite is not wired to Stryker at all. A
 # review in November 2026 found thirteen defects and eight of them were in the part this
 # number does not measure, which is worth knowing before trusting it. The honest way to
 # widen it is to keep lifting decisions out of the actions into classes a unit test can
-# call — each of OutboundAddresses, LogoutTokenLedger and the discovery host check came
+# call — OutboundAddresses, LogoutTokenLedger, the discovery host check, and then
+# SsoAddress, SsoCookies and SelfServiceLinks when the controller was split up, each came
 # out that way, and each is in the list now.
 set -euo pipefail
 

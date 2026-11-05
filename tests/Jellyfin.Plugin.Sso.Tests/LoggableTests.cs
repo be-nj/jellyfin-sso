@@ -1,5 +1,5 @@
 using Jellyfin.Plugin.Sso.Configuration;
-using Jellyfin.Plugin.Sso.Controllers;
+using Jellyfin.Plugin.Sso.Logging;
 
 namespace Jellyfin.Plugin.Sso.Tests;
 
@@ -17,7 +17,7 @@ public sealed class LoggableTests : IDisposable
     {
         _harness.Configuration.Providers.Add(new ProviderConfig { Id = "provider-1", Name = "Authentik" });
 
-        Assert.Equal("provider-1", SsoController.KnownProviderId("provider-1"));
+        Assert.Equal("provider-1", Loggable.KnownProviderId("provider-1"));
     }
 
     [Theory]
@@ -28,7 +28,7 @@ public sealed class LoggableTests : IDisposable
     {
         _harness.Configuration.Providers.Add(new ProviderConfig { Id = "provider-1", Name = "Authentik" });
 
-        Assert.Equal("unknown", SsoController.KnownProviderId(providerId));
+        Assert.Equal("unknown", Loggable.KnownProviderId(providerId));
     }
 
     [Theory]
@@ -37,7 +37,7 @@ public sealed class LoggableTests : IDisposable
     [InlineData("invalid_scope")]
     public void A_standard_oauth_error_is_passed_through(string error)
     {
-        Assert.Equal(error, SsoController.OAuthErrorCode(error));
+        Assert.Equal(error, Loggable.OAuthErrorCode(error));
     }
 
     [Theory]
@@ -46,7 +46,7 @@ public sealed class LoggableTests : IDisposable
     [InlineData(null)]
     public void Anything_outside_RFC_6749_collapses_to_one_code(string? error)
     {
-        var code = SsoController.OAuthErrorCode(error);
+        var code = Loggable.OAuthErrorCode(error);
 
         Assert.Equal("unrecognised_error", code);
         Assert.DoesNotContain('\n', code);
@@ -59,7 +59,7 @@ public sealed class LoggableTests : IDisposable
     [InlineData("none")]
     public void A_fetch_site_the_specification_defines_is_named(string site)
     {
-        Assert.Equal(site, SsoController.NamedFetchSite(site));
+        Assert.Equal(site, Loggable.NamedFetchSite(site));
     }
 
     [Theory]
@@ -69,7 +69,7 @@ public sealed class LoggableTests : IDisposable
     [InlineData(null)]
     public void Any_other_fetch_site_is_not_echoed(string? site)
     {
-        var named = SsoController.NamedFetchSite(site);
+        var named = Loggable.NamedFetchSite(site);
 
         Assert.Equal("an unrecognised value", named);
         Assert.DoesNotContain('\n', named);
