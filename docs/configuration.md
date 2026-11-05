@@ -89,11 +89,20 @@ the provider publishes becomes the Jellyfin profile picture at every login, repl
 somebody chose in Jellyfin — so turn it on only where the provider is where the household
 keeps its photos. Users in the exclusion list keep their own picture either way.
 
-The address comes out of the token, which means the server fetches whatever it points at.
-Only absolute `http`/`https` addresses are fetched, three redirects at most, 2 MB at most,
-and only JPEG, PNG, GIF and WebP; anything else — an SVG, an HTML error page, a body that
-keeps coming — is logged and ignored. A picture that does not arrive never fails
-a login. The same picture is fetched again at the next login — the provider is the one who
+The address comes out of the token, which means the server fetches whatever it points at —
+and on several providers that attribute is one the user can edit, so the address is theirs
+while the request is the server's. Only absolute `http`/`https` addresses are fetched,
+three redirects at most **with every hop checked, not only the first**, 2 MB at most, and
+only JPEG, PNG, GIF and WebP; anything else — an SVG, an HTML error page, a body that
+keeps coming — is logged and ignored. A picture that does not arrive never fails a login.
+
+Where it may be fetched *from* is limited too. The provider's own address is always
+allowed, which is where avatars normally live, and so is any public address. An address
+that only means something from inside — loopback, a private range, a link-local address, a
+container name — is refused, because the bytes come back out again as that user's profile
+picture and a request the server makes reaches whatever the server can reach.
+**Allow profile pictures from this network** lifts that for a household that serves its
+avatars from a second machine on the same network; it changes nothing else. The same picture is fetched again at the next login — the provider is the one who
 knows whether it changed — but only written when its bytes differ, so the clients' image
 tags stay put.
 

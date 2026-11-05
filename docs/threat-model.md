@@ -43,6 +43,8 @@ its signature is checked, and the group names that arrive with it.
 | Forged log lines through a crafted provider id | Only configured ids and the fixed RFC 6749 error codes are logged | `LoggableTests` |
 | Provider name injecting markup into the login page | Names are HTML-escaped, ids URL-encoded | `A_provider_name_cannot_inject_markup` |
 | Someone else's identity linked to your account | A link to an identity another account holds is refused | `SessionAndLinkingTests` |
+| Your identity linked to someone else's account | A login can only be finished in the browser that started it: a cookie is minted when the flow begins and has to come back with the callback. Without that, an account holder could ask for an authorize URL carrying their own user id and get somebody in an administrator group to complete it — the link would attach the victim's subject to the asking account, and the victim's next login would write their groups, administrator flag included, onto it | `A_link_flow_finished_in_another_browser_is_refused`, `A_state_presented_by_another_browser_is_refused` |
+| A login completed in your browser by somebody else | The same cookie. A stranger holding a `code` and a `state` cannot have your browser spend them, so they cannot sign you in as themselves | `A_login_callback_opened_in_another_browser_is_refused` |
 | Forged back-channel logout ending a session | The logout token is checked against the provider's JWKS, issuer and audience | `A_token_signed_by_nobody_the_provider_knows_is_refused`, `A_token_signed_by_somebody_else_is_rejected` |
 | An ID token replayed as a logout token | A logout token must carry the logout event and must not carry a `nonce` | `An_id_token_cannot_be_replayed_as_a_logout_token`, `A_token_without_the_logout_event_is_rejected` |
 | A captured logout token replayed | Each accepted token is remembered for longer than it could stay valid and refused the second time, and `iat` is required and may be at most five minutes old in any case | `A_token_captured_earlier_cannot_be_replayed_later`, `The_same_logout_token_cannot_be_used_twice` |
@@ -55,6 +57,13 @@ its signature is checked, and the group names that arrive with it.
 
 ## Known gaps
 
+- **This model was written by the same model that wrote the code**, and a review of the
+  whole plugin in November 2026 found thirteen things it had not accounted for — one of
+  them a way for any account holder to end up an administrator
+  ([#126](https://github.com/be-nj/jellyfin-sso/issues/126)). Every one is fixed and
+  tested, and the rows above were corrected where they had claimed more than the code
+  did. That is the honest status of this document: it is a record of what has been thought
+  about, not evidence that enough has been.
 - **A group change waits for the next login.** Removing someone from a group at the
   provider changes their permissions only when they sign in again. A session *ended* at
   the provider now ends in Jellyfin too, where the provider sends back-channel logout
@@ -62,6 +71,12 @@ its signature is checked, and the group names that arrive with it.
   [Back-channel logout](login-and-logout.md#back-channel-logout). Changing a group without
   ending the session still needs Jellyfin's own user screen, or ending the session under
   Dashboard → Devices. See [Security notes](security.md).
+- **A forwarded header is taken from whoever sent the request.** The plugin reads
+  `X-Forwarded-Prefix`, `-Host` and `-Proto` itself rather than through Jellyfin's
+  known-proxy handling, so what they are allowed to contain is the whole of the defence:
+  a prefix has to look like a path, a host like a host, and the pages escape both again
+  for the context they land in. A proxy that strips client-supplied forwarded headers —
+  most do not by default — closes this properly.
 - **Quick Connect needs the person to approve.** Opening `/sso/oidc/start/qc?code=…` and
   signing in no longer authorizes the code on its own — the login ends on a page that
   names the account and shows the code, and approval is a separate click
