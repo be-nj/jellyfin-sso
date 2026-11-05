@@ -540,10 +540,12 @@ public sealed class SsoController : ControllerBase
                 "This provider is not configured correctly, so the login could not be "
                 + "completed. The server log says what is wrong.");
         }
-        catch (SecurityTokenException ex)
+        catch (Exception ex) when (ex is SecurityTokenException or ArgumentException)
         {
             // A token that does not validate is a refusal, not a server fault. Without
             // this the exception middleware answered 500 and put its message in the body.
+            // ArgumentException belongs here too: a token the library will not even parse
+            // — a registered claim carrying an object or an array — fails that way.
             _logger.LogWarning(
                 "Rejected a token from provider {Id}: {Reason}",
                 KnownProviderId(providerId), ex.Message);

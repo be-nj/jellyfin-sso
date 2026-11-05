@@ -124,13 +124,13 @@ public sealed class ClaimsExtractor
         // at an attribute that is empty for some users sends "sub": "", and an empty
         // string is a perfectly good dictionary key: the first such login would create
         // the link, and every later one would match it and sign in to that account.
-        var sub = Trimmed(principal.FindFirst("sub")?.Value)
+        var sub = Trimmed(PlainString(principal, "sub"))
             ?? throw new SecurityTokenException(
-                "The ID token's 'sub' claim is missing or empty. The subject is what this "
-                + "plugin matches an account on, so check which attribute the provider "
-                + "maps to 'sub'.");
-        var username = principal.FindFirst("preferred_username")?.Value
-            ?? principal.FindFirst("name")?.Value
+                "The ID token's 'sub' claim is missing, empty, or not a single value. The "
+                + "subject is what this plugin matches an account on, so check which "
+                + "attribute the provider maps to 'sub'.");
+        var username = Trimmed(PlainString(principal, "preferred_username"))
+            ?? Trimmed(PlainString(principal, "name"))
             ?? sub;
 
         // A picture is one string where groups are many, but both arrive the same way —
@@ -158,6 +158,30 @@ public sealed class ClaimsExtractor
     /// roles without a mapper (`realm_access.roles`) and where Entra ID keeps a client's
     /// (`resource_access.&lt;client&gt;.roles`).
     /// </summary>
+    /// <summary>
+    /// A claim's value when it is one plain string, and null when it is anything else.
+    ///
+    /// A JSON object or array arrives here as its own JSON text — the library records the
+    /// shape in the claim's value type and hands over the serialised form — so reading
+    /// the value directly turned a provider sending
+    /// <c>"preferred_username": {"given": "ben"}</c> into a Jellyfin account literally
+    /// called <c>{"given":"ben"}</c>. These three claims name one person each; a
+    /// structure is a misconfiguration, not a name.
+    /// </summary>
+    private static string? PlainString(ClaimsPrincipal principal, string claim)
+    {
+        var found = principal.FindFirst(claim);
+        if (found is null)
+        {
+            return null;
+        }
+
+        return found.ValueType is JsonClaimValueTypes.Json or JsonClaimValueTypes.JsonArray
+            or JsonClaimValueTypes.JsonNull
+            ? null
+            : found.Value;
+    }
+
     /// <summary>
     /// Null for a value that is absent or only whitespace. The logout token validator has
     /// always treated a blank subject as no subject; this is the same rule on the login

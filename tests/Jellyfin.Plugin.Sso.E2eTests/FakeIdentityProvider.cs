@@ -47,6 +47,18 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
 
     /// <summary>Signs the next token with a key that is not in the published key set.</summary>
     public bool SignWithAStrangersKey { get; set; }
+
+    /// <summary>
+    /// The redirect URIs this provider has been told about, the way a real one is
+    /// configured. Both the authorize request and the post-logout redirect are checked
+    /// against it, because Keycloak and Authentik check theirs — and because not checking
+    /// is what let a doubled sub-path in the post-logout URL pass its own test for weeks.
+    /// Empty means the check is off, which keeps the tests that predate it working.
+    /// </summary>
+    public HashSet<string> RegisteredRedirectUris { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>How often a request named a redirect URI this provider does not know.</summary>
+    public int UnregisteredRedirectsRefused { get; private set; }
     private readonly WebApplication _app;
     private readonly ConcurrentDictionary<string, PendingCode> _codes = new();
     private readonly ConcurrentDictionary<string, FakeUser> _accessTokens = new();
@@ -238,6 +250,20 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
                 return Results.BadRequest("only S256 is supported");
             }
 
+            // Checked here and not only at the token endpoint. A real provider refuses an
+            // unregistered redirect before it shows anybody a login form, which is the
+            // difference between a misconfiguration the operator sees at once and one
+            // that surfaces as a broken callback.
+            if (!Registered(redirectUri))
+            {
+                UnregisteredRedirectsRefused++;
+                return Results.BadRequest(new
+                {
+                    error = "invalid_request",
+                    detail = $"redirect_uri is not registered: {redirectUri}",
+                });
+            }
+
             var separator = redirectUri.Contains('?') ? '&' : '?';
 
             if (NextAuthorizeError is { } error)
@@ -297,6 +323,19 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
         app.MapGet("/endsession", (
             [FromQuery(Name = "post_logout_redirect_uri")] string? postLogoutRedirectUri) =>
         {
+            // A real provider refuses a post-logout redirect it has not been given, and
+            // aborts the logout. This used to redirect wherever it was told, which is why
+            // a URL carrying the sub-path twice passed the test that asserted it.
+            if (postLogoutRedirectUri is { Length: > 0 } && !Registered(postLogoutRedirectUri))
+            {
+                UnregisteredRedirectsRefused++;
+                return Results.BadRequest(new
+                {
+                    error = "invalid_request",
+                    detail = $"post_logout_redirect_uri is not registered: {postLogoutRedirectUri}",
+                });
+            }
+
             SessionsEnded++;
             return Results.Redirect(postLogoutRedirectUri ?? "/");
         });
@@ -390,6 +429,13 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
+
+    /// <summary>
+    /// Whether this provider has been told about an address. No registrations at all means
+    /// anything goes, so a test that does not care about this does not have to say so.
+    /// </summary>
+    private bool Registered(string uri)
+        => RegisteredRedirectUris.Count == 0 || RegisteredRedirectUris.Contains(uri);
 
     private static string Challenge(string verifier)
         => Convert.ToBase64String(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)))

@@ -37,6 +37,9 @@ stated() {
 said_unit=$(stated '\*\*[0-9]+ unit tests\*\*')
 said_e2e=$(stated '\*\*[0-9]+ end-to-end tests\*\*')
 said_real=$(stated '\*\*[0-9]+ real-provider logins\*\*')
+# The prose below the table says the same number in words, and said nine while the table
+# said sixteen — because this script greps one pattern per claim and never looked here.
+said_real_words=$(grep -oE '(nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty) real-provider logins' README.md | head -1 | cut -d' ' -f1)
 said_sum=$(grep -oE '\| [0-9]+ \+ [0-9]+ \|' README.md | head -1 | grep -oE '[0-9]+ \+ [0-9]+' || true)
 
 fail=0
@@ -53,6 +56,17 @@ check() {
 check "unit tests" "$said_unit" "$unit"
 check "end-to-end tests" "$said_e2e" "$e2e_ci"
 check "real-provider logins" "$said_real" "$real"
+
+# Spelled out, so the words have to agree with the digits.
+words() {
+  case "$1" in
+    9) echo nine ;; 10) echo ten ;; 11) echo eleven ;; 12) echo twelve ;;
+    13) echo thirteen ;; 14) echo fourteen ;; 15) echo fifteen ;; 16) echo sixteen ;;
+    17) echo seventeen ;; 18) echo eighteen ;; 19) echo nineteen ;; 20) echo twenty ;;
+    *) echo "$1" ;;
+  esac
+}
+check "real-provider logins in words" "$said_real_words" "$(words "$real")"
 check "unit + end-to-end cases" "$said_sum" "$unit + $e2e_all"
 
 exit "$fail"

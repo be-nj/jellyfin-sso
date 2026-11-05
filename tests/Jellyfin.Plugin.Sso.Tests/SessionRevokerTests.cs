@@ -42,15 +42,34 @@ public sealed class SessionRevokerTests : IDisposable
         await _sessions.Received(1).RevokeUserTokens(userId, null);
     }
 
+    /// <summary>
+    /// A subject this server has never seen is not an error: a provider announces a logout
+    /// to every application somebody was signed into, including the ones that never saw
+    /// them.
+    ///
+    /// This used to be the whole story, and it was the wrong story. The test asserted the
+    /// *mechanism* — a lookup that finds nothing touches nothing — which was also exactly
+    /// what happened when somebody unlinked themselves to keep their sessions alive
+    /// (#131). A green assertion that nothing is revoked is only correct while nothing
+    /// should be; the account the logout is about is what the test has to be about, so the
+    /// case below says which account it is and that this one is not it.
+    /// </summary>
     [Fact]
-    public async Task An_identity_nobody_linked_revokes_nothing()
+    public async Task A_logout_for_a_stranger_leaves_the_accounts_we_do_know_alone()
     {
-        Link("provider-1", "ben", Guid.NewGuid());
+        var ours = Guid.NewGuid();
+        Link("provider-1", "ben", ours);
 
         var revoked = await _revoker.RevokeAsync("provider-1", "stranger");
 
         Assert.Equal(0, revoked);
-        await _sessions.DidNotReceiveWithAnyArgs().RevokeUserTokens(default, default);
+
+        // The point: our account is untouched, not merely that nothing happened.
+        await _sessions.DidNotReceive().RevokeUserTokens(ours, null);
+
+        // And the same provider announcing the subject we do know still ends that account.
+        Assert.Equal(1, await _revoker.RevokeAsync("provider-1", "ben"));
+        await _sessions.Received(1).RevokeUserTokens(ours, null);
     }
 
     [Fact]

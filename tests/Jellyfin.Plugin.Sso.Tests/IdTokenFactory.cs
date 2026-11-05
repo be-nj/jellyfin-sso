@@ -27,6 +27,39 @@ internal sealed class IdTokenFactory : IDisposable
     /// <summary>The public key material a provider would publish in its JWKS.</summary>
     public SecurityKey SigningKey => _key;
 
+    /// <summary>
+    /// Mints an ID token from a payload a test writes itself, so a claim can have a shape
+    /// the typed overload below cannot express: an array where a string belongs, an
+    /// object, a number, a duplicate. The userinfo path has been tested against those
+    /// shapes for a long time and this path never was — which is the asymmetry that let a
+    /// blank subject through, because Mint could only ever emit strings.
+    /// </summary>
+    public string MintRaw(JwtPayload payload)
+        => new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken(
+            new JwtHeader(new SigningCredentials(_key, SecurityAlgorithms.RsaSha256)),
+            payload));
+
+    /// <summary>
+    /// A payload with the claims a valid ID token carries, for a test to then spoil one of
+    /// them. Lifetimes and the nonce are already right, so a test says only what it is
+    /// about.
+    /// </summary>
+    public static JwtPayload ValidPayload(string nonce = "test-nonce")
+    {
+        var now = DateTimeOffset.UtcNow;
+        return new JwtPayload
+        {
+            { "iss", Issuer },
+            { "aud", Audience },
+            { "sub", "ben" },
+            { "preferred_username", "ben" },
+            { "nonce", nonce },
+            { "nbf", now.AddSeconds(-5).ToUnixTimeSeconds() },
+            { "exp", now.AddMinutes(5).ToUnixTimeSeconds() },
+            { "iat", now.ToUnixTimeSeconds() },
+        };
+    }
+
     public string Mint(
         string sub = "ben",
         string? preferredUsername = "ben",
