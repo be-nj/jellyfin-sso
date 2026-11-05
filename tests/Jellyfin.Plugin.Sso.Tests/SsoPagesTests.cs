@@ -148,6 +148,27 @@ public sealed class SsoPagesTests
         Assert.DoesNotContain(prefix, link, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The address the web client keeps.
+    ///
+    /// Every request the handoff makes is built from the base path, and the one value that
+    /// is not a request was not: the server entry written into jellyfin_credentials held
+    /// the origin alone. jellyfin-web resolves its API address from that entry, so a first
+    /// login under a sub-path ended with a client talking to the origin, where this server
+    /// is not. The browser test that reads this entry back has only ever run at the root.
+    /// </summary>
+    [Theory]
+    [InlineData("", "window.location.origin + base")]
+    [InlineData("/jellyfin", "window.location.origin + base")]
+    public void The_saved_server_address_carries_the_sub_path(string prefix, string expected)
+    {
+        var login = SsoPages.CompleteWebLogin(prefix, "ben", "s3cret");
+
+        Assert.Contains($"ManualAddress: {expected},", login, StringComparison.Ordinal);
+        Assert.DoesNotContain("ManualAddress: window.location.origin,", login, StringComparison.Ordinal);
+        Assert.Contains($"const base = {SsoPages.JsonEscape(prefix)};", login, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void The_approval_page_shows_the_code_and_carries_the_one_time_token()
     {

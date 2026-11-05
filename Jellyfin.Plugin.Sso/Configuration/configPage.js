@@ -2,7 +2,37 @@
  * Loaded by Jellyfin's SPA via data-controller="__plugin/SSO Authentication.js".
  * Must be an ES module; default export receives the view element. */
 
-var API = '/sso/admin';
+/* Where this server is, prefix and all.
+ *
+ * Both of these used to be written from the origin alone: the API as the root-relative
+ * '/sso/admin', and the addresses the page offers for copying as window.location.origin
+ * plus a path. On a server published under a sub-path — Jellyfin's own "Base URL" setting,
+ * or a proxy that keeps the prefix — that address is not this server: the page's own
+ * requests left the application and came back a 404, so the configuration page did not
+ * load at all, and the callback URL it told an operator to register was one the plugin
+ * would never be reached at.
+ *
+ * ApiClient knows the address the dashboard is talking to, prefix included, because every
+ * other page in Jellyfin needs the same thing. Its own path helper is used where there is
+ * one, and the address alone where the value is shown to a person. */
+function serverAddress() {
+    try {
+        if (typeof ApiClient !== 'undefined' && ApiClient.serverAddress) {
+            var address = ApiClient.serverAddress();
+            if (address) { return address.replace(/\/+$/, ''); }
+        }
+    } catch (e) { /* Fall through to the origin, which is right at the root. */ }
+
+    return window.location.origin;
+}
+
+function api(path) {
+    if (typeof ApiClient !== 'undefined' && ApiClient.getUrl) {
+        return ApiClient.getUrl('sso/admin/' + path);
+    }
+
+    return serverAddress() + '/sso/admin/' + path;
+}
 // Mirrors PluginConfiguration.DefaultLoginRequestsPerMinute.
 var DEFAULT_LOGIN_REQUESTS_PER_MINUTE = 60;
 var _libraries = [], _seenGroups = [], _users = [], _config = null;
@@ -33,7 +63,7 @@ export default function (view) {
         var sub = getVal(view, 'LinkSub').trim();
         var uid = getVal(view, 'LinkUserId');
         if (!pid || !sub || !uid) { Dashboard.alert('Provider, user and subject are all required.'); return; }
-        apiPost(API + '/links', { ProviderId: pid, Sub: sub, JellyfinUserId: uid })
+        apiPost(api('links'), { ProviderId: pid, Sub: sub, JellyfinUserId: uid })
             .then(function () {
                 setVal(view, 'LinkSub', '');
                 return populateLinkForm(view);
@@ -65,9 +95,9 @@ function setupTabs(view) {
 
 function load(view) {
     return Promise.all([
-        apiGet(API + '/config'),
-        apiGet(API + '/libraries'),
-        apiGet(API + '/seen-groups'),
+        apiGet(api('config')),
+        apiGet(api('libraries')),
+        apiGet(api('seen-groups')),
     ]).then(function (r) {
         _config = r[0]; _libraries = r[1]; _seenGroups = r[2];
         renderProviders(view, _config.Providers || []);
@@ -94,7 +124,7 @@ function load(view) {
 
 // Users are needed twice: the manual-link dropdown and the exclude-from-sync list.
 function populateUsers(view) {
-    return apiGet(API + '/users').then(function (users) {
+    return apiGet(api('users')).then(function (users) {
         _users = users;
         populateLinkForm(view);
         renderExcluded(view);
@@ -161,7 +191,7 @@ function save(view) {
         LoginRequestsPerMinute: rateLimit(view),
         SyncExcludedUserIds: collectExcluded(view),
     };
-    apiPost(API + '/config', cfg).then(function () {
+    apiPost(api('config'), cfg).then(function () {
         _config = cfg;
         renderProviders(view, providers);
         return populateUsers(view);
@@ -187,9 +217,10 @@ function buildProviderCard(p, i) {
     card.open = true;
     card.dataset.providerId = p.Id || newId();
 
+    var server = serverAddress();
     var loginUrl = '/sso/oidc/start/' + card.dataset.providerId;
-    var redirectUri = window.location.origin + '/sso/oidc/callback/' + card.dataset.providerId;
-    var logoutUri = window.location.origin + '/sso/oidc/backchannel-logout/' + card.dataset.providerId;
+    var redirectUri = server + '/sso/oidc/callback/' + card.dataset.providerId;
+    var logoutUri = server + '/sso/oidc/backchannel-logout/' + card.dataset.providerId;
     var scopes = (p.Scopes || []).join(' ');
 
     card.innerHTML =
@@ -270,7 +301,7 @@ function buildProviderCard(p, i) {
         '</div>' +
         '<div class="sso-copy-list">' +
             copyRow('Redirect URI for your provider', redirectUri) +
-            copyRow('Login URL', window.location.origin + loginUrl) +
+            copyRow('Login URL', server + loginUrl) +
             copyRow('Back-channel logout URL', logoutUri) +
             copyRow('Provider ID', card.dataset.providerId) +
         '</div>' +
@@ -501,7 +532,7 @@ function collectMappings(view) {
 // ─── Links ───────────────────────────────────────────────────────────────────
 
 function renderLinks(view) {
-    apiGet(API + '/links').then(function (links) {
+    apiGet(api('links')).then(function (links) {
         var c = view.querySelector('#Links'); c.innerHTML = '';
         if (!links || !links.length) { c.textContent = 'No manual links configured.'; return; }
         var t = document.createElement('table'); t.className = 'sso-links-table';
@@ -519,7 +550,7 @@ function renderLinks(view) {
             btn.setAttribute('is', 'emby-button');
             btn.type = 'button'; btn.className = 'raised'; btn.innerHTML = '<span>Remove</span>';
             btn.addEventListener('click', function () {
-                apiDelete(API + '/links/' + l.JellyfinUserId)
+                apiDelete(api('links/' + l.JellyfinUserId))
                     .then(function () { return populateLinkForm(view); })
                     .then(function () { renderLinks(view); })
                     .catch(function (e) { Dashboard.alert(e.message); });

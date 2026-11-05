@@ -127,14 +127,17 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task The_quick_connect_picker_keeps_the_code()
+    public async Task The_quick_connect_picker_keeps_the_code_and_the_flow()
     {
         await _env.AddSecondProviderAsync();
 
         using var client = JellyfinEnvironment.TrustingClient();
         var body = await client.GetStringAsync($"{_env.BaseUrl}/sso/oidc/start/qc?code=ABC123");
 
-        Assert.Contains($"/sso/oidc/start/{JellyfinEnvironment.ProviderId}?code=ABC123", body);
+        // /qc, not the ordinary start route: this test used to assert the route without it,
+        // which is why nobody noticed that choosing a provider dropped the device.
+        Assert.Contains($"/sso/oidc/start/{JellyfinEnvironment.ProviderId}/qc?code=ABC123", body);
+        Assert.DoesNotContain($"/sso/oidc/start/{JellyfinEnvironment.ProviderId}?code=", body);
     }
 
     [Fact]

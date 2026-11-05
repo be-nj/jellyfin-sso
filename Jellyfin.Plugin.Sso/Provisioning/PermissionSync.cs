@@ -32,6 +32,13 @@ public sealed class PermissionSync
 
     public async Task SyncAsync(Guid userId, OidcIdentity identity, CancellationToken ct = default)
     {
+        // One login at a time. The administrator decision below reads every account on the
+        // server and the policy write that acts on it happens afterwards; two logins
+        // overlapping there could demote the last two administrators at once, each having
+        // seen the other as the one that would be left. AccountBookkeeping says why this
+        // is a semaphore and not the configuration lock.
+        using var turn = await AccountBookkeeping.EnterAsync(ct).ConfigureAwait(false);
+
         var config = Plugin.Instance!.Configuration;
 
         RecordSeenGroups(config, identity);

@@ -397,7 +397,7 @@ public sealed class SsoCallbackController : SsoFlowController
         ProviderConfig provider, OidcIdentity identity, Guid linkUserId)
     {
         var config = Plugin.Instance!.Configuration;
-        var decision = SelfServiceLinks.Decide(config, provider.Id, identity.Sub, linkUserId);
+        var decision = SelfServiceLinks.Attach(config, provider.Id, identity.Sub, linkUserId);
 
         switch (decision.Outcome)
         {
@@ -420,17 +420,6 @@ public sealed class SsoCallbackController : SsoFlowController
                     "This account is already linked for that provider.", success: true);
 
             default:
-                lock (Plugin.ConfigurationLock)
-                {
-                    config.Links.Add(new LinkConfig
-                    {
-                        ProviderId = provider.Id,
-                        Sub = identity.Sub,
-                        JellyfinUserId = linkUserId,
-                    });
-                    Plugin.Instance.SaveConfiguration();
-                }
-
                 _logger.LogInformation(
                     "Self-service link created for user {UserId} on provider {Id}",
                     linkUserId, Loggable.KnownProviderId(provider.Id));

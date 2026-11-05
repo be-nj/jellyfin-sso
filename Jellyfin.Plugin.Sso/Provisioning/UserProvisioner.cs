@@ -52,6 +52,13 @@ public sealed class UserProvisioner
         OidcIdentity identity,
         CancellationToken ct = default)
     {
+        // One login at a time, for the same reason as the permission sync: everything
+        // below is a question about the server's accounts followed by a change to them,
+        // with an await in the middle that a lock cannot span. Two first logins of one
+        // identity arriving together would each find no link, and each then ask Jellyfin to
+        // create the account.
+        using var turn = await AccountBookkeeping.EnterAsync(ct).ConfigureAwait(false);
+
         var config = Plugin.Instance!.Configuration;
 
         // 1. Check for an existing link — the only way to match, never by username.

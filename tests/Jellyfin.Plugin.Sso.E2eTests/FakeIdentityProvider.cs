@@ -75,12 +75,23 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
     /// Replaces the signing key and publishes the new one, the way a provider rotating
     /// its keys does. Tokens signed before this are then signed by a key the published
     /// set no longer carries.
+    ///
+    /// A new key id every time, which a real provider also gives: the first version added
+    /// a fixed "-rotated" suffix, so a second rotation in one test run published different
+    /// key material under a key id the plugin had already cached. That is not a rotation —
+    /// it is the shape of a forgery, the key is found and the signature does not check out
+    /// — and it left the provider unusable for every test that followed.
     /// </summary>
     public void RotateSigningKey()
     {
         _rsa = RSA.Create(2048);
-        _signingKey = new RsaSecurityKey(_rsa) { KeyId = KeyId + "-rotated" };
+        _signingKey = new RsaSecurityKey(_rsa)
+        {
+            KeyId = $"{KeyId}-{Interlocked.Increment(ref _rotations)}",
+        };
     }
+
+    private int _rotations;
 
     private FakeIdentityProvider(int port, TestCertificate certificate)
     {

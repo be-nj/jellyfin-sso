@@ -52,6 +52,51 @@ public sealed class QuickConnectTests : IAsyncLifetime
         Assert.True(await IsAuthorizedAsync(secret));
     }
 
+    /// <summary>
+    /// The whole flow on a server with two providers, which is the one way into Quick
+    /// Connect that nothing walked: the picker's link.
+    ///
+    /// It built /sso/oidc/start/{id}?code=… — the ordinary login route, which does not read
+    /// the code — so choosing a provider signed the browser in and left the device waiting
+    /// for ever. Three tests covered Quick Connect and three covered more than one
+    /// provider, and the pair of them was covered by none, which is how this survived from
+    /// October.
+    /// </summary>
+    [Fact]
+    public async Task A_second_provider_does_not_cost_the_waiting_device_its_approval()
+    {
+        var (code, secret) = await InitiateAsync();
+        await _env.AddSecondProviderAsync();
+
+        using var picker = JellyfinEnvironment.TrustingClient();
+        var choices = await picker.GetStringAsync($"{_env.BaseUrl}/sso/oidc/start/qc?code={code}");
+
+        var chosen = Regex.Match(choices, @"href=""(?<href>[^""]*/sso/oidc/start/[^""]+)""")
+            .Groups["href"].Value;
+        Assert.NotEmpty(chosen);
+
+        // Followed, rather than rebuilt: the address under test is the one the page offers.
+        var login = await _env.StartWebLoginAsync(
+            new FakeUser("sub-picked", "picked-user", ["media"]),
+            startUrl: $"{_env.BaseUrl}{chosen}");
+
+        Assert.Equal(HttpStatusCode.OK, login.CallbackStatus);
+        Assert.Contains("Approve this device?", login.Body!);
+        Assert.False(await IsAuthorizedAsync(secret));
+
+        var token = Regex.Match(login.Body!, @"name=""token"" value=""(?<t>[A-F0-9]+)""")
+            .Groups["t"].Value;
+        Assert.NotEmpty(token);
+
+        using var client = JellyfinEnvironment.TrustingClient();
+        var approval = await client.PostAsync(
+            $"{_env.BaseUrl}/sso/oidc/qc/approve",
+            new FormUrlEncodedContent([new KeyValuePair<string, string>("token", token)]));
+
+        Assert.Equal(HttpStatusCode.OK, approval.StatusCode);
+        Assert.True(await IsAuthorizedAsync(secret));
+    }
+
     [Fact]
     public async Task An_approval_token_cannot_be_used_twice()
     {

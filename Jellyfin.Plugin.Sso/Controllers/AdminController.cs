@@ -5,6 +5,7 @@ using Jellyfin.Plugin.Sso.Web;
 using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.Sso.Controllers;
 
@@ -21,19 +22,22 @@ public sealed class AdminController : ControllerBase
     private readonly LoginBranding _branding;
     private readonly LoginRateLimiter _limiter;
     private readonly SessionRevoker _revoker;
+    private readonly ILogger<AdminController> _logger;
 
     public AdminController(
         ILibraryManager libraryManager,
         IUserManager userManager,
         LoginBranding branding,
         LoginRateLimiter limiter,
-        SessionRevoker revoker)
+        SessionRevoker revoker,
+        ILogger<AdminController> logger)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _branding = branding;
         _limiter = limiter;
         _revoker = revoker;
+        _logger = logger;
     }
 
     // ─── Config ──────────────────────────────────────────────────────────────
@@ -230,22 +234,10 @@ public sealed class AdminController : ControllerBase
     [Authorize(Policy = "RequiresElevation")]
     public async Task<IActionResult> DeleteLink(Guid jellyfinUserId, CancellationToken ct)
     {
-        var config = Plugin.Instance!.Configuration;
+        var unlinked = await new Unlinking(_revoker, _logger)
+            .RemoveAsync(jellyfinUserId, providerId: null, ct).ConfigureAwait(false);
 
-        lock (Plugin.ConfigurationLock)
-        {
-            var removed = config.Links.RemoveAll(l => l.JellyfinUserId == jellyfinUserId);
-            if (removed == 0)
-            {
-                return NotFound("No link found for this user.");
-            }
-
-            Plugin.Instance.SaveConfiguration();
-        }
-
-        await _revoker.RevokeUserAsync(jellyfinUserId, ct).ConfigureAwait(false);
-
-        return Ok();
+        return unlinked ? Ok() : NotFound("No link found for this user.");
     }
 
 }

@@ -137,25 +137,12 @@ public sealed class SsoLinkController : SsoFlowController
         if (string.IsNullOrWhiteSpace(providerId))
             return PlainText.BadRequest("Name the provider to unlink, as ?providerId=…");
 
-        lock (Plugin.ConfigurationLock)
-        {
-            var removed = config.Links.RemoveAll(l =>
-                l.JellyfinUserId == userId
-                && string.Equals(l.ProviderId, providerId, StringComparison.Ordinal));
+        var unlinked = await new Unlinking(_revoker, _logger)
+            .RemoveAsync(userId, providerId, ct).ConfigureAwait(false);
 
-            if (removed == 0)
-                return NotFound("No link found for this account and provider.");
-
-            Plugin.Instance.SaveConfiguration();
-        }
-
-        await _revoker.RevokeUserAsync(userId, ct).ConfigureAwait(false);
-
-        _logger.LogInformation(
-            "User {UserId} unlinked provider {Id}; their sessions were ended.",
-            userId, Loggable.KnownProviderId(providerId));
-
-        return Ok();
+        return unlinked
+            ? Ok()
+            : NotFound("No link found for this account and provider.");
     }
 
     /// <summary>Whether the operator has left self-service linking on.</summary>

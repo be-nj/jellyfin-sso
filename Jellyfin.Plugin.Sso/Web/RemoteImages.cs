@@ -47,6 +47,7 @@ public sealed class RemoteImages : IDisposable
     private const int MaxRedirects = 3;
 
     private readonly HttpClient _http;
+    private readonly TimeSpan _deadline;
     private readonly ILogger _logger;
 
     public RemoteImages(ILogger<RemoteImages> logger)
@@ -113,7 +114,8 @@ public sealed class RemoteImages : IDisposable
         // Six seconds. A profile picture is fetched while somebody is waiting to be let
         // in, so this is time added to a login — and a host that has not answered in six
         // seconds is not going to make the login feel better by answering in ten.
-        _http = new HttpClient(handler) { Timeout = timeout ?? TimeSpan.FromSeconds(6) };
+        _deadline = timeout ?? TimeSpan.FromSeconds(6);
+        _http = new HttpClient(handler) { Timeout = _deadline };
     }
 
     /// <summary>
@@ -157,10 +159,11 @@ public sealed class RemoteImages : IDisposable
         bool allowPrivateNetworks = false,
         CancellationToken ct = default)
     {
+        using var deadline = Deadline(ct);
         try
         {
-            using var response = await SendAsync(uri, authority, allowPrivateNetworks, ct)
-                .ConfigureAwait(false);
+            using var response = await SendAsync(
+                uri, authority, allowPrivateNetworks, deadline.Token).ConfigureAwait(false);
             if (response is null)
             {
                 return null;
@@ -177,7 +180,8 @@ public sealed class RemoteImages : IDisposable
                 return null;
             }
 
-            var bytes = await ReadCappedAsync(response, maxBytes, ct).ConfigureAwait(false);
+            var bytes = await ReadCappedAsync(response, maxBytes, deadline.Token)
+                .ConfigureAwait(false);
             return bytes is { Length: > 0 } ? new RemoteImage(bytes, mediaType!) : null;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -209,10 +213,11 @@ public sealed class RemoteImages : IDisposable
         bool allowPrivateNetworks = false,
         CancellationToken ct = default)
     {
+        using var deadline = Deadline(ct);
         try
         {
-            using var response = await SendAsync(uri, authority, allowPrivateNetworks, ct)
-                .ConfigureAwait(false);
+            using var response = await SendAsync(
+                uri, authority, allowPrivateNetworks, deadline.Token).ConfigureAwait(false);
             if (response is null
                 || !response.IsSuccessStatusCode
                 || response.Content.Headers.ContentLength > maxBytes)
@@ -220,7 +225,8 @@ public sealed class RemoteImages : IDisposable
                 return null;
             }
 
-            return await ReadCappedAsync(response, maxBytes, ct).ConfigureAwait(false);
+            return await ReadCappedAsync(response, maxBytes, deadline.Token)
+                .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -231,6 +237,29 @@ public sealed class RemoteImages : IDisposable
             _logger.LogDebug(ex, "SSO: could not fetch {Url}.", uri);
             return null;
         }
+    }
+
+    /// <summary>
+    /// The clock for one fetch, whole.
+    ///
+    /// <c>HttpClient.Timeout</c> does not cover this, and that is not a subtlety: the
+    /// fetch asks for the headers only — so that a body nobody wants is never buffered —
+    /// and once they have arrived the timeout has done its work. Everything after it, the
+    /// body included, ran on the caller's token alone. A host that answers in a
+    /// millisecond with a content type, a length and then silence held the fetch open for
+    /// as long as it cared to, and a login waiting on a profile picture waited with it.
+    /// Measured at thirty seconds against a six-second limit.
+    ///
+    /// Linked to the caller's token, so cancelling the request still cancels the fetch and
+    /// the difference between the two is still visible: a caller that went away is
+    /// rethrown, while this deadline is answered with no picture, because a picture is
+    /// never worth failing a login over.
+    /// </summary>
+    private CancellationTokenSource Deadline(CancellationToken ct)
+    {
+        var source = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        source.CancelAfter(_deadline);
+        return source;
     }
 
     /// <summary>

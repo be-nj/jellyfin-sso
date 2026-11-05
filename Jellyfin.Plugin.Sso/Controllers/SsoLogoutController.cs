@@ -1,5 +1,6 @@
 using Duende.IdentityModel.Client;
 using Jellyfin.Plugin.Sso.Auth;
+using Jellyfin.Plugin.Sso.Configuration;
 using Jellyfin.Plugin.Sso.Logging;
 using Jellyfin.Plugin.Sso.Oidc;
 using Jellyfin.Plugin.Sso.Provisioning;
@@ -122,6 +123,47 @@ public sealed class SsoLogoutController : SsoControllerBase
     }
 
     /// <summary>
+    /// Who the logout token says has signed out, with one refetch of the provider's keys
+    /// if the token was signed by one this server has not seen.
+    ///
+    /// The login callback has done this since a provider's key rotation stopped every
+    /// login on the server for the rest of the cache's half hour. The same cache decides
+    /// whether a logout token can be checked, and this endpoint had no equivalent: a
+    /// rotation inside that window meant every logout the provider sent was refused, and a
+    /// logout token is only accepted for five minutes, so it expired long before the cache
+    /// did. The sessions the provider had ended stayed open, which is the one thing this
+    /// endpoint exists to prevent.
+    ///
+    /// Exactly once, like the callback. A token signed by nobody still fails, and nothing
+    /// else is relaxed — the signature, issuer, audience, age and replay checks are the
+    /// same on both attempts.
+    /// </summary>
+    private async Task<LogoutSubject> ValidatedSubjectAsync(
+        ProviderConfig provider, string logoutToken, CancellationToken ct)
+    {
+        var disco = await _oidc.GetDiscoveryDocumentAsync(provider, ct).ConfigureAwait(false);
+
+        try
+        {
+            return LogoutTokenValidator.Validate(
+                provider, disco.Issuer, OidcClientFactory.SigningKeysFrom(disco), logoutToken);
+        }
+        catch (SecurityTokenSignatureKeyNotFoundException)
+        {
+            _logger.LogInformation(
+                "A logout token from provider {Id} was signed by an unknown key; refetching "
+                + "its keys.",
+                Loggable.KnownProviderId(provider.Id));
+
+            _oidc.Forget(provider);
+            var fresh = await _oidc.GetDiscoveryDocumentAsync(provider, ct).ConfigureAwait(false);
+
+            return LogoutTokenValidator.Validate(
+                provider, fresh.Issuer, OidcClientFactory.SigningKeysFrom(fresh), logoutToken);
+        }
+    }
+
+    /// <summary>
     /// Whether the browser says this logout began on this site, and may therefore spend
     /// the retained token.
     ///
@@ -189,9 +231,7 @@ public sealed class SsoLogoutController : SsoControllerBase
         LogoutSubject subject;
         try
         {
-            var disco = await _oidc.GetDiscoveryDocumentAsync(provider, ct).ConfigureAwait(false);
-            subject = LogoutTokenValidator.Validate(
-                provider, disco.Issuer, OidcClientFactory.SigningKeysFrom(disco), logoutToken);
+            subject = await ValidatedSubjectAsync(provider, logoutToken, ct).ConfigureAwait(false);
         }
         catch (SecurityTokenException ex)
         {

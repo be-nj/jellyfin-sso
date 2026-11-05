@@ -93,12 +93,25 @@ internal static class SsoPages
             """;
     }
 
-    /// <summary>Lets the user choose when more than one provider is enabled.</summary>
+    /// <summary>
+    /// Lets the user choose when more than one provider is enabled.
+    ///
+    /// <paramref name="quickConnect"/> is not decoration. The two entry points differ by
+    /// one path segment — /sso/oidc/start/{id} signs the browser in, /sso/oidc/start/{id}/qc
+    /// signs in and then asks whether the waiting device may come in — and the picker used
+    /// to build the first one for both, carrying the Quick Connect code in a query string
+    /// that the ordinary action does not read. So choosing a provider on a server with two
+    /// of them signed the browser in and left the device waiting for ever.
+    /// </summary>
     internal static string ProviderPicker(
-        string basePath, IReadOnlyList<ProviderConfig> providers, string queryString)
+        string basePath,
+        IReadOnlyList<ProviderConfig> providers,
+        string queryString,
+        bool quickConnect = false)
     {
+        var flow = quickConnect ? "/qc" : string.Empty;
         var buttons = string.Join("\n", providers.Select(p =>
-            $"<a class=\"choice\" href=\"{basePath}/sso/oidc/start/{Uri.EscapeDataString(p.Id)}{queryString}\">"
+            $"<a class=\"choice\" href=\"{basePath}/sso/oidc/start/{Uri.EscapeDataString(p.Id)}{flow}{queryString}\">"
             + $"{Html(p.Name)}</a>"));
 
         return Shell(
@@ -189,7 +202,11 @@ internal static class SsoPages
                   UserName: data.User.Name,
                   // jellyfin-web resolves the API address from the entry itself; without
                   // an address for the chosen mode it throws "Must supply a serverAddress".
-                  ManualAddress: window.location.origin,
+                  // With the prefix: every request above carries it, and this one is the
+                  // address the web client keeps and uses from then on — written without it,
+                  // a first login under /jellyfin ended on a client talking to the origin,
+                  // where this server is not.
+                  ManualAddress: window.location.origin + base,
                   LastConnectionMode: 2,
                   DateLastAccessed: Date.now(),
                 };
