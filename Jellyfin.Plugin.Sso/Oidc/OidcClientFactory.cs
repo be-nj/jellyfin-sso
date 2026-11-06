@@ -252,11 +252,52 @@ public sealed class OidcClientFactory : IDisposable
     /// logout token are checked against these.
     /// </summary>
     public static List<SecurityKey> SigningKeysFrom(DiscoveryDocumentResponse disco)
-        => disco.KeySet?.Keys?
-            .Select(k => new JsonWebKey(System.Text.Json.JsonSerializer.Serialize(k)))
-            .Cast<SecurityKey>()
-            .ToList()
+        => SigningKeysFrom(
+            disco.KeySet?.Keys?.Select(k => System.Text.Json.JsonSerializer.Serialize(k)));
+
+    /// <summary>
+    /// The same selection, over the published keys as JSON. Separate so the rule can be
+    /// tested without standing up a discovery response, which this library will not let a
+    /// test construct.
+    /// </summary>
+    internal static List<SecurityKey> SigningKeysFrom(IEnumerable<string>? publishedKeys)
+    {
+        var published = publishedKeys
             ?? throw new SecurityTokenException("No signing keys in discovery document.");
+
+        var forSignatures = published
+            .Select(json => new JsonWebKey(json))
+            .Where(IsForVerifyingSignatures)
+            .Cast<SecurityKey>()
+            .ToList();
+
+        // A key set with keys in it, none of them for signatures, is not the same thing as
+        // a key set with no keys — but there is nothing to check a token against either
+        // way, and the caller has one question.
+        if (forSignatures.Count == 0)
+            throw new SecurityTokenException("No signing keys in discovery document.");
+
+        return forSignatures;
+    }
+
+    /// <summary>
+    /// Whether a published key may be used to verify a signature.
+    ///
+    /// RFC 7517 §4.2: "use" says whether a public key is for encrypting data or for
+    /// verifying signatures. Every key in the set used to be handed to the validator,
+    /// encryption keys included — the conformance suite publishes an RSA-OAEP key and an
+    /// ECDH-ES key alongside its signing keys, and both were accepted as things a token
+    /// could be signed with. The provider holds those private keys too, so this was not a
+    /// forgery path; it was wider than what the provider declared, and an encryption key
+    /// is the one that tends to live somewhere else — a different slot, a different
+    /// rotation, sometimes shared with whoever is meant to encrypt to it.
+    ///
+    /// A key with no "use" at all is still accepted: the parameter is optional, and
+    /// providers that publish one key and omit it are common.
+    /// </summary>
+    private static bool IsForVerifyingSignatures(JsonWebKey key)
+        => string.IsNullOrEmpty(key.Use)
+            || string.Equals(key.Use, "sig", StringComparison.Ordinal);
 
     /// <summary>
     /// Reads a confidential client secret from an env var ("env:VAR_NAME") or file ("file:/path").

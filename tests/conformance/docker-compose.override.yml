@@ -1,0 +1,10 @@
+services:
+  nginx:
+    volumes:
+      - ./tls/suite.crt:/etc/ssl/certs/nginx-selfsigned.crt:ro
+      - ./tls/suite.key:/etc/ssl/private/nginx-selfsigned.key:ro
+  server:
+    extra_hosts:
+      # the relying party under test is published on the Docker host, so the suite's
+      # outbound calls to it (back-channel logout) have to leave the compose network
+      - "host.docker.internal:host-gateway"

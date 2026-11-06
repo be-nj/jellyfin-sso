@@ -81,7 +81,7 @@ screenshots:
 #   E2E_STACK_MINUTES=120 make stack
 stack:
 	$(MAKE) e2e E2E_FILTER='--filter "FullyQualifiedName~ManualStackTests"' \
-	  E2E_EXTRA_ENV='-e E2E_IDP_PLAIN_AUTHORIZE=1'
+	  E2E_EXTRA_ENV='-e E2E_IDP_PLAIN_AUTHORIZE=1 -e E2E_STACK_MINUTES=$(E2E_STACK_MINUTES)'
 
 demo:
 	$(MAKE) e2e E2E_FILTER='--filter "Category=Demo"'

@@ -15,6 +15,14 @@ public sealed class TestCertificate
     /// host, the browser is told to resolve it to loopback.</summary>
     public const string HostName = "host.docker.internal";
 
+    /// <summary>
+    /// The name the OpenID Foundation conformance suite serves itself under. Its own
+    /// image ships a certificate for "CN=localhost" with no subject alternative name at
+    /// all, which no current TLS stack will accept for any hostname, so the suite is given
+    /// this certificate instead and the name has to be on it.
+    /// </summary>
+    public const string ConformanceHostName = "localhost.emobix.co.uk";
+
     private TestCertificate(string directory, X509Certificate2 certificate)
     {
         Certificate = certificate;
@@ -47,6 +55,7 @@ public sealed class TestCertificate
 
         var names = new SubjectAlternativeNameBuilder();
         names.AddDnsName(HostName);
+        names.AddDnsName(ConformanceHostName);
         names.AddDnsName("localhost");
         names.AddIpAddress(System.Net.IPAddress.Loopback);
         request.CertificateExtensions.Add(names.Build());
