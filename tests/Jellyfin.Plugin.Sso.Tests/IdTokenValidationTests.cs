@@ -262,4 +262,95 @@ public sealed class IdTokenValidationTests : IDisposable
         Assert.DoesNotContain("jellyfin-admins", groups);
     }
 
+    /// <summary>
+    /// An ID token with no issued-at time. OpenID Connect Core lists iat among the
+    /// required claims (§2) and tells the client to validate it (§3.1.3.7, step 9);
+    /// Microsoft's handler has no switch for it, so nothing refused one until the
+    /// conformance suite pointed it out — it saw the plugin go on and call the userinfo
+    /// endpoint with a token that had no iat.
+    /// </summary>
+    [Fact]
+    public void A_token_with_no_issued_at_time_is_refused()
+    {
+        var payload = IdTokenFactory.ValidPayload();
+        payload.Remove("iat");
+
+        var error = Assert.Throws<SecurityTokenException>(() => Validate(_idp.MintRaw(payload)));
+
+        Assert.Contains("iat", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// An issued-at time that is a word. The check written here never sees it: the
+    /// library refuses to decode a payload whose iat is a string at all, with
+    /// "IDX12723: Unable to decode the payload", and that is an ArgumentException rather
+    /// than a token exception. It still ends as a refusal, because the callback makes
+    /// one from both types — which is the property worth asserting, since it is the one
+    /// that decides whether the visitor sees "refused" or a 500 with a library message
+    /// in the body.
+    /// </summary>
+    [Fact]
+    public void An_issued_at_time_that_is_not_a_number_is_refused()
+    {
+        var payload = IdTokenFactory.ValidPayload();
+        payload["iat"] = "yesterday";
+
+        var error = Record.Exception(() => Validate(_idp.MintRaw(payload)));
+
+        Assert.NotNull(error);
+        Assert.True(
+            error is SecurityTokenException or ArgumentException,
+            $"A bad iat has to fail as a refusal, not as {error.GetType().Name}.");
+    }
+
+    /// <summary>
+    /// A token issued further in the future than the clock skew allows. Not a lifetime
+    /// question — exp is still valid here — but a claim about the past that cannot be
+    /// true, and the sort of thing a provider with a badly set clock or a replayed test
+    /// fixture produces.
+    /// </summary>
+    [Fact]
+    public void A_token_issued_in_the_future_is_refused()
+    {
+        var payload = IdTokenFactory.ValidPayload();
+        payload["iat"] = DateTimeOffset.UtcNow.AddMinutes(10).ToUnixTimeSeconds();
+
+        var error = Assert.Throws<SecurityTokenException>(() => Validate(_idp.MintRaw(payload)));
+
+        Assert.Contains("future", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A token issued a minute into the future, which is inside the skew the lifetime
+    /// check already allows. Refusing this would make the plugin stricter about iat than
+    /// about exp, and a household server and its provider do not share a clock.
+    /// </summary>
+    [Fact]
+    public void A_token_issued_within_the_clock_skew_is_accepted()
+    {
+        var payload = IdTokenFactory.ValidPayload();
+        payload["iat"] = DateTimeOffset.UtcNow.AddSeconds(30).ToUnixTimeSeconds();
+
+        var (sub, _, _, _) = Validate(_idp.MintRaw(payload));
+
+        Assert.Equal("ben", sub);
+    }
+
+    /// <summary>
+    /// An issued-at time outside the years a DateTimeOffset can hold. The same shape
+    /// answered 500 on the back-channel logout endpoint before it was range-checked
+    /// there, because ArgumentOutOfRangeException is not one of the types a refusal is
+    /// made from. This is the login side of that rule.
+    /// </summary>
+    [Theory]
+    [InlineData(long.MaxValue)]
+    [InlineData(long.MinValue)]
+    [InlineData(-1L)]
+    public void An_implausible_issued_at_time_is_refused_as_a_token_problem(long iat)
+    {
+        var payload = IdTokenFactory.ValidPayload();
+        payload["iat"] = iat;
+
+        Assert.Throws<SecurityTokenException>(() => Validate(_idp.MintRaw(payload)));
+    }
 }

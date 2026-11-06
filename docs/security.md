@@ -22,10 +22,19 @@ The details:
   two forms, so this is a check and not a convention
   ([how](configuration.md#confidential-clients)).
 - Full ID-token validation: JWKS signature with the acceptable algorithms named and
-  asymmetric, `iss`, `aud` — and `azp` where a token names several audiences — `exp` and
-  `nonce`. Where claims come from the userinfo endpoint, its `sub` has to match the ID
-  token's. `iat` is checked on the back-channel logout token, where freshness is the
-  replay control. Each rejection has its own test.
+  asymmetric, `iss`, `aud` — and `azp` where a token names several audiences — `exp`,
+  `iat` and `nonce`. Where claims come from the userinfo endpoint, its `sub` has to match
+  the ID token's. Each rejection has its own test.
+- `iat` is required on both tokens, and the two rules differ because the tokens do. On an
+  ID token it is a required claim that must not claim to come from the future, and how old
+  the token may be is left to `exp`; on a back-channel logout token, which carries `iat`
+  and only optionally `exp`, freshness is the replay control and five minutes is the limit.
+  The ID token's half of that was missing until the conformance suite asked for it
+  ([the run](reviews/2026-11-06-oidc-conformance.md)).
+- Only keys the provider published for signatures are accepted as signing keys. A key set
+  routinely carries encryption keys as well, and `use` is what says which is which
+  (RFC 7517 §4.2); a key that says nothing is still accepted, because the field is
+  optional.
 - A login can only be finished in the browser that started it. The `state` makes a
   callback single-use and pins it to one provider; the browser is established separately,
   by a cookie minted when the login starts and compared when the callback arrives — a

@@ -112,6 +112,25 @@ E2E_KEYCLOAK_IMAGE=quay.io/keycloak/keycloak:latest \
   make e2e E2E_FILTER='--filter "Category=RealIdp"'
 ```
 
+### Conformance tests
+
+```bash
+E2E_STACK_MINUTES=90 make stack     # in one terminal: a server to test
+tests/conformance/setup.sh          # in another: the suite
+python3 -I tests/conformance/drive.py && python3 -I tests/conformance/run_all.py
+```
+
+The OpenID Foundation's conformance suite, run against the plugin as a relying party: the
+suite plays the identity provider, each module answers in one specific broken way, and
+what the plugin did with it is the result. Run by hand like the real-provider tier — it
+wants two container stacks and about twenty-five minutes — and documented in
+[tests/conformance/README.md](tests/conformance/README.md), which also lists the four
+things the harness has to get right, each of them learned by getting it wrong.
+
+Worth running after anything that touches token validation, the discovery document, or
+the logout endpoints. What it found the first time is in
+[docs/reviews/2026-11-06-oidc-conformance.md](docs/reviews/2026-11-06-oidc-conformance.md).
+
 ### Cutting a release
 
 ```bash

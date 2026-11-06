@@ -103,6 +103,16 @@ internal sealed class IdTokenFactory : IDisposable
         // or the token is rejected for an invalid lifetime instead of for being expired.
         var notBefore = expires.AddMinutes(-1) < now ? expires.AddMinutes(-1) : now.AddMinutes(-1);
 
+        // iat is added as a claim. The constructor below writes nbf and exp and has no
+        // parameter for it, so for a long time this factory minted ID tokens that no
+        // conforming provider would issue — and the unit suite could not have found the
+        // missing iat check, because its own tokens never carried one.
+        claims.Add(new Claim(
+            "iat",
+            new DateTimeOffset(now, TimeSpan.Zero).ToUnixTimeSeconds().ToString(
+                System.Globalization.CultureInfo.InvariantCulture),
+            ClaimValueTypes.Integer64));
+
         var token = new JwtSecurityToken(
             issuer: issuer,
             audience: audience,

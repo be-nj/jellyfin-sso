@@ -21,6 +21,7 @@ CITING=(
     "$REPO_ROOT/docs/reviews/2026-11-05-hardening.md"
     "$REPO_ROOT/docs/reviews/2026-11-05-outside-review.md"
     "$REPO_ROOT/docs/reviews/2026-11-05-test-practices.md"
+    "$REPO_ROOT/docs/reviews/2026-11-06-oidc-conformance.md"
     "$REPO_ROOT/docs/threat-model.md"
 )
 failures=0

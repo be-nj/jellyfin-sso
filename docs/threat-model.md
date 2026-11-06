@@ -27,6 +27,8 @@ its signature is checked, and the group names that arrive with it.
 | Attack | What stops it | Test |
 |---|---|---|
 | Forged ID token | Signature checked against the provider's JWKS, with the acceptable algorithms named and asymmetric: a JWKS is public, so a symmetric key in one must not be able to decide whether a token is genuine | `A_token_signed_by_an_untrusted_key_is_rejected`, `An_unsigned_token_is_rejected`, `A_token_signed_with_a_symmetric_key_from_the_key_set_is_rejected` |
+| A key the provider did not publish for signing | Only keys marked for signatures, or marked not at all, are offered to the validator; a key set carries encryption keys too, and `use` is what distinguishes them (RFC 7517 §4.2) | `A_key_published_for_encryption_is_not_offered`, `A_key_set_with_only_encryption_keys_is_refused` |
+| An ID token with no issued-at time | `iat` is required, must be a plausible time, and must not claim to come from the future. How old the token may be is left to `exp`, which is required too. Found by the conformance suite: nothing required it, and neither of this repository's fake providers minted one | `A_token_with_no_issued_at_time_is_refused`, `A_token_issued_in_the_future_is_refused`, `An_implausible_issued_at_time_is_refused_as_a_token_problem` |
 | Token minted for another application | `aud` must name this provider's client id, and where it names several, `azp` must name this one — a provider can be configured to cross audiences, and such a token was issued for the other client | `A_token_for_another_client_is_rejected`, `A_token_naming_several_audiences_without_azp_is_rejected` |
 | Token from a different provider | `iss` must equal the issuer from discovery | `A_token_from_another_issuer_is_rejected` |
 | Replayed token from an earlier login | `nonce` must equal the one this login issued | `A_replayed_token_from_another_login_is_rejected`, `A_token_without_a_nonce_is_rejected` |
@@ -69,9 +71,15 @@ its signature is checked, and the group names that arrive with it.
   — the first by something that did not write this plugin — found eight more, two of them
   invariants this document asserts that held only as long as nothing happened at the same
   time as anything else ([the outside review](reviews/2026-11-05-outside-review.md)). Every one is fixed and tested,
-  and the rows above were corrected where they had claimed more than the code did. That is
-  the honest status of this document: it is a record of what has been thought about, not
-  evidence that enough has been.
+  and the rows above were corrected where they had claimed more than the code did.
+
+  The day after, the OpenID Foundation conformance suite was run against the plugin for
+  the first time — the other side of the protocol, sending the broken responses rather
+  than reasoning about them — and found three more, one of them a required claim that
+  nothing checked and that neither of this repository's own fake providers ever minted
+  ([the conformance run](reviews/2026-11-06-oidc-conformance.md)). That is the honest
+  status of this document: it is a record of what has been thought about, not evidence
+  that enough has been.
 - **A group change waits for the next login.** Removing someone from a group at the
   provider changes their permissions only when they sign in again. A session *ended* at
   the provider now ends in Jellyfin too, where the provider sends back-channel logout

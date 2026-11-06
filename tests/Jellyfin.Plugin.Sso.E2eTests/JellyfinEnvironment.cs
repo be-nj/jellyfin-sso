@@ -74,6 +74,10 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
             .WithPortBinding(8096, true)
             // Lets the server call the fake provider running in the test process.
             .WithExtraHost("host.docker.internal", "host-gateway")
+            // And the conformance suite, which runs in its own containers and publishes
+            // itself on the Docker host under this name. Inside a container the name
+            // resolves to 127.0.0.1, which would be the server itself.
+            .WithExtraHost(TestCertificate.ConformanceHostName, "host-gateway")
             .WithBindMount(pluginDir, $"/config/plugins/SSO Authentication_{PluginVersion}", AccessMode.ReadWrite)
             .WithBindMount(mediaDir, "/media", AccessMode.ReadOnly)
             .WithBindMount(Certificate.CertificatePath, "/usr/local/share/ca-certificates/e2e-idp.crt", AccessMode.ReadOnly)

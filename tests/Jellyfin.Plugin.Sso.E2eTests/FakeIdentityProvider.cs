@@ -436,6 +436,19 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
         }
 
         var now = DateTime.UtcNow;
+
+        // iat, which OpenID Connect requires of an ID token and the constructor below has
+        // no parameter for. It was missing here for as long as this fake has existed, and
+        // so was the plugin's check for it — the logout token a few lines down has always
+        // carried one, because the logout validator has always required one. Both fakes
+        // were shaped by what the plugin happened to check, which is why no test in this
+        // repository could have found the gap the conformance suite found.
+        claims.Add(new Claim(
+            "iat",
+            new DateTimeOffset(now, TimeSpan.Zero).ToUnixTimeSeconds().ToString(
+                System.Globalization.CultureInfo.InvariantCulture),
+            ClaimValueTypes.Integer64));
+
         var token = new JwtSecurityToken(
             issuer: ContainerAuthority,
             audience: pending.ClientId,
