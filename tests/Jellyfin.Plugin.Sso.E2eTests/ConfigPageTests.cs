@@ -384,6 +384,53 @@ public sealed class ConfigPageTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A signing algorithm the plugin does not recognise is dropped on the way to the
+    /// validator, and a provider whose list is nothing but such names falls back to every
+    /// asymmetric algorithm — more than whoever typed it asked for. Refused here, because
+    /// the page is the only place somebody is around to be told.
+    /// </summary>
+    [Theory]
+    [InlineData("RSA256")]
+    [InlineData("none")]
+    [InlineData("HS256")]
+    public async Task A_signing_algorithm_the_plugin_does_not_accept_is_refused(string algorithm)
+    {
+        var result = await _env.TrySaveConfigAsync(config =>
+            config["Providers"]!.AsArray()[0]!["SigningAlgorithms"] =
+                new JsonArray { algorithm });
+
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.Status);
+        Assert.Contains("is not a signing algorithm this plugin accepts", result.Body);
+
+        var saved = await _env.PluginConfigAsync();
+        Assert.Empty(saved["Providers"]!.AsArray()[0]!["SigningAlgorithms"]!.AsArray());
+    }
+
+    /// <summary>
+    /// And the one almost every provider uses saves, so the refusal above is about the
+    /// name rather than about the field.
+    /// </summary>
+    [Fact]
+    public async Task The_algorithm_a_provider_signs_with_can_be_pinned()
+    {
+        var result = await _env.TrySaveConfigAsync(config =>
+            config["Providers"]!.AsArray()[0]!["SigningAlgorithms"] =
+                new JsonArray { "RS256" });
+
+        Assert.Equal(System.Net.HttpStatusCode.OK, result.Status);
+
+        var saved = await _env.PluginConfigAsync();
+        Assert.Equal(
+            "RS256",
+            Assert.Single(saved["Providers"]!.AsArray()[0]!["SigningAlgorithms"]!.AsArray())!
+                .GetValue<string>());
+
+        // Put back, so the login tests that follow run against the default shape.
+        await _env.TrySaveConfigAsync(config =>
+            config["Providers"]!.AsArray()[0]!["SigningAlgorithms"] = new JsonArray());
+    }
+
+    /// <summary>
     /// The page posts the configuration it loaded with, and both the links and the seen
     /// groups change underneath it — a login links an account, the Links tab removes one.
     /// Saving a provider therefore used to write that snapshot back: a removed link

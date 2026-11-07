@@ -31,6 +31,12 @@ The details:
   and only optionally `exp`, freshness is the replay control and five minutes is the limit.
   The ID token's half of that was missing until the conformance suite asked for it
   ([the run](reviews/2026-11-06-oidc-conformance.md)).
+- The algorithms a given provider signs with can be pinned per provider
+  ([how](configuration.md#providers)). Empty by default, which accepts the whole
+  asymmetric set; filled in, a token signed with anything else is refused even when its
+  key is one the provider published. The setting can only narrow that set — a
+  configuration naming `HS256` or `none` leaves the default in place rather than widening
+  it, because a public JWKS must never become an HMAC secret.
 - Only keys the provider published for signatures are accepted as signing keys. A key set
   routinely carries encryption keys as well, and `use` is what says which is which
   (RFC 7517 §4.2); a key that says nothing is still accepted, because the field is

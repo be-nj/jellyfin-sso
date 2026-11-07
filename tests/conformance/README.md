@@ -105,6 +105,12 @@ Four of them, each learned by getting it wrong:
 | `oidcc-client-test-plan` | 28 | The login: ID token validation, userinfo, discovery, key rotation |
 | `oidcc-client-back-channel-logout-rp-basic` | 8 | The logout token's refusals |
 
+One module needs a provider setting rather than the default shape:
+`oidcc-client-test-rp-backchannel-rpinitlogout-wrong-alg` signs the logout token with an
+algorithm it did not register for, and a client that accepts any asymmetric algorithm
+cannot tell. Fill *Signing algorithms* in on the provider card — `RS256`, which is what the
+suite registers — before running the logout plan, or that module fails by design.
+
 Both are run with `client_registration: static_client`, `client_auth_type: none`,
 `response_type: code` and `request_type: plain_http_request` — the plugin's default shape,
 a PKCE public client on the authorization code flow.

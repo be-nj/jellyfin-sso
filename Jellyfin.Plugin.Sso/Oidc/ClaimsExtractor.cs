@@ -144,7 +144,7 @@ public sealed class ClaimsExtractor
             ValidIssuer = issuer,
             ValidAudience = provider.ClientId,
             IssuerSigningKeys = signingKeys,
-            ValidAlgorithms = OidcClientFactory.AsymmetricSigningAlgorithms,
+            ValidAlgorithms = OidcClientFactory.SigningAlgorithmsFor(provider),
             ValidateLifetime = true,
             ClockSkew = ClockSkew,
         };

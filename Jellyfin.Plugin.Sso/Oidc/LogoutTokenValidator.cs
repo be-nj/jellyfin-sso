@@ -57,7 +57,7 @@ public static class LogoutTokenValidator
             ValidIssuer = issuer,
             ValidAudience = provider.ClientId,
             IssuerSigningKeys = signingKeys,
-            ValidAlgorithms = OidcClientFactory.AsymmetricSigningAlgorithms,
+            ValidAlgorithms = OidcClientFactory.SigningAlgorithmsFor(provider),
             // A logout token carries iat and only optionally exp, so the age is checked
             // below rather than here; an exp that is there is still honoured.
             RequireExpirationTime = false,

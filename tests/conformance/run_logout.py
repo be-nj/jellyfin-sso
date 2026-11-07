@@ -30,7 +30,12 @@ ctx = ssl.create_default_context(cafile=CA)
 # What the plugin must refuse. Each name says which rule is under test.
 MUST_REFUSE = {
     "oidcc-client-test-rp-backchannel-rpinitlogout-alg-none": "an unsigned logout token",
-    "oidcc-client-test-rp-backchannel-rpinitlogout-wrong-alg": "a token signed with a symmetric key",
+    # Not a symmetric key, which is what this said when the plan was first written and
+    # was the wrong guess: the suite registers RS256 for its client and then signs with
+    # ES256 using another key out of its own published set. Refusing it needs the
+    # provider's signing algorithms pinned, which configure() below does.
+    "oidcc-client-test-rp-backchannel-rpinitlogout-wrong-alg":
+        "a token signed with an algorithm the provider did not register",
     "oidcc-client-test-rp-backchannel-rpinitlogout-wrong-aud": "a token for another audience",
     "oidcc-client-test-rp-backchannel-rpinitlogout-wrong-iss": "a token from another issuer",
     "oidcc-client-test-rp-backchannel-rpinitlogout-no-event": "a token with no events claim",
@@ -52,6 +57,10 @@ def configure(base, token, issuer):
             "GroupsClaim": "groups",
             "GroupsFromUserInfo": False,
             "AcceptBackChannelLogout": True,
+            # The suite registers RS256 and signs rpinitlogout-wrong-alg with ES256, using
+            # a second key from the same published set. Without this, both algorithms are
+            # inside the asymmetric default and the plugin cannot tell them apart.
+            "SigningAlgorithms": ["RS256"],
         }
     ]
     config["SignOutOfIdentityProvider"] = True

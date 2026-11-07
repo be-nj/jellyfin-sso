@@ -17,15 +17,32 @@ internal sealed class IdTokenFactory : IDisposable
     public const string Audience = "jellyfin-client-id";
 
     private readonly RSA _rsa = RSA.Create(2048);
+    private readonly ECDsa _ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
     private readonly RsaSecurityKey _key;
+    private readonly ECDsaSecurityKey _ellipticKey;
 
     public IdTokenFactory(string keyId = "test-key")
     {
         _key = new RsaSecurityKey(_rsa) { KeyId = keyId };
+        _ellipticKey = new ECDsaSecurityKey(_ecdsa) { KeyId = keyId + "-ec" };
     }
 
     /// <summary>The public key material a provider would publish in its JWKS.</summary>
     public SecurityKey SigningKey => _key;
+
+    /// <summary>
+    /// A second key out of the same published set, of the other kind. Real providers
+    /// publish several — the conformance suite publishes thirteen — and whoever mints a
+    /// token picks which one to use, so a token signed with this one is as genuine as one
+    /// signed with the first. Which is the whole case for pinning the algorithm.
+    /// </summary>
+    public SecurityKey EllipticSigningKey => _ellipticKey;
+
+    /// <summary>The credentials for whichever of the two keys that algorithm belongs to.</summary>
+    private SigningCredentials CredentialsFor(string algorithm)
+        => new(
+            algorithm.StartsWith("ES", StringComparison.Ordinal) ? _ellipticKey : _key,
+            algorithm);
 
     /// <summary>
     /// Mints an ID token from a payload a test writes itself, so a claim can have a shape
@@ -34,9 +51,9 @@ internal sealed class IdTokenFactory : IDisposable
     /// shapes for a long time and this path never was — which is the asymmetry that let a
     /// blank subject through, because Mint could only ever emit strings.
     /// </summary>
-    public string MintRaw(JwtPayload payload)
+    public string MintRaw(JwtPayload payload, string algorithm = SecurityAlgorithms.RsaSha256)
         => new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken(
-            new JwtHeader(new SigningCredentials(_key, SecurityAlgorithms.RsaSha256)),
+            new JwtHeader(CredentialsFor(algorithm)),
             payload));
 
     /// <summary>
@@ -69,7 +86,8 @@ internal sealed class IdTokenFactory : IDisposable
         string issuer = Issuer,
         string audience = Audience,
         TimeSpan? lifetime = null,
-        string groupsClaim = "groups")
+        string groupsClaim = "groups",
+        string algorithm = SecurityAlgorithms.RsaSha256)
     {
         var claims = new List<Claim>();
         if (sub is not null)
@@ -119,7 +137,7 @@ internal sealed class IdTokenFactory : IDisposable
             claims: claims,
             notBefore: notBefore,
             expires: expires,
-            signingCredentials: new SigningCredentials(_key, SecurityAlgorithms.RsaSha256));
+            signingCredentials: CredentialsFor(algorithm));
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
@@ -140,7 +158,8 @@ internal sealed class IdTokenFactory : IDisposable
         bool withEvents = true,
         bool withIssuedAt = true,
         TimeSpan? age = null,
-        TimeSpan? lifetime = null)
+        TimeSpan? lifetime = null,
+        string algorithm = SecurityAlgorithms.RsaSha256)
     {
         var now = DateTimeOffset.UtcNow - (age ?? TimeSpan.Zero);
 
@@ -184,9 +203,7 @@ internal sealed class IdTokenFactory : IDisposable
             payload.Add("exp", now.Add(span).ToUnixTimeSeconds());
         }
 
-        var token = new JwtSecurityToken(
-            new JwtHeader(new SigningCredentials(_key, SecurityAlgorithms.RsaSha256)),
-            payload);
+        var token = new JwtSecurityToken(new JwtHeader(CredentialsFor(algorithm)), payload);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
@@ -215,5 +232,9 @@ internal sealed class IdTokenFactory : IDisposable
         return MintRaw(payload);
     }
 
-    public void Dispose() => _rsa.Dispose();
+    public void Dispose()
+    {
+        _rsa.Dispose();
+        _ecdsa.Dispose();
+    }
 }

@@ -248,6 +248,47 @@ public sealed class OidcClientFactory : IDisposable
     ];
 
     /// <summary>
+    /// The algorithms a token from one provider may be signed with: the ones that provider
+    /// is configured for, or all of the asymmetric ones when it is configured for none.
+    ///
+    /// Two rules here are not the operator's to override, and both of them are about where
+    /// this value goes — straight into <c>TokenValidationParameters.ValidAlgorithms</c>.
+    ///
+    /// It is intersected with <see cref="AsymmetricSigningAlgorithms"/> rather than used as
+    /// typed. A configuration naming <c>HS256</c>, or <c>none</c>, would otherwise undo the
+    /// pinning this setting exists to tighten and hand a public JWKS the job of an HMAC
+    /// secret. A setting that can only narrow what is accepted cannot be used to widen it.
+    ///
+    /// And the result is never empty. The library skips the algorithm check altogether when
+    /// <c>ValidAlgorithms</c> has no entries, so a list of names the plugin does not
+    /// recognise would accept <em>more</em> than the default does — the opposite of what
+    /// whoever typed it wanted. Such a list falls back to the default set; the save
+    /// endpoint refuses one at the door, so it should never reach here at all.
+    /// </summary>
+    internal static string[] SigningAlgorithmsFor(ProviderConfig provider)
+    {
+        var pinned = provider.SigningAlgorithms
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => Recognised(name.Trim()))
+            .OfType<string>()
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        return pinned.Length > 0 ? pinned : AsymmetricSigningAlgorithms;
+    }
+
+    /// <summary>
+    /// One configured name as the library spells it, or null for a name that is not an
+    /// asymmetric signing algorithm. Compared without case so that <c>rs256</c> in the
+    /// configuration still matches the <c>RS256</c> a provider puts in the header, which
+    /// is compared exactly.
+    /// </summary>
+    internal static string? Recognised(string name)
+        => Array.Find(
+            AsymmetricSigningAlgorithms,
+            known => string.Equals(known, name, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
     /// The signing keys out of a provider's JWKS. Both the ID token and the back-channel
     /// logout token are checked against these.
     /// </summary>

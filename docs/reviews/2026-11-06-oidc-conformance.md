@@ -23,7 +23,7 @@ findings in a plugin that had been through five internal passes.
 | # | Finding | Severity | Issue |
 |---|---|---|---|
 | 1 | An ID token with no `iat` claim was accepted | moderate | [#216](https://github.com/be-nj/jellyfin-sso/issues/216) |
-| 2 | A logout token signed with an unexpected algorithm was accepted | low | [#219](https://github.com/be-nj/jellyfin-sso/issues/219) |
+| 2 | A logout token signed with an unexpected algorithm was accepted | low | [#219](https://github.com/be-nj/jellyfin-sso/issues/219), closed the next day with a per-provider setting |
 | 3 | Keys published for encryption were accepted as signing keys | low | [#220](https://github.com/be-nj/jellyfin-sso/issues/220) |
 | 4 | A refusal message named the wrong outcome | low | [#217](https://github.com/be-nj/jellyfin-sso/issues/217) |
 | 5 | `E2E_STACK_MINUTES` never reached the container | — | [#218](https://github.com/be-nj/jellyfin-sso/issues/218) |
@@ -72,7 +72,7 @@ The range check comes before the conversion for the same reason as on the logout
 representable years, and a signed token carrying `"iat": 9223372036854775807` would answer
 500 with the library's message in the body instead of refusing the token.
 
-## The one the plugin cannot currently close
+## The one that needed a setting
 
 **`oidcc-client-test-rp-backchannel-rpinitlogout-wrong-alg`.** The suite set
 `id_token_signed_response_alg` for its registered client to the algorithm of the first key
@@ -100,8 +100,21 @@ Two tightenings that look like the fix are not:
 What would close it is the thing the specification assumes and this plugin does not have: a
 notion of the algorithm a given provider signs with. The plugin is a static client and
 registers nothing. That is [#219](https://github.com/be-nj/jellyfin-sso/issues/219), filed
-with the analysis and not implemented here — it is a configuration field, an admin
-validation and a page control, which is a feature rather than the fix to a defect.
+with the analysis and not implemented in the same pass — it is a configuration field, an
+admin validation and a page control, which is a feature rather than the fix to a defect.
+
+**Built the next day**, as *Signing algorithms* on the provider card: empty by default and
+therefore no change to any existing deployment, and filled in it refuses a token signed
+with anything else, on the login path and the logout path alike. Two things about it were
+decided by how the library behaves rather than by taste. The setting is intersected with
+the asymmetric set, so a configuration naming `HS256` cannot undo the pinning it exists to
+tighten. And the result is never an empty list, because
+`An_empty_algorithm_list_would_let_the_library_accept_anything` demonstrates what the name
+says: with no entries in `ValidAlgorithms` the handler skips the algorithm check, so a
+field full of typos would have accepted more than the default did. A list of names the
+plugin does not recognise therefore falls back to the default set, and `SaveConfig` refuses
+one at the door so that fallback stays a safety net rather than a behaviour anybody relies
+on. Seven of the eighteen new tests fail if the pinning is removed again.
 
 ## The one that came out of reading the suite's key set
 
@@ -145,7 +158,8 @@ IDX10205  issuer validation failed         oidcc-client-test-invalid-iss
           subject
 ```
 
-and six of the eight back-channel logout modules: a valid token ends the sessions, and a
+and six of the eight back-channel logout modules — all eight once the algorithm was
+pinned, see the rerun below: a valid token ends the sessions, and a
 token that is unsigned, carries a `nonce`, carries no `events` claim, names another event,
 or names another audience is refused.
 
@@ -220,14 +234,52 @@ has fetched the document and the keys — which is all they test. The harness th
 full login, and the request that follows arrives after the test has closed, so the suite
 records `Illegal test state change: FINISHED -> RUNNING` and a failure. The plugin did the
 required thing; the recorded verdict is FAILED, and that is not being written up as a pass.
-`rpinitlogout-wrong-iss` is the same story on the logout side — the plugin refused the token
-with `IDX10205` in its own log, and the suite's verdict is spoiled by the same late request.
+`rpinitlogout-wrong-iss` looked like the same story on the logout side — the plugin refused
+the token with `IDX10205` in its own log, and the verdict read FAILED. It passed on the
+rerun a day later, unchanged, so that one was timing in the harness rather than anything
+about the module: the late request is a race, not a certainty.
 
 Driving only a discovery fetch would settle all three, and there is no way to ask the plugin
 for one: it fetches the document when a login starts and at no other time. There is no
 "test this provider" action anywhere in the plugin, so an operator who has just configured
 one learns whether it works by trying to log in. That is a gap of its own and not a security
 one.
+
+## The rerun, 7 November
+
+The logout plan again, against the same server with *Signing algorithms* set to `RS256`,
+which is what the suite registers for its client. **Eight of eight.**
+
+```
+PASSED  rpinitlogout              a valid token ends the sessions
+PASSED  rpinitlogout-alg-none
+PASSED  rpinitlogout-no-event
+PASSED  rpinitlogout-with-nonce
+PASSED  rpinitlogout-wrong-alg    the one this run found
+PASSED  rpinitlogout-wrong-aud
+PASSED  rpinitlogout-wrong-event
+PASSED  rpinitlogout-wrong-iss    FAILED above, on timing
+```
+
+Attributed the way every other verdict here is — by who stopped the flow, out of the
+server's own log rather than the suite's word for it:
+
+```
+09:15:16 [INF] Back-channel logout from provider conformance ended the sessions of 1 account(s).
+09:21:27 [WRN] Rejected a back-channel logout for provider conformance: IDX10511:
+               Signature validation failed. Keys tried: ... Use: 'sig', Kty: 'EC'
+```
+
+The second line is `wrong-alg`, and it names the EC key the suite signed with. Worth
+reading closely: the refusal arrives as a signature failure rather than as "that algorithm
+is not allowed", because `ValidAlgorithms` takes the algorithm out of consideration before
+the key is tried, and then no key validates. The outcome is the right one and the message
+is a layer lower than the decision — which is worth knowing before somebody reads that
+line in a support thread and goes looking for a key problem.
+
+The first line is the positive case, from the same configuration. Pinning the algorithm
+does not cost the ordinary logout, which is the half of the acceptance that a passing
+refusal does not prove.
 
 ## How to run it again
 

@@ -1,5 +1,6 @@
 using Jellyfin.Plugin.Sso.Auth;
 using Jellyfin.Plugin.Sso.Configuration;
+using Jellyfin.Plugin.Sso.Oidc;
 using Jellyfin.Plugin.Sso.Provisioning;
 using Jellyfin.Plugin.Sso.Web;
 using MediaBrowser.Controller.Library;
@@ -64,6 +65,26 @@ public sealed class AdminController : ControllerBase
                     $"Provider '{provider.Id}': ConfidentialSecretRef must name where the "
                     + "secret is, as 'env:VARIABLE' or 'file:/path', not hold the secret "
                     + "itself. Nothing was saved.");
+            }
+        }
+
+        // A name the plugin does not recognise is dropped on the way to the validator, and
+        // a list of nothing but unrecognised names falls back to every asymmetric
+        // algorithm — which is more than whoever typed it asked for, and silently. This is
+        // the only moment it can be said while somebody is looking at the page.
+        foreach (var provider in config.Providers)
+        {
+            var bad = provider.SigningAlgorithms
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .FirstOrDefault(name => OidcClientFactory.Recognised(name.Trim()) is null);
+
+            if (bad is not null)
+            {
+                return BadRequest(
+                    $"Provider '{provider.Id}': '{bad}' is not a signing algorithm this "
+                    + "plugin accepts. Use one or more of "
+                    + string.Join(", ", OidcClientFactory.AsymmetricSigningAlgorithms)
+                    + ", or leave the field empty for all of them. Nothing was saved.");
             }
         }
 

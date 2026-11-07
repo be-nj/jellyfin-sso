@@ -172,6 +172,27 @@ public class ProviderConfig
     public bool AcceptBackChannelLogout { get; set; } = true;
 
     /// <summary>
+    /// The signing algorithms a token from this provider may carry. Empty — the default,
+    /// and what every release before this one did — means all of the asymmetric ones.
+    ///
+    /// An operator who knows their provider signs with RS256 can say so, and then a token
+    /// signed ES256 by another key out of the same published set is refused. That is the
+    /// difference between accepting whatever the provider felt like signing with and
+    /// accepting what it was configured to send: without it, the effective strength is
+    /// that of the weakest key in the provider's set, chosen by whoever mints the token
+    /// rather than by the party checking it.
+    ///
+    /// Not a forgery defence — every key in that set belongs to the provider. It is what
+    /// the OpenID Connect conformance suite asks for in
+    /// <c>oidcc-client-test-rp-backchannel-rpinitlogout-wrong-alg</c>, where a client is
+    /// expected to refuse an algorithm it was not told to expect. The names are the JWS
+    /// ones, <c>RS256</c> and friends; see
+    /// <see cref="Oidc.OidcClientFactory.SigningAlgorithmsFor"/> for what a name outside
+    /// the asymmetric set does, which is nothing.
+    /// </summary>
+    public List<string> SigningAlgorithms { get; set; } = [];
+
+    /// <summary>
     /// When true the login button is painted in the provider's own colour, with its mark
     /// in black or white on top. Off, the button looks like Jellyfin's other buttons and
     /// carries the provider's colour on its left edge alone.
