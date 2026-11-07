@@ -282,13 +282,13 @@ public sealed class ConfigPageTests : IAsyncLifetime
             await page.WaitForSelectorAsync("#GroupMappings", new PageWaitForSelectorOptions
             {
                 State = WaitForSelectorState.Attached,
-                Timeout = 30_000,
+                Timeout = BrowserSupport.WebClientTimeout,
             });
             // The mapping cards are rendered after the config request resolves.
             await page.WaitForFunctionAsync(
                 "() => document.querySelectorAll('.sso-mapping').length > 0",
                 null,
-                new PageWaitForFunctionOptions { Timeout = 30_000 });
+                new PageWaitForFunctionOptions { Timeout = BrowserSupport.WebClientTimeout });
 
             await page.ClickAsync(".sso-tab[data-tab=\"mappings\"]");
             await page.WaitForSelectorAsync("#GroupMappings", new PageWaitForSelectorOptions { Timeout = 10_000 });

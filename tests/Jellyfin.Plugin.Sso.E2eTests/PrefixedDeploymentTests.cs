@@ -82,7 +82,7 @@ public sealed class PrefixedDeploymentTests : IAsyncLifetime
 
         // A provider card only renders once the configuration fetch has come back.
         await page.Locator(".sso-provider").First
-            .WaitForAsync(new LocatorWaitForOptions { Timeout = 30_000 });
+            .WaitForAsync(new LocatorWaitForOptions { Timeout = BrowserSupport.WebClientTimeout });
 
         // Every request the page made for its own API carried the prefix.
         var apiCalls = requests.Where(u => u.Contains("/sso/admin/", StringComparison.Ordinal))
@@ -139,7 +139,7 @@ public sealed class PrefixedDeploymentTests : IAsyncLifetime
             await page.WaitForFunctionAsync(
                 "() => !!localStorage.getItem('jellyfin_credentials')",
                 null,
-                new PageWaitForFunctionOptions { Timeout = 30_000 });
+                new PageWaitForFunctionOptions { Timeout = BrowserSupport.WebClientTimeout });
         }
         catch (TimeoutException)
         {
@@ -155,11 +155,7 @@ public sealed class PrefixedDeploymentTests : IAsyncLifetime
         // middle of that navigation dies with "execution context was destroyed". The
         // condition below is also the stronger claim — the client adopted the session —
         // and WaitForFunction survives the navigation where a read does not.
-        await page.WaitForFunctionAsync(
-            "() => !!(window.ApiClient && window.ApiClient.accessToken() "
-            + "&& window.ApiClient.getCurrentUserId())",
-            null,
-            new PageWaitForFunctionOptions { Timeout = 30_000 });
+        await BrowserSupport.WaitForSignedInAsync(page, "prefixed-browser-login", console);
 
         var stored = await page.EvaluateAsync<string>(
             "() => localStorage.getItem('jellyfin_credentials')");

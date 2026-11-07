@@ -81,6 +81,22 @@ failed browser runs land in `tests/runs/playwright/`.
 `make e2e` runs inside the .NET SDK image (no local SDK needed) and talks to the host's
 Docker daemon; it needs Docker and about 1 GB for the Jellyfin image.
 
+Two rules for a new browser test, both bought with flaky runs:
+
+- **Never wait a hand-written number for something jellyfin-web does.** Use
+  `BrowserSupport.WebClientTimeout`, and `BrowserSupport.WaitForSignedInAsync` for the
+  session handoff. A fixed thirty seconds held on an idle laptop and failed three times in
+  two days under load — the web client has to fetch and execute its bundle before anything
+  a test looks for exists, and none of that is the plugin's work.
+- **Never read the server log straight after the response that should have written to it.**
+  Use `JellyfinEnvironment.WaitForServerLogAsync`. The server hands the line to its logger,
+  which writes it when it writes it, and Docker passes it on when asked — three steps that
+  have nothing to do with the answer the test already has.
+
+What both have in common: the reason a wait is needed is that the thing being waited for is
+somebody else's work. A test that reads instead of waiting is asserting that the machine was
+not busy.
+
 Both suites run on every push and pull request, and again before a release is published —
 except when a change is Markdown, something under `docs/`, or `scripts/demo-clip.sh` and
 nothing else, which `scripts/changed-code.sh` decides. The jobs still run and still

@@ -68,6 +68,95 @@ internal static class BrowserSupport
     }
 
     /// <summary>Saves a screenshot and the page HTML under tests/runs/playwright.</summary>
+    /// <summary>
+    /// How long jellyfin-web gets to do its own work: boot, adopt a handed-over session,
+    /// render the page a test is about. Not how long the plugin gets — the plugin's own
+    /// answers are HTTP requests, and those are fast or broken.
+    ///
+    /// Generous on purpose, and it costs nothing when the client is quick: every wait
+    /// using it returns the moment its condition holds, so this number only decides what
+    /// happens on a loaded machine. Thirty seconds was not enough three times in two
+    /// days, at three different waits — the session handoff twice (once locally beside
+    /// the unit suite, once on a GitHub runner) and the user profile page once
+    /// ([#224](https://github.com/be-nj/jellyfin-sso/issues/224)). Three waits, one
+    /// cause: a single-core-ish runner with containers on it, and a web client that has
+    /// to fetch and execute a bundle before anything a test looks for exists.
+    ///
+    /// For the session in particular, the handoff cannot race it: SsoPages writes the
+    /// credentials into localStorage and only then navigates to the web client, so the
+    /// client always boots after they exist. A client that has not adopted them yet is
+    /// still starting, not stuck, and waiting longer is the right answer rather than a
+    /// way of hiding one.
+    /// </summary>
+    public const int WebClientTimeout = 90_000;
+
+    /// <summary>
+    /// Waits until the web client itself reports a usable session: its ApiClient has an
+    /// access token and knows which user it belongs to. That is what the localStorage
+    /// handoff is for, and asserting it is stronger than reading the credentials back —
+    /// it says the client adopted them rather than that they were written.
+    ///
+    /// Six call sites waited on this with the same string and their own timeout, and the
+    /// one that failed in CI had no diagnosis at all: a bare TimeoutException from
+    /// Playwright, with no record of what the page was showing. The message below names
+    /// which half went wrong, because the two mean opposite things. Credentials present
+    /// and no session means the client was still starting. No credentials means the login
+    /// never finished, and the problem is upstream of anything this wait can see.
+    /// </summary>
+    public static async Task WaitForSignedInAsync(
+        IPage page, string name, IEnumerable<string>? consoleMessages = null)
+    {
+        try
+        {
+            await page.WaitForFunctionAsync(
+                "() => !!(window.ApiClient && window.ApiClient.accessToken() "
+                + "&& window.ApiClient.getCurrentUserId())",
+                null,
+                new PageWaitForFunctionOptions { Timeout = WebClientTimeout });
+        }
+        catch (TimeoutException)
+        {
+            await CaptureAsync(page, name);
+
+            Assert.Fail(
+                $"The web client never adopted the SSO session within "
+                + $"{WebClientTimeout / 1000} s.\n"
+                + $"url:         {page.Url}\n"
+                + $"credentials: {await DescribeAsync(page, CredentialsProbe)}\n"
+                + $"ApiClient:   {await DescribeAsync(page, ApiClientProbe)}\n"
+                + $"console:     {string.Join(" | ", consoleMessages ?? [])}");
+        }
+    }
+
+    private const string CredentialsProbe =
+        "() => { const raw = localStorage.getItem('jellyfin_credentials');"
+        + " if (!raw) return 'none in localStorage';"
+        + " try { const s = (JSON.parse(raw).Servers || [])[0];"
+        + " return s ? ('for ' + s.UserName + ' at ' + s.ManualAddress) : 'written but empty'; }"
+        + " catch (e) { return 'unreadable: ' + e.message; } }";
+
+    private const string ApiClientProbe =
+        "() => !window.ApiClient ? 'not created yet \u2014 the client is still starting'"
+        + " : (window.ApiClient.accessToken() ? 'has a token, no user id yet'"
+        + " : 'created without a token')";
+
+    /// <summary>
+    /// One probe's answer, or why it could not be asked. A page in the middle of a
+    /// navigation throws here, and losing the whole failure message to that would leave
+    /// exactly the empty report this helper exists to replace.
+    /// </summary>
+    private static async Task<string> DescribeAsync(IPage page, string probe)
+    {
+        try
+        {
+            return await page.EvaluateAsync<string>(probe);
+        }
+        catch (PlaywrightException e)
+        {
+            return $"could not be read: {e.Message.Split('\n')[0]}";
+        }
+    }
+
     public static async Task<string> CaptureAsync(IPage page, string name)
     {
         var directory = Path.Combine(RunsDirectory(), "playwright");

@@ -164,7 +164,15 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
         }
 
         // Give the plugin as long as it would need to sign somebody in, then insist that
-        // it did not.
+        // it did not. Deliberately not the shared budget: here the timeout *is* the pass,
+        // so raising it would only make a refusal take a minute and a half to confirm.
+        //
+        // What it costs is worth writing down: on a machine slow enough, a login that
+        // would have succeeded looks the same as one that was refused, and this test would
+        // pass for the wrong reason. The refusals it covers are decided by the server
+        // before the browser goes anywhere, so fifteen seconds is generous for what is
+        // actually being waited on — but it is a weaker guarantee than the positive tests
+        // have, and not the same claim as "the login was refused".
         try
         {
             await page.WaitForFunctionAsync(
@@ -290,7 +298,10 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
             await page.WaitForFunctionAsync(
                 "() => !!(window.ApiClient && window.ApiClient.accessToken() && window.ApiClient.getCurrentUserId())",
                 null,
-                new PageWaitForFunctionOptions { Timeout = 60_000 });
+                // The shared budget, so there is one number for how long the web client
+                // gets. The catch below stays its own: it can reach the provider's
+                // containers and the server log, which the shared helper cannot.
+                new PageWaitForFunctionOptions { Timeout = BrowserSupport.WebClientTimeout });
         }
         catch (TimeoutException)
         {
@@ -413,11 +424,15 @@ public sealed class AutheliaTests : RealIdentityProviderTests
         Assert.Empty(policy["EnabledFolders"]!.AsArray());
         Assert.Empty((await _env.PluginConfigAsync())["SeenGroups"]!.AsArray());
 
-        var logs = (await _env.ServerLogsAsync())[logsBefore.Length..];
-        Assert.Contains("libraries=0, groups=", logs);
-        Assert.Contains(
-            "No groups were read from ID token claim groups for provider real-provider", logs);
-        Assert.Contains("Fetch groups from userinfo endpoint", logs);
+        // Each line is waited for rather than read once: the assertions above are HTTP
+        // round-trips, which usually gives the log enough time, and "usually" is what a
+        // flake is made of.
+        await _env.WaitForServerLogAsync("libraries=0, groups=", logsBefore.Length);
+        await _env.WaitForServerLogAsync(
+            "No groups were read from ID token claim groups for provider real-provider",
+            logsBefore.Length);
+        await _env.WaitForServerLogAsync(
+            "Fetch groups from userinfo endpoint", logsBefore.Length);
     }
 
     internal override async Task<IRealIdentityProvider> StartProviderAsync(JellyfinEnvironment env)
@@ -474,7 +489,7 @@ public sealed class KeycloakTests : RealIdentityProviderTests
 
         // And the server said why, which is the difference between a five-minute
         // diagnosis and an afternoon of it.
-        Assert.Contains("Full group path", await _env.ServerLogsAsync());
+        await _env.WaitForServerLogAsync("Full group path");
 
         // The other half: spelled the way the claim arrives, the same login works.
         await _env.PatchConfigAsync(config =>
