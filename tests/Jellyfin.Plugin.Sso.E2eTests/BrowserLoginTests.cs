@@ -106,7 +106,7 @@ public sealed class BrowserLoginTests : IAsyncLifetime
         await button.WaitForAsync(new LocatorWaitForOptions
         {
             State = WaitForSelectorState.Visible,
-            Timeout = 30_000,
+            Timeout = BrowserSupport.WebClientTimeout,
         });
         var markup = await button.EvaluateAsync<string>("el => el.outerHTML");
         await button.ClickAsync();
@@ -119,7 +119,7 @@ public sealed class BrowserLoginTests : IAsyncLifetime
         {
             await page.WaitForURLAsync(
                 url => !url.Contains("login", StringComparison.OrdinalIgnoreCase),
-                new PageWaitForURLOptions { Timeout = 30_000 });
+                new PageWaitForURLOptions { Timeout = BrowserSupport.WebClientTimeout });
         }
         catch (TimeoutException)
         {
@@ -162,7 +162,7 @@ public sealed class BrowserLoginTests : IAsyncLifetime
     {
         try
         {
-            await page.WaitForURLAsync("**/web/**", new PageWaitForURLOptions { Timeout = 30_000 });
+            await page.WaitForURLAsync("**/web/**", new PageWaitForURLOptions { Timeout = BrowserSupport.WebClientTimeout });
         }
         catch (TimeoutException)
         {
@@ -178,26 +178,10 @@ public sealed class BrowserLoginTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Waits until the web client itself reports a usable session: its ApiClient has an
-    /// access token and a current user. That is what the localStorage handoff is for.
+    /// Waits until the web client itself reports a usable session. Shared with the other
+    /// classes that wait for the same thing, and with the timeout and the diagnosis that
+    /// [#224](https://github.com/be-nj/jellyfin-sso/issues/224) was about.
     /// </summary>
-    private static async Task WaitForSignedInAsync(IPage page, string name, List<string>? consoleErrors = null)
-    {
-        try
-        {
-            await page.WaitForFunctionAsync(
-                "() => !!(window.ApiClient && window.ApiClient.accessToken() && window.ApiClient.getCurrentUserId())",
-                null,
-                new PageWaitForFunctionOptions { Timeout = 30_000 });
-        }
-        catch (TimeoutException)
-        {
-            await BrowserSupport.CaptureAsync(page, name);
-            Assert.Fail(
-                "The web client never adopted the SSO session.\n"
-                + $"url:     {page.Url}\n"
-                + $"text:    {await page.InnerTextAsync("body")}\n"
-                + $"console: {string.Join(" | ", consoleErrors ?? [])}");
-        }
-    }
+    private static Task WaitForSignedInAsync(IPage page, string name, List<string>? consoleErrors = null)
+        => BrowserSupport.WaitForSignedInAsync(page, name, consoleErrors);
 }

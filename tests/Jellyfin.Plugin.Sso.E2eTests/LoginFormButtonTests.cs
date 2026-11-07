@@ -85,7 +85,7 @@ public sealed class LoginFormButtonTests : IAsyncLifetime
         await button.First.WaitForAsync(new LocatorWaitForOptions
         {
             State = WaitForSelectorState.Visible,
-            Timeout = 30_000,
+            Timeout = BrowserSupport.WebClientTimeout,
         });
 
         Assert.Equal(
@@ -115,25 +115,14 @@ public sealed class LoginFormButtonTests : IAsyncLifetime
         await button.WaitForAsync(new LocatorWaitForOptions
         {
             State = WaitForSelectorState.Visible,
-            Timeout = 30_000,
+            Timeout = BrowserSupport.WebClientTimeout,
         });
         await button.ClickAsync();
 
         // jellyfin-web routes anchor clicks through its own router wherever it owns the
         // element. This one is added to the form by the plugin's own script, so it has to
         // navigate like any link — and the login has to end in a session.
-        try
-        {
-            await page.WaitForFunctionAsync(
-                "() => !!(window.ApiClient && window.ApiClient.accessToken() && window.ApiClient.getCurrentUserId())",
-                null,
-                new PageWaitForFunctionOptions { Timeout = 30_000 });
-        }
-        catch (TimeoutException)
-        {
-            await BrowserSupport.CaptureAsync(page, "form-button-click");
-            Assert.Fail($"The button in the form did not sign anybody in.\nurl: {page.Url}");
-        }
+        await BrowserSupport.WaitForSignedInAsync(page, "form-button-click");
 
         Assert.DoesNotContain("login.html", page.Url);
     }
@@ -156,13 +145,12 @@ public sealed class LoginFormButtonTests : IAsyncLifetime
         await button.WaitForAsync(new LocatorWaitForOptions
         {
             State = WaitForSelectorState.Visible,
-            Timeout = 30_000,
+            Timeout = BrowserSupport.WebClientTimeout,
         });
         await button.ClickAsync();
-        await page.WaitForFunctionAsync(
-            "() => !!(window.ApiClient && window.ApiClient.accessToken())",
-            null,
-            new PageWaitForFunctionOptions { Timeout = 30_000 });
+        // The stronger condition of the shared wait is fine here: this test goes on to
+        // ask for the current user id, so it needs the session adopted, not merely a token.
+        await BrowserSupport.WaitForSignedInAsync(page, "form-button-already-signed-in");
 
         // The profile page carries password fields and a form of its own, which is
         // exactly what the script used to take for a login form.
@@ -171,7 +159,7 @@ public sealed class LoginFormButtonTests : IAsyncLifetime
         await page.Locator("input[type=password]").First.WaitForAsync(new LocatorWaitForOptions
         {
             State = WaitForSelectorState.Visible,
-            Timeout = 30_000,
+            Timeout = BrowserSupport.WebClientTimeout,
         });
 
         Assert.Equal(0, await page.Locator("a.sso-form-button:visible").CountAsync());

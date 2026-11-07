@@ -55,11 +55,13 @@ public sealed class TinyauthTests : RealIdentityProviderTests
         Assert.Empty(policy["EnabledFolders"]!.AsArray());
         Assert.Empty((await _env.PluginConfigAsync())["SeenGroups"]!.AsArray());
 
-        // The log is the only place that explains it, so the guide points at this line.
-        var logs = (await _env.ServerLogsAsync())[logsBefore.Length..];
-        Assert.Contains("libraries=0, groups=", logs);
-        Assert.Contains(
-            "No groups were read from ID token claim groups for provider real-provider", logs);
+        // The log is the only place that explains it, so the guide points at this line —
+        // and it is waited for, not read, because the login answering does not mean the
+        // line has left the container.
+        await _env.WaitForServerLogAsync("libraries=0, groups=", logsBefore.Length);
+        await _env.WaitForServerLogAsync(
+            "No groups were read from ID token claim groups for provider real-provider",
+            logsBefore.Length);
     }
 
     /// <summary>
@@ -102,10 +104,7 @@ public sealed class TinyauthTests : RealIdentityProviderTests
         await page.Locator(_idp.LoginFormSelector)
             .WaitForAsync(new LocatorWaitForOptions { Timeout = 20_000 });
         await _idp.SignInAsync(page, _idp.MemberUser);
-        await page.WaitForFunctionAsync(
-            "() => !!(window.ApiClient && window.ApiClient.accessToken() && window.ApiClient.getCurrentUserId())",
-            null,
-            new PageWaitForFunctionOptions { Timeout = 20_000 });
+        await BrowserSupport.WaitForSignedInAsync(page, "tinyauth-login");
 
         var response = await page.GotoAsync("/sso/oidc/logout");
 

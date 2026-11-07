@@ -356,10 +356,10 @@ public sealed class SsoLoginTests : IAsyncLifetime
         var login = await _env.StartWebLoginAsync(new FakeUser("sub-nobody", "nobodyuser", ["media"]));
 
         Assert.Equal(HttpStatusCode.Forbidden, login.CallbackStatus);
-        Assert.Contains(
-            "no group mappings are configured",
-            await _env.ServerLogsAsync(),
-            StringComparison.Ordinal);
+
+        // Waited for rather than read: the 403 is back before the line that explains it
+        // has made its way out of the container.
+        await _env.WaitForServerLogAsync("no group mappings are configured");
     }
 
     private static List<Guid> Folders(JsonNode policy)

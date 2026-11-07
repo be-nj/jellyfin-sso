@@ -52,7 +52,7 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
         await ours.First.WaitForAsync(new LocatorWaitForOptions
         {
             State = WaitForSelectorState.Visible,
-            Timeout = 30_000,
+            Timeout = BrowserSupport.WebClientTimeout,
         });
 
         // "Use Quick Connect" — a button Jellyfin itself puts in that column.
@@ -256,7 +256,7 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
         await page.Locator("button.sso-login-button").First.WaitForAsync(new LocatorWaitForOptions
         {
             State = WaitForSelectorState.Visible,
-            Timeout = 30_000,
+            Timeout = BrowserSupport.WebClientTimeout,
         });
 
         // The button fades into its colour — .15s on background — and an ease curve is

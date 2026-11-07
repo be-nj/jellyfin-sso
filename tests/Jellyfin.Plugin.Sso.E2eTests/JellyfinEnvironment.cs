@@ -499,6 +499,54 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
 
     public async Task<string> ServerLogsAsync() => (await _jellyfin.GetLogsAsync()).Stdout;
 
+    /// <summary>
+    /// Waits until the server's log carries <paramref name="fragment"/>, and returns the
+    /// log from <paramref name="skip"/> bytes on.
+    ///
+    /// A log line is not there the moment the request that caused it has answered. The
+    /// server hands it to its own logger, the logger writes it when it writes it, and
+    /// Docker passes it on when asked — three steps that have nothing to do with the
+    /// response already sent. Reading once, straight after the response, therefore passes
+    /// on an idle machine and fails on a busy one: that is what
+    /// `Switched_on_with_no_mappings_at_all_turns_everybody_away` did in 36 ms under load,
+    /// with the line it wanted arriving afterwards
+    /// ([#224](https://github.com/be-nj/jellyfin-sso/issues/224)).
+    ///
+    /// Asserting on a log is asserting on something asynchronous, so it needs a wait and
+    /// not a read. The failure message carries the tail of the log, because "the line was
+    /// not there" is useless without what was.
+    /// </summary>
+    public async Task<string> WaitForServerLogAsync(
+        string fragment, int skip = 0, int timeoutMs = 30_000)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        var logs = string.Empty;
+
+        while (true)
+        {
+            logs = await ServerLogsAsync();
+            var window = logs.Length > skip ? logs[skip..] : string.Empty;
+
+            if (window.Contains(fragment, StringComparison.Ordinal))
+            {
+                return window;
+            }
+
+            if (DateTime.UtcNow >= deadline)
+            {
+                break;
+            }
+
+            await Task.Delay(250);
+        }
+
+        Assert.Fail(
+            $"The server log never carried \"{fragment}\" within {timeoutMs / 1000} s.\n"
+            + "last 20 lines:\n"
+            + string.Join("\n", logs.Split('\n').TakeLast(20)));
+        return logs;
+    }
+
     // ─── Setup helpers ────────────────────────────────────────────────────────
 
     private async Task CompleteStartupWizardAsync()
