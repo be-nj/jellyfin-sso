@@ -60,14 +60,33 @@ docker compose -f docker-compose-prebuilt.yml -f docker-compose.override.yml dow
 Each script records two things per module, and the second is the one that matters:
 
 - **`suiteResult`** — the suite's own verdict, from the provider's side.
-- **who stopped the flow** — taken from the host of the last address the login reached. A
-  login that ended on the plugin's own address was refused by the plugin; a login that
-  ended on the suite's address was stopped by the *suite*, which for a module that
-  requires a refusal is a finding rather than a pass.
+- **`stoppedBy`** — taken from the host of the last address the login reached, by the
+  `who_stopped` in `drive.py` that every script shares. A login that ended on the plugin's
+  own address was refused by the plugin; a login that ended on the suite's address was
+  stopped by the *suite*, which for a module that requires a refusal is a finding rather
+  than a pass; a login that reached `Completing login` was stopped by nobody.
 
 The two are not the same claim, and conflating them produced three verdicts in the first
 run that read as findings and were not. "The login did not complete" says nothing about
-who decided that.
+who decided that — and `run_all.py` went on using the weaker check for one more run, which
+is how `discovery-issuer-mismatch` came back green a second time from a flow the suite had
+ended. One shared helper, so there is one answer to the question.
+
+`run_all.py` sorts the modules into four groups, and the verdict means something different
+in each: a login that must complete, a refusal the plugin must make, a refusal the plugin
+makes **by design** (`userinfo-bearer-body` and `userinfo-signed`, both written up in the
+review), and a module about a facility the plugin does not claim to have. The middle two
+are checked identically — the refusal has to be the plugin's own — and only labelled apart.
+
+`run_discovery.py` records two more, because for two of its three modules the suite's
+verdict is about the harness rather than the plugin:
+
+- **`ranToCompletion`** — did the module log `Test has run to completion`?
+- **`failuresBeforeCompletion`** — which failures landed before it did?
+
+A module that ran to completion with nothing failing first did the thing it tests, whatever
+the verdict says afterwards. It is evidence, not a pass; the verdict is still FAILED and is
+reported as FAILED.
 
 The server's own log is the third source and often the clearest:
 
@@ -108,8 +127,14 @@ Four of them, each learned by getting it wrong:
 One module needs a provider setting rather than the default shape:
 `oidcc-client-test-rp-backchannel-rpinitlogout-wrong-alg` signs the logout token with an
 algorithm it did not register for, and a client that accepts any asymmetric algorithm
-cannot tell. Fill *Signing algorithms* in on the provider card — `RS256`, which is what the
-suite registers — before running the logout plan, or that module fails by design.
+cannot tell. `run_logout.py` sets *Signing algorithms* to `RS256` itself, which is what the
+suite registers, so there is nothing to fill in by hand.
+
+Nothing else gets that pin, and that is deliberate: the login plan's `invalid-sig-es256`
+signs a token with ES256 and a broken signature, and a plugin pinned to RS256 would refuse
+it for the algorithm before the signature was ever checked — the module would pass without
+testing what it is for. `configure_provider` therefore defaults to no pin at all, which is
+also what an operator who never touches the field has.
 
 Both are run with `client_registration: static_client`, `client_auth_type: none`,
 `response_type: code` and `request_type: plain_http_request` — the plugin's default shape,

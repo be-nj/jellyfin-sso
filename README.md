@@ -216,7 +216,11 @@ the suites hold. Only this one is mutation tested (70 %, floor 65, over the file
   this repository's own fake providers had ever minted, so no test here could have caught
   it ([the run](docs/reviews/2026-11-06-oidc-conformance.md)). Thirty-six modules, five
   findings, all five now closed — the last of them needed a setting rather than a fix, so
-  it was filed, analysed and then built.
+  it was filed, analysed and then built. Both plans were then run again against the fixed
+  plugin, because a fix checked only by the tests written to close it is checked by
+  whoever misread the specification in the first place: eight of eight on the logout side,
+  and on the login side the twenty-three modules that apply to this client, with the
+  missing claim now refused by name in the server's own log.
 
   The rest still stands: CodeQL, the test matrix and mutation testing are not a reviewer,
   and the documents under `docs/reviews/` were written by the model that wrote the code. Counting

@@ -20,11 +20,11 @@ import json
 import os
 import sys
 import time
-from urllib.parse import urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from drive import (  # noqa: E402
     CLIENT_ID, RUNS, SUITE, configure_provider, drive_login, jellyfin_token, stack, suite,
+    who_stopped,
 )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -42,13 +42,28 @@ VARIANT = {
 }
 
 
-def who_stopped(final_url, body):
-    if final_url is None:
-        return "unclear"
-    if "Completing login" in (body or ""):
-        return "nobody"
-    host = urlparse(final_url).netloc
-    return "the suite" if host.startswith("localhost.emobix.co.uk") else "the plugin"
+def ran_to_completion(log):
+    """Did the module finish its own checks before anything else arrived?
+
+    Two of these three modules are over as soon as the relying party has fetched the
+    document and the keys — which is all they test. The harness then drives a full login,
+    and the authorization request that follows arrives after the test has closed, so the
+    suite records "Illegal test state change: FINISHED -> RUNNING" and the overall verdict
+    reads FAILED. That verdict is about the harness, not about the plugin.
+
+    So the verdict is not the evidence here; the order of the log is. A module that
+    reached "Test has run to completion" with no failure before that point did the thing
+    it tests, whatever the final verdict says. Returns that, and the failures that landed
+    before completion — which are the ones that would be about the plugin.
+    """
+    before, finished = [], False
+    for e in log:
+        if e.get("result") == "FINISHED":
+            finished = True
+            break
+        if e.get("result") == "FAILURE":
+            before.append(str(e.get("msg"))[:200])
+    return finished, before
 
 
 def main():
@@ -80,12 +95,15 @@ def main():
             time.sleep(2)
         info = suite("GET", f"/api/info/{test_id}")
         log = suite("GET", f"/api/log/{test_id}") or []
+        finished, failed_before = ran_to_completion(log)
         out = {
             "module": module,
             "testId": test_id,
             "providerId": provider_id,
             "suiteResult": info.get("result"),
             "stoppedBy": who_stopped(final_url, body),
+            "ranToCompletion": finished,
+            "failuresBeforeCompletion": failed_before,
             "rpHttpStatus": status,
             "rpFinalUrl": final_url,
             "rpBody": (body or "")[:400],
@@ -95,7 +113,8 @@ def main():
             ][:10],
         }
         print(f"      suite={out['suiteResult']}  stopped_by={out['stoppedBy']}  "
-              f"rp={status}", flush=True)
+              f"rp={status}  ran_to_completion={finished}"
+              f"{'  (failed before that)' if failed_before else ''}", flush=True)
         for n in out["notes"][:3]:
             print(f"        {n['result']}: {str(n['msg'])[:140]}", flush=True)
         results.append(out)
@@ -104,7 +123,9 @@ def main():
 
     print("\n=== summary ===")
     for r in results:
-        print(f"{r['module']:58} suite={str(r['suiteResult']):8} stopped_by={r['stoppedBy']}")
+        print(f"{r['module']:58} suite={str(r['suiteResult']):8} "
+              f"stopped_by={r['stoppedBy']:10} "
+              f"ran_to_completion={r['ranToCompletion']}")
 
 
 if __name__ == "__main__":

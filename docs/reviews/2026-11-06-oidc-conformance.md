@@ -28,6 +28,12 @@ findings in a plugin that had been through five internal passes.
 | 4 | A refusal message named the wrong outcome | low | [#217](https://github.com/be-nj/jellyfin-sso/issues/217) |
 | 5 | `E2E_STACK_MINUTES` never reached the container | — | [#218](https://github.com/be-nj/jellyfin-sso/issues/218) |
 
+Both plans were run again the next day against the fixed plugin, and the two reruns are
+the last two sections of this page. Every fix above is confirmed by the suite rather than
+only by the tests written to close it, which matters most for the first finding: the test
+that covers it was written by the same reader of the specification who had not noticed the
+claim was unchecked.
+
 ## The one that was a real gap
 
 **`oidcc-client-test-missing-iat`.** What the suite requires, in its own words:
@@ -239,13 +245,19 @@ the token with `IDX10205` in its own log, and the verdict read FAILED. It passed
 rerun a day later, unchanged, so that one was timing in the harness rather than anything
 about the module: the late request is a race, not a certainty.
 
+The second rerun, below, got as far as this can get without the plugin growing a way to
+fetch a discovery document on demand: the harness now records whether a module reached
+`Test has run to completion` and which failures, if any, landed *before* it did. For both
+of these the answer is yes and none, which is a positive statement about the run and still
+not a pass — the suite's verdict is what the suite publishes, and it says FAILED.
+
 Driving only a discovery fetch would settle all three, and there is no way to ask the plugin
 for one: it fetches the document when a login starts and at no other time. There is no
 "test this provider" action anywhere in the plugin, so an operator who has just configured
 one learns whether it works by trying to log in. That is a gap of its own and not a security
 one.
 
-## The rerun, 7 November
+## The first rerun, 7 November: the logout plan
 
 The logout plan again, against the same server with *Signing algorithms* set to `RS256`,
 which is what the suite registers for its client. **Eight of eight.**
@@ -280,6 +292,82 @@ line in a support thread and goes looking for a key problem.
 The first line is the positive case, from the same configuration. Pinning the algorithm
 does not cost the ordinary logout, which is the half of the acceptance that a passing
 refusal does not prove.
+
+## The second rerun, 7 November: the login plan
+
+The logout plan proved its own fix. The login plan had not been run again since, which left
+two of the findings — the missing `iat` and the encryption keys — verified only by the unit
+tests written to close them. Those tests were written by the same reader of the
+specification who had missed the gap in the first place, which is the whole reason this tier
+exists. So the plan was run again, twenty-eight modules, against a server built from `6193f63`.
+
+**Twenty-three pass, three do not apply, and two are the discovery cache.** No finding, and
+nothing changed about the plugin between the two runs.
+
+The one the rerun was for, in the plugin's own words rather than the suite's:
+
+```
+19:13:51 [WRN] Rejected a token from provider conformance:
+               The ID token carries no 'iat' claim, which OpenID Connect requires.
+```
+
+Yesterday that same module recorded `Client has incorrectly called userinfo_endpoint after
+receiving an id_token with no iat claim`. The refusal is the plugin's, it names the claim,
+and it is the sentence an operator reads in the log.
+
+Everything that held before held again: ten refusals each with their own reason in the
+server's log, both key-rotation modules, and the userinfo subject binding. A token with no
+`kid` validated against a single-key and a multiple-key JWKS, as it did before.
+
+That last part is where the encryption-key fix got its live check. The suite publishes
+thirteen keys at this issuer and still does: six usable signing keys, five deliberately
+unusable ones, and the two with `use: enc` that finding three is about.
+
+```
+kty=RSA  alg=RSA-OAEP      use=enc
+kty=EC   alg=ECDH-ES       use=enc   crv=P-256
+kty=AKP  alg=ML-DSA-9999   use=sig
+kty=RSA  alg=RS9999        use=sig
+kty=EC   alg=ES9999        use=sig   crv=P-256
+kty=EC                     use=sig   crv=P-9999
+kty=OIDF-CONFORMANCE-UNSUPPORTED
+```
+
+So every login that completed in this run, and every refusal that named a signature,
+verified against a set the plugin had to filter first — and the one that refused a
+rotated key refetched and then found the right one among them.
+
+Two modules refuse by design and are written up above — `userinfo-bearer-body` and
+`userinfo-signed`. The harness used to report them as questions; it now has a name for
+"the plugin refused this on purpose", checked exactly like any other required refusal.
+
+### Three harness faults, found by rerunning rather than by reading
+
+- **The classifier still handed out a false pass.** `discovery-issuer-mismatch` came back
+  `OK` on the warm run, from a check that asked whether the login completed. It had not
+  completed — because the *suite* stopped it, at its own authorization endpoint, which for a
+  module requiring the client to refuse is the opposite of a pass. The rule was written down
+  after the first run and applied in `run_discovery.py` only; `run_all.py` kept the weaker
+  check. Both scripts now share one `who_stopped`, and that module now reads `LOOK` with the
+  suite named, which is the honest answer on a warm cache. Cold, with its own provider id, it
+  passes: `suite=PASSED  stopped_by=the plugin`.
+- **The driver pinned an algorithm the login plan should not have pinned.** `configure_provider`
+  had been left defaulting to `RS256` after the logout rerun, which is what that one plan
+  needs. On the login plan it would have made `invalid-sig-es256` refuse the token for its
+  algorithm before the signature was ever checked — the module would have passed without
+  testing what it is for. The default is the plugin's default shape again, and the one plan
+  that needs the pin sets it itself.
+- **A FAILED verdict was being read by hand.** The two discovery modules end before the login
+  the harness drives, so their verdict is about the harness. The harness now records whether
+  each module reached `Test has run to completion` and which failures preceded it — for both,
+  `ran_to_completion=True` with nothing failing before. Also visible there, and worth having
+  on the record: `jwks-uri-keys` publishes its key set at a random path
+  (`/jwks` + ten random characters), and the suite's log shows the plugin fetching exactly
+  that one, so it read `jwks_uri` out of the document rather than assuming where it would be.
+
+All three were mistakes in the thing doing the judging, which is the same lesson as the
+first run's three and the reason the rerun was worth the twenty minutes: a harness that is
+only ever run once is a harness whose verdicts nobody has checked.
 
 ## How to run it again
 
