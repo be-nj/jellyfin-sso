@@ -99,15 +99,20 @@ def jellyfin(base, token, method, path, body=None):
 
 
 def configure_provider(
-    base, token, issuer, provider_id=PROVIDER_ID, algorithms=("RS256",)
+    base, token, issuer, provider_id=PROVIDER_ID, algorithms=()
 ):
     """Point the plugin at the suite's OP, as an operator would.
 
-    The signing algorithm is pinned to RS256 because the suite registers RS256 for its
-    client and then, in rpinitlogout-wrong-alg, signs with ES256 using another key out of
-    its own published set. A client that accepts any asymmetric algorithm cannot tell the
-    difference, which is what that module is for; pass algorithms=() to run with the
-    plugin's default shape instead.
+    No signing algorithm is pinned, which is the plugin's default shape and what an
+    operator who never touches the field gets. That is deliberate: the login plan has a
+    module that signs a token with ES256 and a broken signature, and pinning RS256 would
+    make the plugin refuse it for the algorithm before the signature is ever checked —
+    the module would pass without testing what it is for.
+
+    The one plan that does need a pin is the back-channel logout plan, whose
+    rpinitlogout-wrong-alg module signs with ES256 using a second key out of the same
+    published set: a client that accepts every asymmetric algorithm cannot tell that
+    apart from a legitimate token. run_logout.py configures RS256 itself for that reason.
     """
     config = jellyfin(base, token, "GET", "/sso/admin/config")
     config["Providers"] = [
@@ -127,6 +132,22 @@ def configure_provider(
     config["LoginRequestsPerMinute"] = 0
     config["Links"] = []
     jellyfin(base, token, "POST", "/sso/admin/config", config)
+
+
+def who_stopped(final_url, body):
+    """Who ended the flow: the plugin, the suite, or nobody.
+
+    This is the question every negative module actually asks, and "the login did not
+    complete" does not answer it. A flow that ends on the suite's own address was stopped
+    by the *suite* — for a module that requires the client to refuse, that is a finding
+    dressed as a pass. Taken from the host of the last address the login reached.
+    """
+    if final_url is None:
+        return "unclear"
+    if "Completing login" in (body or ""):
+        return "nobody"
+    host = urllib.parse.urlparse(final_url).netloc
+    return "the suite" if host.startswith("localhost.emobix.co.uk") else "the plugin"
 
 
 def drive_login(base, provider_id=PROVIDER_ID, verbose=False):
