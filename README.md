@@ -60,8 +60,8 @@ Against real software, not mocks. Every push runs:
 
 | | |
 |---|---|
-| **576 unit tests** | Token validation, permissions, lockout guards, markup, the served pages |
-| **131 end-to-end tests** | Throwaway Jellyfin container, an OIDC provider built for the suite, real browser |
+| **594 unit tests** | Token validation, permissions, lockout guards, markup, the served pages |
+| **135 end-to-end tests** | Throwaway Jellyfin container, an OIDC provider built for the suite, real browser |
 | **Three Jellyfin versions** | The same build against 12.0, 12.1 and 12.2 |
 | **16 real-provider logins** | Authentik, Keycloak and Authelia, through their own forms — including the misconfigurations their guides warn about |
 | **Mutation testing** | Stryker breaks the code to see whether the tests notice: 70 %, floor 65 % — over the files the unit suite can reach, which is most of the plugin but not the controllers |
@@ -178,7 +178,7 @@ same way for each of the four, this one included.
 
 | | Since | Latest | ★ | Licence | Written by AI | Tests |
 |---|---|---|---:|---|---|---|
-| **This one** | 2026-09 | v1.12.19 · 2026-11 | 3 | MIT → GPLv3 | **153 of 182** commits | 576 + 151 |
+| **This one** | 2026-09 | v1.12.19 · 2026-11 | 3 | MIT → GPLv3 | **153 of 182** commits | 594 + 155 |
 | K0lin | 2026-06 | v5.1.1 · 2026-09 | 176 | GPL-3.0 | none from an AI | 68 |
 | Ezeqielle | 2026-05 | v1.0.10 · 2026-09 | 41 | GPL-3.0 | 33 of last 100 | 16 |
 | 9p4 | 2022-01 | v4.0.0.4 · archived | 1,453 | GPL-3.0 | none from an AI | none |
@@ -214,9 +214,9 @@ the suites hold. Only this one is mutation tested (70 %, floor 65, over the file
   specification says a client must refuse and recording what this one did with them. It
   found three more, including a required claim that nothing checked and that neither of
   this repository's own fake providers had ever minted, so no test here could have caught
-  it ([the run](docs/reviews/2026-11-06-oidc-conformance.md)). Thirty-six modules; what
-  still fails, and why one of the failures needs a feature rather than a fix, is written
-  down there.
+  it ([the run](docs/reviews/2026-11-06-oidc-conformance.md)). Thirty-six modules, five
+  findings, all five now closed — the last of them needed a setting rather than a fix, so
+  it was filed, analysed and then built.
 
   The rest still stands: CodeQL, the test matrix and mutation testing are not a reviewer,
   and the documents under `docs/reviews/` were written by the model that wrote the code. Counting

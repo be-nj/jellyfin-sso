@@ -98,8 +98,17 @@ def jellyfin(base, token, method, path, body=None):
         return json.loads(raw) if raw else None
 
 
-def configure_provider(base, token, issuer, provider_id=PROVIDER_ID):
-    """Point the plugin at the suite's OP, as an operator would."""
+def configure_provider(
+    base, token, issuer, provider_id=PROVIDER_ID, algorithms=("RS256",)
+):
+    """Point the plugin at the suite's OP, as an operator would.
+
+    The signing algorithm is pinned to RS256 because the suite registers RS256 for its
+    client and then, in rpinitlogout-wrong-alg, signs with ES256 using another key out of
+    its own published set. A client that accepts any asymmetric algorithm cannot tell the
+    difference, which is what that module is for; pass algorithms=() to run with the
+    plugin's default shape instead.
+    """
     config = jellyfin(base, token, "GET", "/sso/admin/config")
     config["Providers"] = [
         {
@@ -112,6 +121,7 @@ def configure_provider(base, token, issuer, provider_id=PROVIDER_ID):
             "GroupsClaim": "groups",
             "GroupsFromUserInfo": False,
             "AcceptBackChannelLogout": True,
+            "SigningAlgorithms": list(algorithms),
         }
     ]
     config["LoginRequestsPerMinute"] = 0

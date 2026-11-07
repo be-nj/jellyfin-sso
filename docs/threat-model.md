@@ -29,6 +29,7 @@ its signature is checked, and the group names that arrive with it.
 | Forged ID token | Signature checked against the provider's JWKS, with the acceptable algorithms named and asymmetric: a JWKS is public, so a symmetric key in one must not be able to decide whether a token is genuine | `A_token_signed_by_an_untrusted_key_is_rejected`, `An_unsigned_token_is_rejected`, `A_token_signed_with_a_symmetric_key_from_the_key_set_is_rejected` |
 | A key the provider did not publish for signing | Only keys marked for signatures, or marked not at all, are offered to the validator; a key set carries encryption keys too, and `use` is what distinguishes them (RFC 7517 §4.2) | `A_key_published_for_encryption_is_not_offered`, `A_key_set_with_only_encryption_keys_is_refused` |
 | An ID token with no issued-at time | `iat` is required, must be a plausible time, and must not claim to come from the future. How old the token may be is left to `exp`, which is required too. Found by the conformance suite: nothing required it, and neither of this repository's fake providers minted one | `A_token_with_no_issued_at_time_is_refused`, `A_token_issued_in_the_future_is_refused`, `An_implausible_issued_at_time_is_refused_as_a_token_problem` |
+| A token signed with an algorithm the provider was not configured for | Optional: *Signing algorithms* on the provider card pins what that provider may sign with, on the ID token and the logout token alike. Empty by default, which accepts the whole asymmetric set; the setting can only narrow it, so naming `HS256` or `none` leaves the default in place. Not a forgery defence — every key in the set is the provider's — but it takes away the choice of a weaker one. Found by the conformance suite | `A_provider_pinned_to_one_algorithm_refuses_a_token_signed_with_another`, `A_logout_token_signed_with_an_unexpected_algorithm_is_refused`, `A_symmetric_algorithm_cannot_be_configured_back_in` |
 | Token minted for another application | `aud` must name this provider's client id, and where it names several, `azp` must name this one — a provider can be configured to cross audiences, and such a token was issued for the other client | `A_token_for_another_client_is_rejected`, `A_token_naming_several_audiences_without_azp_is_rejected` |
 | Token from a different provider | `iss` must equal the issuer from discovery | `A_token_from_another_issuer_is_rejected` |
 | Replayed token from an earlier login | `nonce` must equal the one this login issued | `A_replayed_token_from_another_login_is_rejected`, `A_token_without_a_nonce_is_rejected` |
@@ -112,7 +113,7 @@ its signature is checked, and the group names that arrive with it.
 
 ## How the claims are kept honest
 
-- 565 unit tests and 131 browser-driven end-to-end tests run on every push, against
+- 594 unit tests and 135 browser-driven end-to-end tests run on every push, against
   Jellyfin 12.0, 12.1 and 12.2.
 - Every release signs in through real Authentik, Keycloak and Authelia containers.
 - CodeQL runs on every push, and Scorecard rates the repository from outside. Alerts that

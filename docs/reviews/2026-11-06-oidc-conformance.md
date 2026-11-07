@@ -72,7 +72,7 @@ The range check comes before the conversion for the same reason as on the logout
 representable years, and a signed token carrying `"iat": 9223372036854775807` would answer
 500 with the library's message in the body instead of refusing the token.
 
-## The one the plugin cannot currently close
+## The one that needed a setting
 
 **`oidcc-client-test-rp-backchannel-rpinitlogout-wrong-alg`.** The suite set
 `id_token_signed_response_alg` for its registered client to the algorithm of the first key
@@ -100,8 +100,21 @@ Two tightenings that look like the fix are not:
 What would close it is the thing the specification assumes and this plugin does not have: a
 notion of the algorithm a given provider signs with. The plugin is a static client and
 registers nothing. That is [#219](https://github.com/be-nj/jellyfin-sso/issues/219), filed
-with the analysis and not implemented here — it is a configuration field, an admin
-validation and a page control, which is a feature rather than the fix to a defect.
+with the analysis and not implemented in the same pass — it is a configuration field, an
+admin validation and a page control, which is a feature rather than the fix to a defect.
+
+**Built the next day**, as *Signing algorithms* on the provider card: empty by default and
+therefore no change to any existing deployment, and filled in it refuses a token signed
+with anything else, on the login path and the logout path alike. Two things about it were
+decided by how the library behaves rather than by taste. The setting is intersected with
+the asymmetric set, so a configuration naming `HS256` cannot undo the pinning it exists to
+tighten. And the result is never an empty list, because
+`An_empty_algorithm_list_would_let_the_library_accept_anything` demonstrates what the name
+says: with no entries in `ValidAlgorithms` the handler skips the algorithm check, so a
+field full of typos would have accepted more than the default did. A list of names the
+plugin does not recognise therefore falls back to the default set, and `SaveConfig` refuses
+one at the door so that fallback stays a safety net rather than a behaviour anybody relies
+on. Seven of the eighteen new tests fail if the pinning is removed again.
 
 ## The one that came out of reading the suite's key set
 

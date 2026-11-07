@@ -222,6 +222,7 @@ function buildProviderCard(p, i) {
     var redirectUri = server + '/sso/oidc/callback/' + card.dataset.providerId;
     var logoutUri = server + '/sso/oidc/backchannel-logout/' + card.dataset.providerId;
     var scopes = (p.Scopes || []).join(' ');
+    var algorithms = (p.SigningAlgorithms || []).join(' ');
 
     card.innerHTML =
         '<summary class="sso-card-summary">' +
@@ -298,6 +299,18 @@ function buildProviderCard(p, i) {
                 'value="' + escAttr(scopes) + '" />' +
             '<div class="fieldDescription">Authelia needs <code>groups</code> added here; ' +
                 'Keycloak rejects it. Leave empty unless your provider says otherwise.</div>' +
+        '</div>' +
+        '<div class="inputContainer">' +
+            '<input type="text" is="emby-input" class="sso-provider-algorithms" ' +
+                'label="Signing algorithms (space separated, empty = any asymmetric one)" ' +
+                'placeholder="RS256" ' +
+                'value="' + escAttr(algorithms) + '" />' +
+            '<div class="fieldDescription">What this provider is allowed to sign ID tokens ' +
+                'and logout tokens with. Empty accepts any asymmetric algorithm, which is ' +
+                'what the plugin did before this field existed. Filled in, a token signed ' +
+                'with anything else is refused \u2014 even by another key the provider ' +
+                'published. <code>RS256</code> is what almost every provider uses; the ' +
+                'rest are RS384, RS512, PS256, PS384, PS512, ES256, ES384 and ES512.</div>' +
         '</div>' +
         '<div class="sso-copy-list">' +
             copyRow('Redirect URI for your provider', redirectUri) +
@@ -385,6 +398,7 @@ function collectProviders(view) {
             BrandedLoginButton: card.querySelector('.sso-provider-branded').checked,
             AcceptBackChannelLogout: card.querySelector('.sso-provider-backchannel').checked,
             ButtonColour: val('.sso-provider-colour'),
+            SigningAlgorithms: val('.sso-provider-algorithms').split(/\s+/).filter(Boolean),
         };
     }).filter(Boolean);
 }

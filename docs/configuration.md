@@ -29,6 +29,20 @@ has to be moved before this plugin can see it.
 Leave *Scopes* empty to request `openid profile email`. [Authelia](authelia.md) needs
 `groups` added; [Keycloak](keycloak.md) rejects it.
 
+*Signing algorithms* is empty by default, which accepts any asymmetric algorithm the
+provider's published keys support — what the plugin did before the field existed. Fill it
+in with what your provider actually signs with, almost always `RS256`, and a token signed
+with anything else is refused, even when the key that signed it is one the provider
+published. Several names are separated by spaces; the accepted ones are `RS256`, `RS384`,
+`RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384` and `ES512`, and anything else is
+refused when you save rather than ignored later.
+
+It is worth setting and it is not urgent. Every key in a provider's set belongs to the
+provider, so this is not what keeps a forged token out — `aud`, `iss`, the signature and
+the nonce are. What it removes is the provider's freedom to pick a weaker key out of its
+own set after the fact, and it is what the
+[conformance suite](reviews/2026-11-06-oidc-conformance.md) asks a client to do.
+
 A new provider is created **disabled**, and one with nothing but a display name saves — so
 you can hand its redirect URI to the provider before the rest exists.
 
