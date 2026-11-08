@@ -269,8 +269,6 @@ public sealed class ConfigPageTests : IAsyncLifetime
             + "window.localStorage.setItem('_deviceId2', 'e2e-config-page');");
 
         var page = await context.NewPageAsync();
-        var consoleMessages = new List<string>();
-        page.Console += (_, message) => consoleMessages.Add($"{message.Type}: {message.Text}");
 
         // Jellyfin's web client routes plugin pages by display name, not by GUID.
         await BrowserSupport.GotoAsync(page, "/web/index.html#/configurationpage?name=SSO%20Authentication");
@@ -299,7 +297,7 @@ public sealed class ConfigPageTests : IAsyncLifetime
             Assert.Fail(
                 "The plugin's configuration page did not initialise.\n"
                 + $"url:     {page.Url}\n"
-                + $"console: {string.Join(" | ", consoleMessages)}");
+                + $"console: {string.Join(" | ", PageConsole.Of(page))}");
         }
 
         return page;

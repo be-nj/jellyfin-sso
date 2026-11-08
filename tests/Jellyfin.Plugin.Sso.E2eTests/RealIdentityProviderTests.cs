@@ -235,15 +235,6 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
             });
         var page = await traced.NewPageAsync();
 
-        var consoleErrors = new List<string>();
-        page.Console += (_, message) =>
-        {
-            if (message.Type == "error")
-            {
-                consoleErrors.Add(message.Text);
-            }
-        };
-
         try
         {
             await BrowserSupport.GotoAsync(page, "/sso/oidc/start");
@@ -276,7 +267,7 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
         }
         catch (TimeoutException)
         {
-            ThrowIfNetworkFlake($"{_idp.Name}'s login form", consoleErrors);
+            ThrowIfNetworkFlake($"{_idp.Name}'s login form", PageConsole.ErrorsOf(page));
 
             await BrowserSupport.CaptureAsync(page, $"{_idp.Name.ToLowerInvariant()}-form");
             var logs = (await _env.ServerLogsAsync()).Split('\n')
@@ -290,7 +281,7 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
                 + $"provider log: {await _idp.DiagnosticsAsync()}\n"
                 + $"url:     {page.Url}\n"
                 + $"text:    {(await page.InnerTextAsync("body")).Split('\n').FirstOrDefault()}\n"
-                + $"console: {string.Join(" | ", consoleErrors)}");
+                + $"console: {string.Join(" | ", PageConsole.ErrorsOf(page))}");
         }
 
         try
@@ -305,7 +296,7 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
         }
         catch (TimeoutException)
         {
-            ThrowIfNetworkFlake("the web client's session", consoleErrors);
+            ThrowIfNetworkFlake("the web client's session", PageConsole.ErrorsOf(page));
 
             await BrowserSupport.CaptureAsync(page, $"{_idp.Name.ToLowerInvariant()}-login");
             var serverLog = (await _env.ServerLogsAsync()).Split('\n')
@@ -317,7 +308,7 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
                 + $"server log: {string.Join(" / ", serverLog)}\n"
                 + $"url:     {page.Url}\n"
                 + $"text:    {await page.InnerTextAsync("body")}\n"
-                + $"console: {string.Join(" | ", consoleErrors)}");
+                + $"console: {string.Join(" | ", PageConsole.ErrorsOf(page))}");
         }
 
         return page;

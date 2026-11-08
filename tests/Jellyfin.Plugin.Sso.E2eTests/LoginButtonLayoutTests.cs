@@ -49,11 +49,8 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
         await BrowserSupport.GotoAsync(page, "/web/index.html#/login.html");
 
         var ours = page.Locator("button.sso-login-button");
-        await ours.First.WaitForAsync(new LocatorWaitForOptions
-        {
-            State = WaitForSelectorState.Visible,
-            Timeout = BrowserSupport.WebClientTimeout,
-        });
+        await BrowserSupport.WaitForVisibleAsync(
+            page, "button.sso-login-button", "login-button-layout");
 
         // "Use Quick Connect" — a button Jellyfin itself puts in that column.
         var theirs = page.Locator("button.raised.block.emby-button").First;
@@ -253,11 +250,8 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
     {
         var page = await context.NewPageAsync();
         await BrowserSupport.GotoAsync(page, "/web/index.html#/login.html");
-        await page.Locator("button.sso-login-button").First.WaitForAsync(new LocatorWaitForOptions
-        {
-            State = WaitForSelectorState.Visible,
-            Timeout = BrowserSupport.WebClientTimeout,
-        });
+        await BrowserSupport.WaitForVisibleAsync(
+            page, "button.sso-login-button", "login-button-colours");
 
         // The button fades into its colour — .15s on background — and an ease curve is
         // nearly flat at the end, so two readings 120ms apart both caught

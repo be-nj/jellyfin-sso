@@ -46,17 +46,8 @@ public sealed class BrowserLoginTests : IAsyncLifetime
         });
         var page = await traced.NewPageAsync();
 
-        var consoleErrors = new List<string>();
-        page.Console += (_, message) =>
-        {
-            if (message.Type == "error")
-            {
-                consoleErrors.Add(message.Text);
-            }
-        };
-
         await BrowserSupport.GotoAsync(page, "/sso/oidc/start");
-        await WaitForWebAppAsync(page, "home-screen", consoleErrors);
+        await WaitForWebAppAsync(page, "home-screen");
 
         // The SPA only gets this far with usable credentials in localStorage.
         var stored = await page.EvaluateAsync<string?>("() => localStorage.getItem('jellyfin_credentials')");
@@ -68,11 +59,11 @@ public sealed class BrowserLoginTests : IAsyncLifetime
         Assert.Equal(_env.BaseUrl, server["ManualAddress"]!.GetValue<string>());
 
         Assert.DoesNotContain(
-            consoleErrors,
+            PageConsole.ErrorsOf(page),
             error => error.Contains("serverAddress", StringComparison.OrdinalIgnoreCase));
 
         // The web client adopted the session rather than bouncing back to the login page.
-        await WaitForSignedInAsync(page, "home-screen", consoleErrors);
+        await WaitForSignedInAsync(page, "home-screen");
         Assert.DoesNotContain("login.html", page.Url);
     }
 
@@ -90,24 +81,12 @@ public sealed class BrowserLoginTests : IAsyncLifetime
         });
         var page = await traced.NewPageAsync();
 
-        var consoleErrors = new List<string>();
-        page.Console += (_, message) =>
-        {
-            if (message.Type == "error")
-            {
-                consoleErrors.Add(message.Text);
-            }
-        };
-
         // The path a household actually takes: the login page, then the button, rather
         // than the start endpoint typed into the address bar.
         await BrowserSupport.GotoAsync(page, "/web/index.html#/login.html");
         var button = page.Locator("button.sso-login-button");
-        await button.WaitForAsync(new LocatorWaitForOptions
-        {
-            State = WaitForSelectorState.Visible,
-            Timeout = BrowserSupport.WebClientTimeout,
-        });
+        await BrowserSupport.WaitForVisibleAsync(
+            page, "button.sso-login-button", "login-page-button");
         var markup = await button.EvaluateAsync<string>("el => el.outerHTML");
         await button.ClickAsync();
 
@@ -124,10 +103,10 @@ public sealed class BrowserLoginTests : IAsyncLifetime
         catch (TimeoutException)
         {
             Assert.Fail($"still on the login page.\nurl: {page.Url}\nanchor: {markup}\n"
-                + $"console: {string.Join(" | ", consoleErrors)}");
+                + $"console: {string.Join(" | ", PageConsole.ErrorsOf(page))}");
         }
 
-        await WaitForSignedInAsync(page, "login-page-button", consoleErrors);
+        await WaitForSignedInAsync(page, "login-page-button");
         Assert.DoesNotContain("login.html", page.Url);
     }
 
@@ -158,7 +137,7 @@ public sealed class BrowserLoginTests : IAsyncLifetime
     /// page HTML to tests/runs/playwright and reports what the page was showing, because
     /// "timed out waiting for a URL" says nothing about why the login stalled.
     /// </summary>
-    private static async Task WaitForWebAppAsync(IPage page, string name, List<string>? consoleErrors = null)
+    private static async Task WaitForWebAppAsync(IPage page, string name)
     {
         try
         {
@@ -172,7 +151,7 @@ public sealed class BrowserLoginTests : IAsyncLifetime
                 "The login never reached the web client.\n"
                 + $"url:     {page.Url}\n"
                 + $"text:    {await page.InnerTextAsync("body")}\n"
-                + $"console: {string.Join(" | ", consoleErrors ?? [])}\n"
+                + $"console: {string.Join(" | ", PageConsole.ErrorsOf(page))}\n"
                 + $"saved:   {directory}");
         }
     }
@@ -182,6 +161,6 @@ public sealed class BrowserLoginTests : IAsyncLifetime
     /// classes that wait for the same thing, and with the timeout and the diagnosis that
     /// [#224](https://github.com/be-nj/jellyfin-sso/issues/224) was about.
     /// </summary>
-    private static Task WaitForSignedInAsync(IPage page, string name, List<string>? consoleErrors = null)
-        => BrowserSupport.WaitForSignedInAsync(page, name, consoleErrors);
+    private static Task WaitForSignedInAsync(IPage page, string name)
+        => BrowserSupport.WaitForSignedInAsync(page, name, PageConsole.ErrorsOf(page));
 }

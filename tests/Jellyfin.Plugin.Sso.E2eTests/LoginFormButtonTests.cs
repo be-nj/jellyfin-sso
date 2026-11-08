@@ -82,11 +82,8 @@ public sealed class LoginFormButtonTests : IAsyncLifetime
         await BrowserSupport.GotoAsync(page, "/web/index.html#/login.html");
 
         var button = page.Locator("a.sso-form-button");
-        await button.First.WaitForAsync(new LocatorWaitForOptions
-        {
-            State = WaitForSelectorState.Visible,
-            Timeout = BrowserSupport.WebClientTimeout,
-        });
+        await BrowserSupport.WaitForVisibleAsync(
+            page, "a.sso-form-button", "form-button-address");
 
         Assert.Equal(
             $"/sso/oidc/start/{JellyfinEnvironment.ProviderId}",
@@ -112,11 +109,8 @@ public sealed class LoginFormButtonTests : IAsyncLifetime
         await BrowserSupport.GotoAsync(page, "/web/index.html#/login.html");
 
         var button = page.Locator("a.sso-form-button").First;
-        await button.WaitForAsync(new LocatorWaitForOptions
-        {
-            State = WaitForSelectorState.Visible,
-            Timeout = BrowserSupport.WebClientTimeout,
-        });
+        await BrowserSupport.WaitForVisibleAsync(
+            page, "a.sso-form-button", "form-button-signs-in");
         await button.ClickAsync();
 
         // jellyfin-web routes anchor clicks through its own router wherever it owns the
@@ -142,11 +136,8 @@ public sealed class LoginFormButtonTests : IAsyncLifetime
         await BrowserSupport.GotoAsync(page, "/web/index.html#/login.html");
 
         var button = page.Locator("a.sso-form-button").First;
-        await button.WaitForAsync(new LocatorWaitForOptions
-        {
-            State = WaitForSelectorState.Visible,
-            Timeout = BrowserSupport.WebClientTimeout,
-        });
+        await BrowserSupport.WaitForVisibleAsync(
+            page, "a.sso-form-button", "form-button-already-signed-in-login");
         await button.ClickAsync();
         // The stronger condition of the shared wait is fine here: this test goes on to
         // ask for the current user id, so it needs the session adopted, not merely a token.
@@ -156,11 +147,21 @@ public sealed class LoginFormButtonTests : IAsyncLifetime
         // exactly what the script used to take for a login form.
         var userId = await page.EvaluateAsync<string>("() => window.ApiClient.getCurrentUserId()");
         await BrowserSupport.GotoAsync(page, $"/web/index.html#/userprofile?userId={userId}");
-        await page.Locator("input[type=password]").First.WaitForAsync(new LocatorWaitForOptions
-        {
-            State = WaitForSelectorState.Visible,
-            Timeout = BrowserSupport.WebClientTimeout,
-        });
+
+        // jellyfin-web 12.2 threw during render on exactly this route change once on main:
+        // the home tab's teardown called pause() on something that is not a function, React
+        // Router caught it, the view rendered nothing, and the password field never arrived.
+        // Intermittent, not a property of the version — the same commit passed on 12.0, on
+        // 12.1, and on 12.2 itself minutes earlier on the pull request, and a rerun of the
+        // failed job was green. A reload mounts the profile route with no home tab left to
+        // tear down, which is the transition that broke; waiting longer is the one thing
+        // that cannot help, because nothing renders after the router has caught an
+        // exception.
+        await BrowserSupport.WaitForVisibleAsync(
+            page,
+            "input[type=password]",
+            "form-button-profile-page",
+            retryAfterClientCrash: true);
 
         Assert.Equal(0, await page.Locator("a.sso-form-button:visible").CountAsync());
     }

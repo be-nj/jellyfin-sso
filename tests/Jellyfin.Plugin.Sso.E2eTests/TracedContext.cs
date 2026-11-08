@@ -53,6 +53,12 @@ internal sealed class TracedContext : IAsyncDisposable
             Sources = false,
         });
 
+        // Every page in this context has its console recorded, so a wait that gives up
+        // can say what the client was doing. On the context's own event rather than in
+        // NewPageAsync below, because half the call sites open their page straight off
+        // Context and a page opened by the application itself has no call site at all.
+        context.Page += (_, page) => PageConsole.Record(page);
+
         return new TracedContext(context, name);
     }
 
