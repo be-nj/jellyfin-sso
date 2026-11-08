@@ -81,8 +81,7 @@ public sealed class PrefixedDeploymentTests : IAsyncLifetime
             $"{_proxy.BaseUrl}/web/index.html#/configurationpage?name=SSO%20Authentication");
 
         // A provider card only renders once the configuration fetch has come back.
-        await page.Locator(".sso-provider").First
-            .WaitForAsync(new LocatorWaitForOptions { Timeout = BrowserSupport.WebClientTimeout });
+        await BrowserSupport.WaitForVisibleAsync(page, ".sso-provider", "prefixed-config-page");
 
         // Every request the page made for its own API carried the prefix.
         var apiCalls = requests.Where(u => u.Contains("/sso/admin/", StringComparison.Ordinal))
@@ -126,8 +125,6 @@ public sealed class PrefixedDeploymentTests : IAsyncLifetime
             IgnoreHTTPSErrors = true,
         });
         var page = await traced.NewPageAsync();
-        var console = new List<string>();
-        page.Console += (_, m) => console.Add($"{m.Type}: {m.Text}");
 
         // Through the retrying helper: this class starts a container of its own moments
         // before navigating, and Docker rearranging its networks abandons a navigation in
@@ -145,7 +142,7 @@ public sealed class PrefixedDeploymentTests : IAsyncLifetime
         {
             Assert.Fail(
                 $"no credentials. first response {landed?.Status}, now at {page.Url}\n"
-                + $"console:\n{string.Join("\n", console)}\n"
+                + $"console:\n{string.Join("\n", PageConsole.Of(page))}\n"
                 + $"body:\n{(await page.ContentAsync())[..Math.Min(1500, (await page.ContentAsync()).Length)]}\n"
                 + $"nginx:\n{await _proxy.LogsAsync()}");
         }
@@ -155,7 +152,7 @@ public sealed class PrefixedDeploymentTests : IAsyncLifetime
         // middle of that navigation dies with "execution context was destroyed". The
         // condition below is also the stronger claim — the client adopted the session —
         // and WaitForFunction survives the navigation where a read does not.
-        await BrowserSupport.WaitForSignedInAsync(page, "prefixed-browser-login", console);
+        await BrowserSupport.WaitForSignedInAsync(page, "prefixed-browser-login", PageConsole.Of(page));
 
         var stored = await page.EvaluateAsync<string>(
             "() => localStorage.getItem('jellyfin_credentials')");

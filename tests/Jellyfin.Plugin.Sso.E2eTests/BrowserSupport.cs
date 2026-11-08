@@ -92,6 +92,89 @@ internal static class BrowserSupport
         }
     }
 
+    /// <summary>
+    /// Waits for one thing on the page to become visible, and says what the client was
+    /// doing if it never does.
+    ///
+    /// Nine waits used to do this by hand, and what they reported when they failed was
+    /// `TimeoutException : Timeout 90000ms exceeded` and the selector. That is the symptom
+    /// in every case and the cause in none: the profile-page wait timed out on main and
+    /// finding out why meant downloading the job's artifact and unzipping a Playwright
+    /// trace, where jellyfin-web 12.2 had logged a React render error three lines before
+    /// giving up. The trace had the answer, which is why it is always written — but a
+    /// failure should not need to be excavated.
+    ///
+    /// A client that crashed while rendering is named as such, because that is a different
+    /// finding from a slow page and it is not a verdict on the plugin.
+    /// </summary>
+    public static async Task WaitForVisibleAsync(
+        IPage page,
+        string selector,
+        string name,
+        int timeout = WebClientTimeout,
+        bool retryAfterClientCrash = false)
+    {
+        var logged = PageConsole.Of(page).Count;
+
+        if (await VisibleAsync(page, selector, timeout))
+        {
+            return;
+        }
+
+        var crashed = PageConsole.ClientCrashedWhileRendering(PageConsole.Of(page).Skip(logged));
+
+        if (crashed && retryAfterClientCrash)
+        {
+            // Mounting the route again, with whatever the client was tearing down already
+            // gone. Only where a caller says the transition is known to break this way,
+            // and only once.
+            await page.ReloadAsync();
+
+            if (await VisibleAsync(page, selector, timeout))
+            {
+                return;
+            }
+        }
+
+        await CaptureAsync(page, name);
+
+        var errors = PageConsole.ErrorsOf(page);
+        var verdict = crashed
+            ? "the web client threw during render and showed nothing \u2014 not the plugin"
+            : "the page was still loading, or what the test waits for is not there";
+
+        Assert.Fail(
+            $"'{selector}' never became visible within {timeout / 1000} s"
+            + (crashed && retryAfterClientCrash ? ", twice" : string.Empty) + ".\n"
+            + $"url:     {page.Url}\n"
+            + $"verdict: {verdict}\n"
+            + $"errors:  {(errors.Count == 0 ? "none logged" : string.Join("\n         ", errors))}");
+    }
+
+    /// <summary>
+    /// The wait itself. Separate so the caller above can run it twice without the
+    /// reporting, and so the full timeout is spent before anything is concluded: a crash
+    /// could be noticed sooner by racing the wait against the console, and that costs a
+    /// second code path to be wrong in. Ninety seconds are wasted only when the client has
+    /// actually crashed, which has happened once.
+    /// </summary>
+    private static async Task<bool> VisibleAsync(IPage page, string selector, int timeout)
+    {
+        try
+        {
+            await page.Locator(selector).First.WaitForAsync(new LocatorWaitForOptions
+            {
+                State = WaitForSelectorState.Visible,
+                Timeout = timeout,
+            });
+            return true;
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>Saves a screenshot and the page HTML under tests/runs/playwright.</summary>
     /// <summary>
     /// How long jellyfin-web gets to do its own work: boot, adopt a handed-over session,
