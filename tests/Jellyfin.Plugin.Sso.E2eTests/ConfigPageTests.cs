@@ -273,7 +273,7 @@ public sealed class ConfigPageTests : IAsyncLifetime
         page.Console += (_, message) => consoleMessages.Add($"{message.Type}: {message.Text}");
 
         // Jellyfin's web client routes plugin pages by display name, not by GUID.
-        await page.GotoAsync("/web/index.html#/configurationpage?name=SSO%20Authentication");
+        await BrowserSupport.GotoAsync(page, "/web/index.html#/configurationpage?name=SSO%20Authentication");
 
         try
         {

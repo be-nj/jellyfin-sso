@@ -192,3 +192,43 @@ jobs:
             echo "no held runs yet (attempt $attempt)"
             sleep 10
           done
+
+      # Nothing has tested the commit that ends up on main. The checks ran against the
+      # manifest branch, and the squash that lands them is pushed with GITHUB_TOKEN,
+      # which starts no workflows — the same rule that makes the dispatch above
+      # necessary. Four of the last five manifest commits on main therefore carry no
+      # Tests run at all, so "is main green?" answers about the commit before them.
+      #
+      # Dispatching against main once the merge has landed gives main's own head a
+      # verdict. It is not the branch's run relabelled: it tests the squashed tree,
+      # which is the one servers will poll.
+      #
+      # Bounded and never fatal, like the approval above it. If the manifest pull
+      # request has not landed within ten minutes its own checks have failed and a
+      # person is looking at it already; the release itself is finished either way, and
+      # failing it here would say something untrue about the artifact.
+      - name: Test main with the manifest on it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          branch="manifest/$GITHUB_REF_NAME"
+
+          for attempt in $(seq 1 30); do
+            state=$(gh pr view "$branch" --json state --jq .state 2>/dev/null || echo UNKNOWN)
+
+            if [ "$state" = MERGED ]; then
+              echo "manifest pull request merged; dispatching the suite against main"
+              gh workflow run test.yml --ref main || true
+              exit 0
+            fi
+
+            if [ "$state" = CLOSED ]; then
+              echo "manifest pull request was closed without merging; nothing to test"
+              exit 0
+            fi
+
+            echo "manifest pull request is $state (attempt $attempt)"
+            sleep 20
+          done
+
+          echo "manifest pull request had not landed after ten minutes; main stays untested"

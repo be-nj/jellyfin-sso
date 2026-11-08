@@ -55,7 +55,7 @@ public sealed class BrowserLoginTests : IAsyncLifetime
             }
         };
 
-        await page.GotoAsync("/sso/oidc/start");
+        await BrowserSupport.GotoAsync(page, "/sso/oidc/start");
         await WaitForWebAppAsync(page, "home-screen", consoleErrors);
 
         // The SPA only gets this far with usable credentials in localStorage.
@@ -101,7 +101,7 @@ public sealed class BrowserLoginTests : IAsyncLifetime
 
         // The path a household actually takes: the login page, then the button, rather
         // than the start endpoint typed into the address bar.
-        await page.GotoAsync("/web/index.html#/login.html");
+        await BrowserSupport.GotoAsync(page, "/web/index.html#/login.html");
         var button = page.Locator("button.sso-login-button");
         await button.WaitForAsync(new LocatorWaitForOptions
         {
@@ -144,7 +144,7 @@ public sealed class BrowserLoginTests : IAsyncLifetime
         });
         var page = await traced.NewPageAsync();
 
-        await page.GotoAsync("/sso/oidc/start");
+        await BrowserSupport.GotoAsync(page, "/sso/oidc/start");
         await WaitForWebAppAsync(page, "reload");
 
         await page.ReloadAsync();

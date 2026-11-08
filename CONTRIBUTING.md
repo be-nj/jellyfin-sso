@@ -318,6 +318,13 @@ workflow: every change arrives as a pull request that the test matrix has to pas
 auto-merge lands it when it does. That is also why the release publishes its manifest
 through a pull request rather than pushing it.
 
+One consequence is worth knowing when reading CI history. A pull request opened with
+`GITHUB_TOKEN` starts no workflows, and neither does the squash that merges it, so the
+manifest commit on `main` gets no run of its own — its checks ran against the manifest
+branch, dispatched by hand. The release now dispatches the suite against `main` once that
+merge lands, so `main`'s head has a verdict of its own; before that it was the commit
+before it that answered "is `main` green?".
+
 The project is open to co-maintainers, and the rule above is the part of it that does not
 wait for one: no change to the authentication path goes in on the strength of a green test
 run alone.
