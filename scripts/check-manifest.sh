@@ -38,13 +38,17 @@ for i in $(seq 0 $((count - 1))); do
         continue
     fi
 
-    # An entry whose changelog is empty shows Jellyfin's own "No changelog" in the
-    # catalog, which is better than a sentence pointing nowhere but still nothing to
-    # decide an upgrade on. The release step reads the notes off the release it just
-    # created, and a body that comes back empty would otherwise land here unnoticed.
+    # The catalog text has to be the CHANGELOG.md section, character for character.
+    # Editing one and not the other is the whole failure mode: the manifest is generated,
+    # and a generated file that somebody has touched by hand stops being a record of
+    # anything. Checking equality also covers the emptiness this used to check for,
+    # because a section that exists is not empty.
     changelog=$(jq -r ".[0].versions[$i].changelog // \"\"" "$MANIFEST")
-    if [[ -z ${changelog//[[:space:]]/} ]]; then
-        echo "::error::$version carries no changelog" >&2
+    if ! section=$("$REPO_ROOT/scripts/changelog-section.sh" "$version" 2>/dev/null); then
+        echo "::error::$version has no section in CHANGELOG.md" >&2
+        failures=$((failures + 1))
+    elif [[ $changelog != "$section" ]]; then
+        echo "::error::$version does not carry its CHANGELOG.md section — run scripts/manifest-changelogs.sh" >&2
         failures=$((failures + 1))
     fi
 

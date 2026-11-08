@@ -177,6 +177,29 @@ Two rules of thumb. If the bullet list does not fit on a phone screen, the relea
 large, not the notes. And if a change cannot be stated in one line, that line should say
 what an operator notices and link to where it is explained — not try to explain it.
 
+### The catalog text is a different text
+
+`CHANGELOG.md` holds one short section per version, and that is what Jellyfin shows in
+**Plugins → Catalog**: jellyfin-web renders the field as Markdown inside a collapsed
+accordion per version, so it is read by somebody deciding whether to click Install.
+
+That is not the same reader as the release body's. The body carries the reasoning — the
+one for 1.12.19 is 6429 characters across five headings, and rightly so — and for a while
+the catalog got that body verbatim, which buried the decision under the argument. Before
+*that*, it got `See the release notes for v1.12.20.` and pointed nowhere at all. So the two
+are written separately: five or six lines here, grouped by what they are rather than one
+line per finding, with issue numbers bare because a link per finding would outweigh the
+lines themselves.
+
+Three things hold it together. `scripts/changelog-section.sh <version>` prints a section
+and fails when there is none, which the release checks **before** it builds anything —
+otherwise a missing section is discovered once the ZIP, the attestation and the GitHub
+release already exist. `scripts/manifest-changelogs.sh` copies the sections into
+`manifest.json` and `m.json`, so a section edited later reaches the catalog by running it
+again. And `scripts/check-manifest.sh` compares the two character for character, because
+the manifest is generated and a generated file somebody has edited by hand is no longer a
+record of anything.
+
 The `Release` workflow builds the ZIP, attaches it to a GitHub release and appends the
 version to `manifest.json` on `main`, which is what servers poll. The `targetAbi` written
 into the manifest is derived from the `Jellyfin.Controller` reference in the csproj, so a
