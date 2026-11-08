@@ -325,6 +325,15 @@ branch, dispatched by hand. The release now dispatches the suite against `main` 
 merge lands, so `main`'s head has a verdict of its own; before that it was the commit
 before it that answered "is `main` green?".
 
+A pull request cannot change which checks `main` requires, so the required checks are
+named once and the matrix behind them is free to move. `main` requires `test` and
+`e2e-all`; `e2e-all` passes only when every job in the server matrix passed. It used to
+require `e2e (12.0)`, `e2e (12.1)` and `e2e (12.2)` by name, which kept one decision — the
+set of tested servers — in two places, the workflow and the ruleset. Moving the matrix on
+to 12.3 and 12.4 under that arrangement would have left `main` waiting for a check that no
+longer runs, and the repair is a repository setting, which is precisely what a
+`GITHUB_TOKEN` pull request may not touch.
+
 The project is open to co-maintainers, and the rule above is the part of it that does not
 wait for one: no change to the authentication path goes in on the strength of a green test
 run alone.
@@ -353,3 +362,31 @@ refuses to load a plugin built against a different one. After a server upgrade:
 3. Run both test suites — the e2e harness reads the pinned version and starts the matching
    server image, so it tests against the Jellyfin you are porting to.
 4. Tag a release. `targetAbi` in the manifest follows the csproj automatically.
+
+### Which servers CI tests
+
+`targetAbi` is a floor, so one build is offered to every server from the pinned version
+upwards — five of them within seven weeks of 12.0, and Jellyfin shows no sign of slowing
+down. Testing each one on each change buys little and grows without end, so the work is
+split in two:
+
+- **Every pull request** runs the end-to-end suite against the versions in
+  `jellyfin-versions.json`: the floor, and the two newest servers Jellyfin has released.
+  Those are the ends of the claimed range, and the ends are where it breaks — the floor
+  catches the plugin reaching for an API the oldest server does not have, the newest catch
+  jellyfin-web moving the login page under it. Both real breakages so far were the second
+  kind.
+- **The weekly `Upstream` run** goes through every released 12.x and `:latest`. A failure
+  there opens an issue rather than blocking a merge, which is what makes it affordable to
+  be exhaustive.
+
+Two things keep the list honest. `scripts/check-jellyfin-versions.sh` fails when its
+oldest entry is not the version the csproj is built against, so the suite cannot test from
+12.1 while the catalog hands the plugin to 12.0 servers. And the weekly run opens a pull
+request moving the list when Jellyfin publishes something newer — only after the matrix
+passed, so the version being proposed is one that was just tested. It is deliberately not
+merged automatically: it changes what every later pull request is held to.
+
+Resolving "newest" inside the test workflow instead would have saved the pull request, and
+would have meant somebody else's Tuesday release turning a red build onto a branch nobody
+touched. `Upstream` makes the same argument for pinning its own containers.
