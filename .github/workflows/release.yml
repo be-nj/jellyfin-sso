@@ -126,16 +126,29 @@ jobs:
 
       - name: Add the version to manifest.json
         env:
+          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
           ZIP: ${{ steps.version.outputs.zip }}
           SERVER_URL: ${{ github.server_url }}
           REPOSITORY: ${{ github.repository }}
         run: |
+          # The notes the step above generated, not a sentence about them. Jellyfin shows
+          # this field under the version in the catalog and renders it as Markdown, so the
+          # release body is exactly what a server operator deciding whether to update
+          # needs. Five releases shipped with "See the release notes for v1.12.20." in
+          # that spot, which named no link and pointed nowhere, while the real notes sat
+          # on the release this job had just created.
+          notes=$(gh release view "$GITHUB_REF_NAME" --json body --jq '.body')
+
+          if [ -z "${notes//[[:space:]]/}" ]; then
+            notes="See the release notes: $SERVER_URL/$REPOSITORY/releases/tag/$GITHUB_REF_NAME"
+          fi
+
           scripts/update-manifest.sh \
             "$VERSION" \
             "$(cat "dist/$ZIP.md5")" \
             "$SERVER_URL/$REPOSITORY/releases/download/$GITHUB_REF_NAME/$ZIP" \
-            "See the release notes for $GITHUB_REF_NAME."
+            "$notes"
 
       # The manifest goes to main the same way every other change does: through a pull
       # request that has to pass the test matrix. Nothing bypasses the rules on main,

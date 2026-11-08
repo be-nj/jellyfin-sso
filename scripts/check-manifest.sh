@@ -38,6 +38,16 @@ for i in $(seq 0 $((count - 1))); do
         continue
     fi
 
+    # An entry whose changelog is empty shows Jellyfin's own "No changelog" in the
+    # catalog, which is better than a sentence pointing nowhere but still nothing to
+    # decide an upgrade on. The release step reads the notes off the release it just
+    # created, and a body that comes back empty would otherwise land here unnoticed.
+    changelog=$(jq -r ".[0].versions[$i].changelog // \"\"" "$MANIFEST")
+    if [[ -z ${changelog//[[:space:]]/} ]]; then
+        echo "::error::$version carries no changelog" >&2
+        failures=$((failures + 1))
+    fi
+
     actual=$(curl -fsSL "$url" | md5sum | cut -d' ' -f1)
     if [[ -z $actual ]]; then
         echo "::error::$version could not be downloaded from $url" >&2
