@@ -8,7 +8,7 @@ Dashboard → **About**, or `http://<your-jellyfin>/System/Info/Public`.
 
 | Jellyfin | Plugin |
 |---|---|
-| 12.0, 12.1, 12.2 | 1.12.6 and newer |
+| every 12.x from 12.0 | 1.12.6 and newer |
 | 12.2 only | 1.12.2 – 1.12.5 |
 | 12.1 only | 1.12.0 – 1.12.1 |
 | 11.x and older | none — upgrade Jellyfin first |
@@ -18,10 +18,18 @@ on every 12.x server from there. Jellyfin hides builds whose minimum is higher t
 server, which is why an empty catalog means your server is older than any build here, not
 that the URL is wrong.
 
-The range is measured rather than assumed: every push runs the whole end-to-end suite
-three times, against Jellyfin 12.0, 12.1 and 12.2 containers, with the same build.
+The range is measured rather than assumed, in two passes with different jobs. Every pull
+request runs the whole end-to-end suite against the oldest server a build is offered to
+and against the two newest Jellyfin has released — the ends of the range, where the two
+things that break live: an API the oldest server does not have, and a web client that has
+moved the login page. Once a week the same suite runs against **every** released 12.x and
+against `:latest`, where a failure opens an issue instead of blocking a merge.
 
-**Pin the Jellyfin image tag** (`jellyfin/jellyfin:12.2`, not `latest`) and upgrade
+So a version in the middle of the range is tested weekly rather than per change. The
+versions in the first pass are listed in
+[`jellyfin-versions.json`](https://github.com/be-nj/jellyfin-sso/blob/main/jellyfin-versions.json).
+
+**Pin the Jellyfin image tag** (`jellyfin/jellyfin:12.4`, not `latest`) and upgrade
 deliberately. A Jellyfin release that breaks the plugin API arrives without warning, and
 your local administrator is the way in until a matching build exists. Upgrading the server
 is its own evening's work —

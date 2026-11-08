@@ -20,7 +20,7 @@ demoted, by design. Log in as them, switch on *Never remove administrator rights
 
 **Jellyfin updated itself and the plugin stopped working.** Install the plugin build for
 the new server version. If there is none yet: sign in as the local administrator and wait,
-or put the image tag back (`jellyfin/jellyfin:12.2`, not `latest`) and pull again. See
+or put the image tag back (`jellyfin/jellyfin:12.4`, not `latest`) and pull again. See
 [Requirements](requirements.md).
 
 **I am coming from the old 9p4 plugin.** Different plugin, not an update: own id, own

@@ -111,18 +111,46 @@ jobs:
       - name: Check the manifest against its own assets
         run: scripts/check-manifest.sh
 
+  # Which servers the pull requests run against. The list is jellyfin-versions.json, so
+  # adding or dropping one is a one-line review instead of a matrix buried in this file,
+  # and so the weekly bump can propose it as an ordinary pull request.
+  #
+  # Floor plus the newest two. The floor catches the plugin reaching for an API the oldest
+  # server it claims does not have; the newest catch jellyfin-web moving the login page
+  # under it, and both real breakages so far were that second kind. The versions in
+  # between are not dropped, they are moved: Upstream runs every 12.x there is, once a
+  # week, where a failure opens an issue instead of blocking somebody's merge.
+  versions:
+    runs-on: ubuntu-latest
+    outputs:
+      list: ${{ steps.read.outputs.list }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # Not gated on `changes`: the file is not Markdown, so editing it is a code change
+      # either way, and two seconds here beats three containers spending twenty minutes
+      # to discover the same typo.
+      - name: Check the list against the ABI the plugin is built for
+        run: scripts/check-jellyfin-versions.sh
+
+      - id: read
+        run: echo "list=$(jq -c '.' jellyfin-versions.json)" >> "$GITHUB_OUTPUT"
+
   # The plugin is built against the oldest server it claims to support, and the same
-  # build is run against every server in that range. The claim in the README is this
-  # job's result, not an assumption about ABI stability.
+  # build is run against every server in jellyfin-versions.json. The claim in the README
+  # is this job's result, not an assumption about ABI stability.
   e2e:
-    needs: changes
-    if: always()
+    needs: [changes, versions]
+    # always() for `changes`, which is continue-on-error: a crashed filter must still
+    # leave the suite running. Not for `versions` — without its list there is no matrix
+    # at all, and e2e-all below turns that into a failure instead of a silent pass.
+    if: always() && needs.versions.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        jellyfin: ['12.0', '12.1', '12.2']
+        jellyfin: ${{ fromJSON(needs.versions.outputs.list) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         if: needs.changes.outputs.code != 'false'
@@ -156,6 +184,34 @@ jobs:
             tests/runs/playwright/*.html
             tests/runs/playwright/*.trace.zip
           if-no-files-found: ignore
+
+  # One check with a stable name standing in for the whole matrix.
+  #
+  # main's ruleset used to require `e2e (12.0)`, `e2e (12.1)` and `e2e (12.2)` by name,
+  # which made the set of servers one decision kept in two places. The day 12.3 and 12.4
+  # shipped, moving the matrix would have left main waiting for a check that no longer
+  # runs, and undoing that is a repository setting — which is exactly what the release's
+  # own GITHUB_TOKEN pull request may not touch. So main requires this job instead. It
+  # passes only when every matrix job passed, which puts the list of servers back in a
+  # file that review can change.
+  e2e-all:
+    needs: [versions, e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every server in the matrix passed
+        env:
+          VERSIONS: ${{ needs.versions.result }}
+          E2E: ${{ needs.e2e.result }}
+        run: |
+          echo "versions: $VERSIONS"
+          echo "e2e:      $E2E"
+          # A matrix that was skipped is a hole, not a pass: nothing ran, so the servers
+          # this release claims were not tested on this change at all.
+          if [ "$VERSIONS" != success ] || [ "$E2E" != success ]; then
+            echo "::error::the server matrix did not pass"
+            exit 1
+          fi
 
   # Real identity providers in containers: slower, and separate so a Keycloak or Authelia
   # release breaking its own container image does not look like a plugin regression.

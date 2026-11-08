@@ -145,8 +145,14 @@ Secrets** are in-memory only. No separate database.
 
 `Jellyfin.Controller` **12.0.0**, `net10.0`. The reference decides the `targetAbi` written
 into the manifest, and Jellyfin hides a version whose `targetAbi` is newer than the server
-— so the lowest version the plugin is built against is the widest audience it reaches, and
-the suite runs against 12.0, 12.1 and 12.2 to say that holds.
+— so the lowest version the plugin is built against is the widest audience it reaches.
+
+Which servers prove that: `jellyfin-versions.json` holds the ones every pull request runs
+against, and `scripts/check-jellyfin-versions.sh` fails if its oldest entry and this
+reference disagree, because then either the catalog offers the plugin to a server nothing
+tested or a job is spent on a server the catalog hides it from. The versions between the
+oldest and the newest are covered by the weekly `Upstream` run, which tests every released
+12.x and `:latest`.
 
 Distribution: a `manifest.json` plus a versioned zip on this repository's GitHub releases,
 which the dashboard installs and updates from. `jf.be-nj.net/m.json` is the same file under
