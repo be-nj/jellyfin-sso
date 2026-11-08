@@ -79,7 +79,7 @@ public sealed class LoginFormButtonTests : IAsyncLifetime
             IgnoreHTTPSErrors = true,
         });
         var page = await traced.NewPageAsync();
-        await page.GotoAsync("/web/index.html#/login.html");
+        await BrowserSupport.GotoAsync(page, "/web/index.html#/login.html");
 
         var button = page.Locator("a.sso-form-button");
         await button.First.WaitForAsync(new LocatorWaitForOptions
@@ -109,7 +109,7 @@ public sealed class LoginFormButtonTests : IAsyncLifetime
             IgnoreHTTPSErrors = true,
         });
         var page = await traced.NewPageAsync();
-        await page.GotoAsync("/web/index.html#/login.html");
+        await BrowserSupport.GotoAsync(page, "/web/index.html#/login.html");
 
         var button = page.Locator("a.sso-form-button").First;
         await button.WaitForAsync(new LocatorWaitForOptions
@@ -139,7 +139,7 @@ public sealed class LoginFormButtonTests : IAsyncLifetime
             IgnoreHTTPSErrors = true,
         });
         var page = await traced.NewPageAsync();
-        await page.GotoAsync("/web/index.html#/login.html");
+        await BrowserSupport.GotoAsync(page, "/web/index.html#/login.html");
 
         var button = page.Locator("a.sso-form-button").First;
         await button.WaitForAsync(new LocatorWaitForOptions
@@ -155,7 +155,7 @@ public sealed class LoginFormButtonTests : IAsyncLifetime
         // The profile page carries password fields and a form of its own, which is
         // exactly what the script used to take for a login form.
         var userId = await page.EvaluateAsync<string>("() => window.ApiClient.getCurrentUserId()");
-        await page.GotoAsync($"/web/index.html#/userprofile?userId={userId}");
+        await BrowserSupport.GotoAsync(page, $"/web/index.html#/userprofile?userId={userId}");
         await page.Locator("input[type=password]").First.WaitForAsync(new LocatorWaitForOptions
         {
             State = WaitForSelectorState.Visible,

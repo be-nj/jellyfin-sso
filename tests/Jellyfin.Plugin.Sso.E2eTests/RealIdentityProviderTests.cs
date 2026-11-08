@@ -148,7 +148,7 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
                 IgnoreHTTPSErrors = true,
             });
         var page = await traced.NewPageAsync();
-        await page.GotoAsync("/sso/oidc/start");
+        await BrowserSupport.GotoAsync(page, "/sso/oidc/start");
 
         // The form may never arrive: a provider that refuses the authorization request
         // answers with its own error page instead of asking who is logging in.
@@ -246,7 +246,7 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
 
         try
         {
-            await page.GotoAsync("/sso/oidc/start");
+            await BrowserSupport.GotoAsync(page, "/sso/oidc/start");
         }
         catch (PlaywrightException ex)
         {
@@ -330,17 +330,9 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
     /// </summary>
     private static void ThrowIfNetworkFlake(string what, IEnumerable<string> messages)
     {
-        string[] transient =
-        [
-            "ERR_NETWORK_CHANGED",
-            "ERR_NETWORK_IO_SUSPENDED",
-            "ERR_INTERNET_DISCONNECTED",
-            "ERR_NAME_NOT_RESOLVED",
-            "ERR_CONNECTION_RESET",
-        ];
-
-        var hit = messages.FirstOrDefault(
-            message => transient.Any(name => message.Contains(name, StringComparison.Ordinal)));
+        // The names live in BrowserSupport, where the retry reads them too. This file
+        // used to keep its own copy, and the two had drifted apart in both directions.
+        var hit = messages.FirstOrDefault(BrowserSupport.IsRunnerNetworkError);
 
         if (hit is not null)
         {

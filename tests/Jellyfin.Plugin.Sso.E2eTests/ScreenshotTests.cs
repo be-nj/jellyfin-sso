@@ -123,7 +123,7 @@ public sealed class ScreenshotTests : IAsyncLifetime
         });
 
         var page = await context.NewPageAsync();
-        await page.GotoAsync("/web/index.html#/login.html");
+        await BrowserSupport.GotoAsync(page, "/web/index.html#/login.html");
 
         try
         {
@@ -247,7 +247,7 @@ public sealed class ScreenshotTests : IAsyncLifetime
             + "window.localStorage.setItem('_deviceId2', 'e2e-screenshots');");
 
         var page = await context.NewPageAsync();
-        await page.GotoAsync("/web/index.html#/configurationpage?name=SSO%20Authentication");
+        await BrowserSupport.GotoAsync(page, "/web/index.html#/configurationpage?name=SSO%20Authentication");
         await page.WaitForSelectorAsync("#GroupMappings", new PageWaitForSelectorOptions
         {
             State = WaitForSelectorState.Attached,

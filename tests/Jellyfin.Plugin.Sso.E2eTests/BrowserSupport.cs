@@ -30,25 +30,51 @@ internal static class BrowserSupport
     /// The network errors a CI runner produces while Docker is still rearranging itself,
     /// as Chromium reports them.
     ///
-    /// Starting a container creates a bridge network and rewrites firewall rules, and a
-    /// navigation in flight while that happens is abandoned with ERR_NETWORK_CHANGED. It
-    /// says nothing about the server or the page: one of three matrix jobs failed this way
-    /// on a navigation 237 milliseconds into a test, and the other two did not.
+    /// Starting or stopping a container creates or tears down a bridge network and
+    /// rewrites firewall rules, and a navigation in flight while that happens is
+    /// abandoned. It says nothing about the server or the page: one of three matrix jobs
+    /// failed with ERR_NETWORK_CHANGED on a navigation 237 milliseconds into a test, and
+    /// the other two did not.
+    ///
+    /// One list, because there were two of them. RealIdentityProviderTests kept its own,
+    /// and the two had diverged: this one knew ERR_CONNECTION_REFUSED and
+    /// ERR_EMPTY_RESPONSE, that one knew ERR_NETWORK_IO_SUSPENDED,
+    /// ERR_INTERNET_DISCONNECTED, ERR_NAME_NOT_RESOLVED and ERR_CONNECTION_RESET, and
+    /// neither knew the other's. Both read this one now, so a name learned once is known
+    /// everywhere.
     /// </summary>
     private static readonly string[] RunnerNetworkErrors =
     [
         "ERR_NETWORK_CHANGED",
+        "ERR_NETWORK_IO_SUSPENDED",
+        "ERR_INTERNET_DISCONNECTED",
+        "ERR_NAME_NOT_RESOLVED",
+        "ERR_CONNECTION_RESET",
         "ERR_CONNECTION_REFUSED",
         "ERR_EMPTY_RESPONSE",
     ];
 
+    /// <summary>Does this message name one of the runner's own network errors?</summary>
+    public static bool IsRunnerNetworkError(string message)
+        => RunnerNetworkErrors.Any(name => message.Contains(name, StringComparison.Ordinal));
+
     /// <summary>
     /// Navigates, and tries again when the runner's own network moved under the request.
     ///
-    /// For the tests that start a container of their own and then drive a browser at it.
+    /// Every navigation in this suite goes through here. Not every container is up before
+    /// the first test: the three real providers and the prefixing proxy start inside the
+    /// class that needs them and stop when it is done, so whichever test is navigating at
+    /// that moment is a matter of ordering, not of which class asked for the container.
+    /// Restricting the retry to the classes that start something of their own therefore
+    /// left the rest exposed to their neighbours — seventeen of the suite's nineteen
+    /// navigations, the `real-idp` check among them.
+    ///
     /// This retries one operation that failed for a stated reason, which is a different
     /// thing from waiting a while and hoping: anything but those errors is raised at once,
-    /// and a last attempt that fails fails the test.
+    /// and a last attempt that fails fails the test. Three attempts one and two seconds
+    /// apart also cannot turn a server that is down into a server that is up — the wait
+    /// strategy in JellyfinEnvironment does that, and it has already returned before any
+    /// test navigates anywhere.
     /// </summary>
     public static async Task<IResponse?> GotoAsync(IPage page, string url, int attempts = 3)
     {
@@ -59,8 +85,7 @@ internal static class BrowserSupport
                 return await page.GotoAsync(url);
             }
             catch (PlaywrightException ex)
-                when (attempt < attempts
-                    && RunnerNetworkErrors.Any(e => ex.Message.Contains(e, StringComparison.Ordinal)))
+                when (attempt < attempts && IsRunnerNetworkError(ex.Message))
             {
                 await Task.Delay(TimeSpan.FromSeconds(attempt));
             }

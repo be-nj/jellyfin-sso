@@ -46,7 +46,7 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
         await using var traced = await TracedContext.StartAsync(_browser, LayoutContext());
         var context = traced.Context;
         var page = await context.NewPageAsync();
-        await page.GotoAsync("/web/index.html#/login.html");
+        await BrowserSupport.GotoAsync(page, "/web/index.html#/login.html");
 
         var ours = page.Locator("button.sso-login-button");
         await ours.First.WaitForAsync(new LocatorWaitForOptions
@@ -252,7 +252,7 @@ public sealed class LoginButtonLayoutTests : IAsyncLifetime
     private static async Task<IPage> ShowLoginPageAsync(IBrowserContext context)
     {
         var page = await context.NewPageAsync();
-        await page.GotoAsync("/web/index.html#/login.html");
+        await BrowserSupport.GotoAsync(page, "/web/index.html#/login.html");
         await page.Locator("button.sso-login-button").First.WaitForAsync(new LocatorWaitForOptions
         {
             State = WaitForSelectorState.Visible,

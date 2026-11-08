@@ -100,13 +100,13 @@ public sealed class TinyauthTests : RealIdentityProviderTests
             IgnoreHTTPSErrors = true,
         });
         var page = await context.NewPageAsync();
-        await page.GotoAsync("/sso/oidc/start");
+        await BrowserSupport.GotoAsync(page, "/sso/oidc/start");
         await page.Locator(_idp.LoginFormSelector)
             .WaitForAsync(new LocatorWaitForOptions { Timeout = 20_000 });
         await _idp.SignInAsync(page, _idp.MemberUser);
         await BrowserSupport.WaitForSignedInAsync(page, "tinyauth-login");
 
-        var response = await page.GotoAsync("/sso/oidc/logout");
+        var response = await BrowserSupport.GotoAsync(page, "/sso/oidc/logout");
 
         Assert.NotNull(response);
         Assert.True(response!.Status < 400, $"logout answered {response.Status}");

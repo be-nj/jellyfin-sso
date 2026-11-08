@@ -307,7 +307,7 @@ public sealed class DemoRecordingTests : IAsyncLifetime
             }
         };
 
-        await page.GotoAsync("/web/index.html#/login.html");
+        await BrowserSupport.GotoAsync(page, "/web/index.html#/login.html");
         var button = page.Locator("button.sso-login-button");
         await button.WaitForAsync(new LocatorWaitForOptions
         {
