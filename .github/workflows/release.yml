@@ -87,6 +87,14 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "zip=jellyfin-sso_$version.zip" >> "$GITHUB_OUTPUT"
 
+      # Before anything is published. The catalog text comes from CHANGELOG.md, and a
+      # release whose section is missing would otherwise be found out after the ZIP, the
+      # attestation and the GitHub release already existed.
+      - name: Check this version has a CHANGELOG.md section
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: scripts/changelog-section.sh "$VERSION" > /dev/null
+
       - name: Run the test suite
         run: dotnet test tests/Jellyfin.Plugin.Sso.Tests -c Release
 
@@ -132,17 +140,15 @@ jobs:
           SERVER_URL: ${{ github.server_url }}
           REPOSITORY: ${{ github.repository }}
         run: |
-          # The notes the step above generated, not a sentence about them. Jellyfin shows
-          # this field under the version in the catalog and renders it as Markdown, so the
-          # release body is exactly what a server operator deciding whether to update
-          # needs. Five releases shipped with "See the release notes for v1.12.20." in
-          # that spot, which named no link and pointed nowhere, while the real notes sat
-          # on the release this job had just created.
-          notes=$(gh release view "$GITHUB_REF_NAME" --json body --jq '.body')
-
-          if [ -z "${notes//[[:space:]]/}" ]; then
-            notes="See the release notes: $SERVER_URL/$REPOSITORY/releases/tag/$GITHUB_REF_NAME"
-          fi
+          # The catalog text, not a sentence about it. Jellyfin renders this field as
+          # Markdown under the version, and five releases shipped with "See the release
+          # notes for v1.12.20." in that spot, which named no link and pointed nowhere.
+          #
+          # From CHANGELOG.md rather than from the release body: the body is the long form
+          # — 1.12.19's is 6429 characters — and somebody reading the catalog is deciding
+          # whether to click Install, not reading up on a release. The section was checked
+          # at the top of this job, so this cannot be empty.
+          notes=$(scripts/changelog-section.sh "$VERSION")
 
           scripts/update-manifest.sh \
             "$VERSION" \
