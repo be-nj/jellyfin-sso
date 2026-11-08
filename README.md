@@ -9,7 +9,7 @@ groups decide who sees which libraries.**
 
 [![Tests](https://github.com/be-nj/jellyfin-sso/actions/workflows/test.yml/badge.svg)](https://github.com/be-nj/jellyfin-sso/actions/workflows/test.yml)
 [![Release](https://img.shields.io/github/v/release/be-nj/jellyfin-sso?logo=github&color=success)](https://github.com/be-nj/jellyfin-sso/releases)
-[![Jellyfin](https://img.shields.io/badge/Jellyfin-12.0%20%E2%80%93%2012.2-00A4DC?logo=jellyfin&logoColor=white)](https://jellyfin.org)
+[![Jellyfin](https://img.shields.io/badge/Jellyfin-12.0%2B-00A4DC?logo=jellyfin&logoColor=white)](https://jellyfin.org)
 [![License](https://img.shields.io/github/license/be-nj/jellyfin-sso?color=blue)](LICENSE)
 
 [Install](#install) · [Set it up](#set-it-up) · [Documentation](docs/README.md) ·
@@ -62,7 +62,7 @@ Against real software, not mocks. Every push runs:
 |---|---|
 | **594 unit tests** | Token validation, permissions, lockout guards, markup, the served pages |
 | **139 end-to-end tests** | Throwaway Jellyfin container, an OIDC provider built for the suite, real browser — four of them check the harness's own reading of a browser console and need none of that |
-| **Three Jellyfin versions** | The same build against 12.0, 12.1 and 12.2 |
+| **Every Jellyfin 12.x** | The same build against the oldest server the catalog offers it to and the two newest, on every pull request — and against every 12.x there is in the weekly run |
 | **16 real-provider logins** | Authentik, Keycloak and Authelia, through their own forms — including the misconfigurations their guides warn about |
 | **Mutation testing** | Stryker breaks the code to see whether the tests notice: 70 %, floor 65 % — over the files the unit suite can reach, which is most of the plugin but not the controllers |
 | **CodeQL** | Every alert fixed, or dismissed with a written reason |

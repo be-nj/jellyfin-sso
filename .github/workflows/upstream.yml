@@ -22,13 +22,38 @@ permissions:
   contents: read
 
 jobs:
-  # The compatibility matrix in Tests covers 12.0, 12.1 and 12.2 — the servers this
-  # release claims. This one is whatever Jellyfin published most recently, which is the
-  # version a new installation gets.
+  # Every server the plugin claims, which is every minor of the major its targetAbi names.
+  # The pull requests test the floor and the newest two and say so; this is where the rest
+  # of the claim gets proven, weekly, without standing in anybody's way.
+  #
+  # Plus :latest, which is the tag a brand-new installation pulls — and the only entry
+  # here that can turn up a major nobody has thought about yet.
+  servers:
+    runs-on: ubuntu-latest
+    outputs:
+      list: ${{ steps.minors.outputs.list }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - id: minors
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          minors=$(scripts/jellyfin-minors.sh)
+          echo "released: $minors"
+          list=$(printf '%s\nlatest\n' "$minors" | jq -R . | jq -sc .)
+          echo "list=$list" >> "$GITHUB_OUTPUT"
+          echo "testing: $list"
+
   jellyfin:
-    name: Newest Jellyfin
+    name: Jellyfin ${{ matrix.jellyfin }}
+    needs: servers
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        jellyfin: ${{ fromJSON(needs.servers.outputs.list) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -38,11 +63,11 @@ jobs:
           global-json-file: global.json
 
       - name: Check the image exists before testing against it
-        run: scripts/upstream-check-images.sh jellyfin/jellyfin:latest
+        run: scripts/upstream-check-images.sh "jellyfin/jellyfin:${{ matrix.jellyfin }}"
 
-      - name: Run the e2e suite against the latest server image
+      - name: Run the e2e suite against Jellyfin ${{ matrix.jellyfin }}
         env:
-          E2E_JELLYFIN_TAG: latest
+          E2E_JELLYFIN_TAG: ${{ matrix.jellyfin }}
         run: >
           dotnet test tests/Jellyfin.Plugin.Sso.E2eTests -c Release --logger trx
           --filter "Category!=RealIdp&Category!=Screenshots&Category!=Demo&Category!=Manual"
@@ -55,12 +80,74 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: upstream-jellyfin
+          name: upstream-jellyfin-${{ matrix.jellyfin }}
           path: |
             tests/runs/dotnet/results/
             tests/runs/playwright/*.png
             tests/runs/playwright/*.html
           if-no-files-found: ignore
+
+  # Move the pin the pull requests test against, when Jellyfin has published something
+  # newer — as a pull request, never as a push.
+  #
+  # Only after the matrix above went green, so the version being proposed is one that has
+  # just been tested rather than one that merely exists. A release that breaks the plugin
+  # opens an issue through `report` below and does not quietly become a required check.
+  bump:
+    name: Move the tested pin
+    needs: [servers, jellyfin]
+    if: needs.jellyfin.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - id: bump
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/bump-jellyfin-versions.sh
+
+      - name: Open a pull request with the new list
+        if: steps.bump.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ steps.bump.outputs.before }}
+          AFTER: ${{ steps.bump.outputs.after }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          branch=jellyfin-versions/$(jq -r '.[-1]' jellyfin-versions.json)
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -b "$branch"
+          git add jellyfin-versions.json
+          git commit -m "Test the pull requests against $AFTER"
+          git push --force origin "$branch"
+
+          # printf rather than a heredoc: every line of a run: block has to stay
+          # indented for the YAML, and a heredoc would carry that indentation into the
+          # pull request body.
+          body=$(printf '%s\n' \
+            "Jellyfin has released a newer server than the pull requests test against." \
+            "" \
+            "Was \`$BEFORE\`, now \`$AFTER\`. The weekly run passed the whole matrix," \
+            "including the version being added, before this was opened: $RUN_URL" \
+            "" \
+            "Not merged automatically, because this changes what every later pull request" \
+            "is held to.")
+
+          if ! gh pr view "$branch" >/dev/null 2>&1; then
+            gh pr create --base main --head "$branch" \
+              --title "Test the pull requests against $AFTER" \
+              --body "$body"
+          fi
+
+          # A pull request opened with GITHUB_TOKEN starts no workflows, so the checks it
+          # should be judged on are dispatched against the branch by hand — the same rule
+          # the release workflow works around for the manifest.
+          gh workflow run test.yml --ref "$branch"
 
   # The three providers at their current release. Authentik is configured through its API
   # and Keycloak through a realm import, so this also catches a provider changing the
@@ -129,7 +216,7 @@ jobs:
   # issue is closed by whoever worked out what changed, with the cause written down.
   report:
     name: Say so
-    needs: [jellyfin, providers]
+    needs: [servers, jellyfin, providers]
     if: always() && github.event_name == 'schedule'
     runs-on: ubuntu-latest
     permissions:
