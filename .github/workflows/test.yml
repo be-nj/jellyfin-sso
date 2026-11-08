@@ -65,7 +65,7 @@ jobs:
 
       - name: Set up .NET
         if: needs.changes.outputs.code != 'false'
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
         with:
           # The SDK comes from global.json, so CI and a local rebuild produce the same
           # bytes for a release.
@@ -157,7 +157,7 @@ jobs:
 
       - name: Set up .NET
         if: needs.changes.outputs.code != 'false'
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
         with:
           # The SDK comes from global.json, so CI and a local rebuild produce the same
           # bytes for a release.
@@ -226,7 +226,7 @@ jobs:
 
       - name: Set up .NET
         if: needs.changes.outputs.code != 'false'
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
         with:
           # The SDK comes from global.json, so CI and a local rebuild produce the same
           # bytes for a release.
