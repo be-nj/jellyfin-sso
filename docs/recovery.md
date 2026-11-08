@@ -18,10 +18,27 @@ to spot a typo or a rename.
 demoted, by design. Log in as them, switch on *Never remove administrator rights on login*
 (**Group Mappings** tab, under *Safety*), then fix the mapping.
 
-**Jellyfin updated itself and the plugin stopped working.** Install the plugin build for
-the new server version. If there is none yet: sign in as the local administrator and wait,
-or put the image tag back (`jellyfin/jellyfin:12.4`, not `latest`) and pull again. See
+**Jellyfin updated itself and the plugin stopped working.** Sign in as the local
+administrator and wait. A build's `targetAbi` is a minimum, so the build you already have
+keeps working on a newer server — a server upgrade usually needs no plugin release at all,
+and when it does, the local account is the way in until there is one. See
 [Requirements](requirements.md).
+
+Do **not** put the image tag back. A Jellyfin minor upgrade migrates the library database,
+and starting the older server against a migrated database is where a library gets lost.
+Going back means restoring a backup, which has to exist before the upgrade:
+
+```bash
+# A consistent copy while the container keeps running.
+sqlite3 <config>/data/jellyfin.db ".backup /somewhere/jellyfin.db"
+
+# Everything else worth keeping. metadata/ is regenerable and would dwarf the rest.
+tar -C <config> -caf /somewhere/jellyfin-config.tar.zst config plugins root data
+```
+
+That is also why [Requirements](requirements.md) says to pin the image tag and upgrade
+deliberately: the pin is what makes the upgrade a decision, and the backup is what makes
+it reversible.
 
 **I am coming from the old 9p4 plugin.** Different plugin, not an update: own id, own
 configuration, own links, nothing migrated. Disable the old one first, set this one up, then link existing accounts

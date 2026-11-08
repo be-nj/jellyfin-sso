@@ -31,8 +31,10 @@ versions in the first pass are listed in
 
 **Pin the Jellyfin image tag** (`jellyfin/jellyfin:12.4`, not `latest`) and upgrade
 deliberately. A Jellyfin release that breaks the plugin API arrives without warning, and
-your local administrator is the way in until a matching build exists. Upgrading the server
-is its own evening's work —
+your local administrator is the way in until a matching build exists. Back the
+configuration up before you do: a minor upgrade migrates the library database, so the tag
+you pinned is not a way back once it has run — [If something goes wrong](recovery.md) has
+the two commands. Upgrading the server is its own evening's work —
 [container documentation](https://jellyfin.org/docs/general/installation/container/) —
 and not one to combine with adding an authentication plugin.
 
