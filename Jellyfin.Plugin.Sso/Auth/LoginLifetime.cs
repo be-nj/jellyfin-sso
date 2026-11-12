@@ -78,10 +78,10 @@ internal static class LoginLifetime
     private static Revocation NewRevocation()
     {
         var now = DateTimeOffset.UtcNow;
-        foreach (var entry in Users)
-            if (entry.Value.Until <= now) Users.TryRemove(entry.Key, out _);
-        foreach (var entry in Identities)
-            if (entry.Value.Until <= now) Identities.TryRemove(entry.Key, out _);
+        foreach (var expired in Users.Where(e => e.Value.Until <= now).Select(e => e.Key))
+            Users.TryRemove(expired, out _);
+        foreach (var expired in Identities.Where(e => e.Value.Until <= now).Select(e => e.Key))
+            Identities.TryRemove(expired, out _);
         return new Revocation(Interlocked.Increment(ref _version), now.Add(RevocationLifetime));
     }
 
