@@ -8,19 +8,19 @@ Dashboard → **About**, or `http://<your-jellyfin>/System/Info/Public`.
 
 | Jellyfin | Plugin |
 |---|---|
-| every 12.x from 12.0 | 1.12.6 and newer |
+| 12.x, with a minimum ABI of 12.0 | 1.12.6 and newer; tested versions below |
 | 12.2 only | 1.12.2 – 1.12.5 |
 | 12.1 only | 1.12.0 – 1.12.1 |
 | 11.x and older | none — upgrade Jellyfin first |
 
-A build's `targetAbi` is a **minimum**: 1.12.6 is compiled against Jellyfin 12.0 and runs
-on every 12.x server from there. Jellyfin hides builds whose minimum is higher than the
-server, which is why an empty catalog means your server is older than any build here, not
-that the URL is wrong.
+A build's `targetAbi` is a **minimum**: 1.12.6 and newer are compiled against Jellyfin
+12.0. It is not a guarantee of compatibility with every future release. Jellyfin hides
+builds whose minimum is higher than the server; if the entry is missing, also check the
+repository URL, reachability and server logs.
 
-The range is measured rather than assumed, in two passes with different jobs. Every pull
-request runs the whole end-to-end suite against the oldest server a build is offered to
-and against the two newest Jellyfin has released — the ends of the range, where the two
+The configured checks cover the range in two passes. For code changes, the pull-request
+workflow runs the regular end-to-end tier against the oldest supported server
+and the two newer versions pinned in `jellyfin-versions.json` — the ends of the range, where the two
 things that break live: an API the oldest server does not have, and a web client that has
 moved the login page. Once a week the same suite runs against **every** released 12.x and
 against `:latest`, where a failure opens an issue instead of blocking a merge.

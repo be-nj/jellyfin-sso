@@ -18,7 +18,7 @@ public sealed class ExpiryTests
     public void An_expired_login_secret_is_refused()
     {
         var store = new EphemeralSecretStore(AlreadyOver);
-        var secret = store.Issue("ben");
+        var secret = store.Issue(Guid.NewGuid(), "ben");
 
         Assert.Null(store.Consume(secret));
     }
@@ -28,7 +28,7 @@ public sealed class ExpiryTests
     {
         var store = new EphemeralSecretStore(LongEnough);
 
-        Assert.Equal("ben", store.Consume(store.Issue("ben")));
+        Assert.Equal("ben", store.Consume(store.Issue(Guid.NewGuid(), "ben")));
     }
 
     [Fact]
@@ -70,9 +70,9 @@ public sealed class ExpiryTests
     public void An_expired_entry_does_not_keep_a_later_one_from_working()
     {
         var store = new EphemeralSecretStore(AlreadyOver);
-        store.Issue("ben");
+        store.Issue(Guid.NewGuid(), "ben");
 
         var live = new EphemeralSecretStore(LongEnough);
-        Assert.Equal("ben", live.Consume(live.Issue("ben")));
+        Assert.Equal("ben", live.Consume(live.Issue(Guid.NewGuid(), "ben")));
     }
 }

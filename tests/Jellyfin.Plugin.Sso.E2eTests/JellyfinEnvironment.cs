@@ -24,6 +24,9 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
     private const string AdminPassword = "e2e-admin-password";
     public const string ClientId = "jellyfin-e2e";
     public const string ProviderId = "e2e-provider";
+
+    /// <summary>The plugin's id, as Jellyfin's own /Plugins endpoints know it.</summary>
+    public const string PluginId = "f5538c3a-1bce-4b8c-b8a5-bc1a0fffdf27";
     public const string SecondProviderId = "e2e-provider-2";
 
     private readonly string _deviceId = Guid.NewGuid().ToString("N");

@@ -69,31 +69,31 @@ public sealed class OidcClientFactory : IDisposable
         _logger.LogInformation("Fetching OIDC discovery for provider {Name} ({Authority})",
             provider.Name, provider.Authority);
 
-        // Authentik publishes most of its endpoints on a shared path
-        // (/application/o/token/, /application/o/authorize/ and so on) while the issuer is
-        // per-application (/application/o/<slug>/). The library's endpoint validation
-        // demands that every endpoint sit under the authority URL, which that layout fails,
-        // and both checks were switched off to get past it.
+        // Duende checks the endpoints before it fetches jwks_uri, which is the point: a
+        // document naming signing keys on another host must be refused before anything is
+        // fetched from there. Its issuer and HTTPS checks stay on as well.
         //
-        // That gave away far more than the paths it was about. Without endpoint validation
-        // the document may name a jwks_uri, a token endpoint and an end-session endpoint on
-        // any host at all; without issuer validation its issuer need not match the
-        // configured authority, and that same unchecked value is then used as the expected
-        // issuer when tokens are validated, which makes the check circular. Anyone able to
-        // serve the discovery document at the configured address could point the signing
-        // keys at themselves and mint tokens for any user.
+        // Two allowances. Authentik publishes endpoints on a path shared between
+        // applications (/application/o/token/) while the issuer is per application, so the
+        // configured origin is allowed, not only the issuer's path; the host check after
+        // the fetch still holds the endpoints the plugin uses to that origin. And Duende
+        // compares host and prefix exactly, so the origin is given both as typed and as
+        // normalised.
         //
-        // The issuer check is back on, because every provider this is tested against names
-        // an issuer that matches. Paths stay unvalidated, because that is the part Authentik
-        // genuinely does differently — and the host is checked instead, below, which is
-        // what the concern was actually about.
+        // Endpoints the plugin never calls are left out of Duende's check. A provider that
+        // puts device authorization or introspection on another host is not handing this
+        // plugin anything there, and refusing the whole document for it refused every
+        // login and every back-channel logout of that provider.
+        var policy = new DiscoveryPolicy { ValidateEndpoints = true };
+        foreach (var origin in Origins(provider.Authority))
+            policy.AdditionalEndpointBaseAddresses.Add(origin);
+        foreach (var unused in EndpointsNotCalled)
+            policy.EndpointValidationExcludeList.Add(unused);
+
         using var request = new DiscoveryDocumentRequest
         {
             Address = provider.Authority,
-            Policy = new DiscoveryPolicy
-            {
-                ValidateEndpoints = false,
-            },
+            Policy = policy,
         };
 
         var doc = await _http.GetDiscoveryDocumentAsync(request, ct).ConfigureAwait(false);
@@ -122,6 +122,38 @@ public sealed class OidcClientFactory : IDisposable
 
         _cache[cacheKey] = new CacheEntry(doc, DateTimeOffset.UtcNow.Add(CacheTtl));
         return doc;
+    }
+
+    /// <summary>
+    /// Discovery entries Duende would hold to the authority's host that the plugin never
+    /// sends anything to. The authorize endpoint is among them for the reason given at the
+    /// host check below; the rest are features this client does not use.
+    /// </summary>
+    internal static readonly IReadOnlyList<string> EndpointsNotCalled =
+    [
+        "authorization_endpoint",
+        "device_authorization_endpoint",
+        "revocation_endpoint",
+        "introspection_endpoint",
+        "pushed_authorization_request_endpoint",
+        "registration_endpoint",
+        "backchannel_authentication_endpoint",
+        "check_session_iframe",
+    ];
+
+    /// <summary>The authority's origin as typed and as normalised, without duplicates.</summary>
+    internal static IEnumerable<string> Origins(string authority)
+    {
+        var normalised = new Uri(authority).GetLeftPart(UriPartial.Authority);
+        yield return normalised;
+
+        var schemeEnd = authority.IndexOf("://", StringComparison.Ordinal);
+        if (schemeEnd < 0)
+            yield break;
+        var pathStart = authority.IndexOfAny(['/', '?', '#'], schemeEnd + 3);
+        var typed = pathStart < 0 ? authority : authority[..pathStart];
+        if (!string.Equals(typed, normalised, StringComparison.Ordinal))
+            yield return typed;
     }
 
     /// <summary>

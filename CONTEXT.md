@@ -1,27 +1,29 @@
 # Jellyfin SSO Plugin
 
 A Jellyfin plugin that authenticates users against an external OIDC/OAuth2 provider
-(Authentik, Authelia) and derives per-library access from the user's IdP groups,
+(Authentik, Keycloak, Authelia) and derives per-library access from the user's IdP groups,
 configurable by an admin in a dashboard UI.
 
 ## Language
 
 **IdP** (Identity Provider):
-The external OIDC/OAuth2 server that authenticates the user. Targets: Authentik, Authelia.
+The external OIDC/OAuth2 server that authenticates the user. Automated provider tests cover Authentik, Keycloak and Authelia.
 _Avoid_: "SSO server", "OAuth server".
 
 **Session Bridge**:
 The mechanism that turns a validated OIDC login into a real Jellyfin access token.
-Jellyfin only issues tokens via its native username+password path, so the plugin
-bridges by implementing `IAuthenticationProvider` and feeding it an ephemeral secret.
+For browser login, the plugin implements `IAuthenticationProvider` and supplies an
+ephemeral secret to Jellyfin’s native username/password path. Quick Connect uses
+Jellyfin’s device authorization API after an explicit approval.
 _Avoid_: "token exchange" (that term belongs to the OIDC code-for-token step).
 
 **Ephemeral Secret**:
 A short-lived, single-use credential the plugin generates after a successful OIDC
 login. The client presents it on Jellyfin's native auth path; the plugin's
 `IAuthenticationProvider` validates it and lets Jellyfin mint the token.
-Stored **in-memory only** (expires seconds after issue; lost-on-restart is fine —
-a pending login just retries).
+Stored **in-memory only**, bound to the Jellyfin user ID and username, and valid for
+90 seconds. Revocation invalidates unspent secrets and older pending logins. Losing
+the store on restart means the pending login must be retried.
 
 **JIT Provisioning** (Just-In-Time):
 Creating a *brand new* Jellyfin user automatically on first OIDC login (unknown `sub`)
@@ -30,30 +32,30 @@ from token claims. JIT never adopts an existing Jellyfin account.
 **Identity Anchor**:
 The stable claim that keys an OIDC identity to a Jellyfin user — `sub` (Subject).
 `sub` is unique per **Provider**, not global, so the **Link** key is `(provider_id, sub)`.
-Username/email are display data only, never a matching key (matching by name is the 9p4
-admin-takeover bug).
+Username/email are display data only, never the key used to adopt an existing account
+(matching by name is the 9p4 admin-takeover bug).
 
 **Provider**:
-A configured IdP entry (Authentik or Authelia). Config holds a *list* of named providers
-but only one is enabled at a time for now; the single enabled one is auto-picked (no
-provider-picker UI yet). Schema is list-shaped from day 1 so adding a second needs no
-migration.
+A configured IdP entry. Multiple providers can be enabled simultaneously. The start
+page selects the only enabled provider automatically, or presents a provider picker
+when several are enabled.
 Auth client: default is a **public client + PKCE** (no `client_secret` stored). If a
 confidential client is required, the secret is supplied by env var / external file
 reference — never written into plugin XML or shown in the dashboard.
 
 **Link**:
 An explicit association between an OIDC `sub` and a Jellyfin UserId. Created either by
-JIT (for a new account) or — for *existing* Jellyfin accounts — only by a manual admin
-action. Existing accounts are never auto-matched.
+JIT (for a new account) or explicitly for an existing account by an administrator or
+the authenticated self-service linking flow. Existing accounts are never auto-matched.
+All writers check uniqueness under the configuration lock when saving the link.
 
 **Group**:
-A group claim value from the IdP (Authentik/Authelia). The unit the admin maps to
+A group claim value from the IdP. The unit the admin maps to
 library access. _Avoid_: "role" (9p4's term; we standardize on "group" since that is
 what Authentik/Authelia emit).
-Source: default claim `groups` read from the ID token (works for both targets out of
-box); claim name + a "fetch from userinfo" toggle are optionally overridable per
-**Provider**.
+Source: default claim `groups` read from the ID token. Claim paths and the "fetch from
+userinfo" option are configurable per **Provider**. Provider configuration determines
+where groups are available; the tested Authelia setup obtains them from userinfo.
 
 **Seen Group**:
 A **Group** string the plugin has observed in some login. Recorded so the admin UI can

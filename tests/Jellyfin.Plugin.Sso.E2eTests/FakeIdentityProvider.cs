@@ -169,6 +169,12 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
     /// <summary>A picture this provider serves, reachable from the Jellyfin container.</summary>
     public string AvatarUrl => $"{ContainerAuthority}/static/avatar.png";
 
+    /// <summary>
+    /// Runs before the avatar is served, so a test can hold the plugin in the middle of a
+    /// login while it changes something underneath.
+    /// </summary>
+    public Func<Task>? BeforeAvatar { get; set; }
+
     /// <summary>How often the avatar was fetched, so a test can see a refetch.</summary>
     public int AvatarsServed { get; private set; }
 
@@ -227,6 +233,7 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
         EndSessionElsewhere = false;
         UserInfoAnswersAboutSomebodyElse = false;
         NextAuthorizeError = null;
+        BeforeAvatar = null;
     }
 
     public static async Task<FakeIdentityProvider> StartAsync(TestCertificate certificate)
@@ -277,8 +284,9 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
 
         app.MapGet("/static/brand-logo.gif", () => Results.File(OnePixelGif(), "image/gif"));
 
-        app.MapGet("/static/avatar.png", () =>
+        app.MapGet("/static/avatar.png", async () =>
         {
+            if (BeforeAvatar is not null) await BeforeAvatar();
             AvatarsServed++;
             return Results.File(OnePixelPng(), "image/png");
         });

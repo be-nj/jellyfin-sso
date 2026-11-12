@@ -27,20 +27,25 @@ public sealed class QuickConnectApprovalStore
     /// <summary>Lets a test watch an approval expire without waiting two minutes.</summary>
     internal QuickConnectApprovalStore(TimeSpan ttl)
     {
-        _ttl = ttl;
+        _ttl = LoginLifetime.Covered(ttl);
     }
 
-    public sealed record Pending(Guid UserId, string Username, string Code, DateTimeOffset Expiry);
+    public sealed record Pending(Guid UserId, string Username, string Code, DateTimeOffset Expiry,
+        LoginStamp Stamp);
 
     private readonly ConcurrentDictionary<string, Pending> _store = new();
 
     /// <summary>Remembers the login and hands back the token the approval page posts.</summary>
     public string Issue(Guid userId, string username, string code)
+        => Issue(userId, username, code, LoginStamp.Now());
+
+    /// <summary>As above, dying with any revocation since the login in <paramref name="stamp"/> started.</summary>
+    public string Issue(Guid userId, string username, string code, LoginStamp stamp)
     {
         Purge();
 
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-        _store[token] = new Pending(userId, username, code, DateTimeOffset.UtcNow.Add(_ttl));
+        _store[token] = new Pending(userId, username, code, DateTimeOffset.UtcNow.Add(_ttl), stamp);
         return token;
     }
 
@@ -52,7 +57,8 @@ public sealed class QuickConnectApprovalStore
             return null;
         }
 
-        return pending.Expiry > DateTimeOffset.UtcNow ? pending : null;
+        return pending.Expiry > DateTimeOffset.UtcNow && LoginLifetime.IsCurrent(pending.UserId, pending.Stamp)
+            ? pending : null;
     }
 
     private void Purge()

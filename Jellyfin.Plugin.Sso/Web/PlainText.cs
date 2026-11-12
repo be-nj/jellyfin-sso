@@ -24,6 +24,10 @@ internal static class PlainText
     internal static IActionResult BadRequest(string message)
         => Text(StatusCodes.Status400BadRequest, message);
 
+    /// <summary>A collision with another request; trying again is the fix.</summary>
+    internal static IActionResult Conflict(string message)
+        => Text(StatusCodes.Status409Conflict, message);
+
     internal static IActionResult Unavailable(string message)
         => Text(StatusCodes.Status503ServiceUnavailable, message);
 

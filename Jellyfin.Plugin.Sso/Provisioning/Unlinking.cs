@@ -19,10 +19,12 @@ namespace Jellyfin.Plugin.Sso.Provisioning;
 ///
 /// So: ask whether there is anything to unlink, end the sessions, remove the links, end
 /// them again. Nothing is removed until a revocation has succeeded, so a failure or a
-/// cancelled request leaves a state the caller can retry. The second revocation closes the
-/// gap between the two — a login that completed in that moment would otherwise keep a
-/// token nobody can reach — and it runs without the request's cancellation token, because
-/// by then abandoning the work halfway is the only outcome worth avoiding.
+/// cancelled request leaves a state the caller can retry. The first revocation also marks
+/// the account and its identities revoked in <see cref="Auth.LoginLifetime"/>, which
+/// refuses every login, secret and approval that was already under way. The second sweep
+/// catches a token minted in the moment between the two, and runs without the request's
+/// cancellation token, because by then abandoning the work halfway is the only outcome
+/// worth avoiding.
 /// </summary>
 internal sealed class Unlinking
 {

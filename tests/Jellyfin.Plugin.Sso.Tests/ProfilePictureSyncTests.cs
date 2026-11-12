@@ -23,6 +23,7 @@ public sealed class ProfilePictureSyncTests : IDisposable
     private readonly IUserManager _userManager = Substitute.For<IUserManager>();
     private readonly IProviderManager _providerManager = Substitute.For<IProviderManager>();
     private readonly RecordingLogger<ProfilePictureSync> _log = new();
+    private readonly ISsoUserPersistence _persistence = Substitute.For<ISsoUserPersistence>();
     private readonly Handler _handler = new();
     private readonly Guid _userId = Guid.NewGuid();
     private readonly string _root = Directory.CreateTempSubdirectory("sso-pictures-").FullName;
@@ -36,6 +37,8 @@ public sealed class ProfilePictureSyncTests : IDisposable
             "Emby.Server.Implementations.Library.DefaultAuthenticationProvider",
             "Emby.Server.Implementations.Library.DefaultPasswordResetProvider");
         _userManager.GetUserById(_userId).Returns(user);
+        _persistence.SetProfileImageAsync(_userId, Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(call => { user.ProfileImage = new ImageInfo(call.Arg<string>()); return Task.CompletedTask; });
     }
 
     private ProfilePictureSync Sync()
@@ -49,7 +52,7 @@ public sealed class ProfilePictureSyncTests : IDisposable
             new RecordingLogger<RemoteImages>(), _handler, TimeSpan.FromSeconds(5));
 
         return new ProfilePictureSync(
-            _userManager, _providerManager, serverConfiguration, images, _log);
+            _userManager, _providerManager, serverConfiguration, images, _log, _persistence);
     }
 
     private Task<int> SavedImages()
@@ -106,7 +109,8 @@ public sealed class ProfilePictureSyncTests : IDisposable
         Assert.NotNull(user.ProfileImage);
         Assert.EndsWith("profile.png", user.ProfileImage!.Path, StringComparison.Ordinal);
         Assert.Contains("ben", user.ProfileImage.Path, StringComparison.Ordinal);
-        await _userManager.Received(1).UpdateUserAsync(user);
+        await _persistence.Received(1).SetProfileImageAsync(_userId, user.ProfileImage.Path, Arg.Any<CancellationToken>());
+        await _userManager.DidNotReceiveWithAnyArgs().UpdateUserAsync(default!);
     }
 
     [Fact]
@@ -121,8 +125,8 @@ public sealed class ProfilePictureSyncTests : IDisposable
 
         await Sync().SyncAsync(_userId, "https://idp.example.com/avatar.png", Idp);
 
-        // Not cleared, not repointed at a file that was never written.
-        await _userManager.DidNotReceiveWithAnyArgs().ClearProfileImageAsync(default!);
+        // Not repointed at a file that was never written.
+        await _persistence.DidNotReceiveWithAnyArgs().SetProfileImageAsync(default, default!, default);
         Assert.Equal("/old/profile.png", user.ProfileImage!.Path);
     }
 
@@ -191,7 +195,12 @@ public sealed class ProfilePictureSyncTests : IDisposable
         await sync.SyncAsync(_userId, "https://idp.example.com/avatar.png", Idp);
 
         Assert.Equal(2, await SavedImages());
-        await _userManager.Received(1).ClearProfileImageAsync(Arg.Any<User>());
+        await _persistence.Received(1).SetProfileImageAsync(
+            _userId, Arg.Is<string>(path => path.EndsWith("profile.png", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>());
+        await _persistence.Received(1).SetProfileImageAsync(
+            _userId, Arg.Is<string>(path => path.EndsWith("profile.jpg", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>());
         Assert.EndsWith(
             "profile.jpg", _userManager.GetUserById(_userId)!.ProfileImage!.Path, StringComparison.Ordinal);
     }

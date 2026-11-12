@@ -23,18 +23,25 @@ public sealed class EphemeralSecretStore
     /// <summary>Lets a test watch a secret expire without waiting 90 seconds.</summary>
     internal EphemeralSecretStore(TimeSpan ttl)
     {
-        _ttl = ttl;
+        _ttl = LoginLifetime.Covered(ttl);
     }
 
-    private sealed record Entry(string Username, DateTimeOffset Expiry);
+    internal sealed record Entry(Guid UserId, string Username, LoginStamp Stamp, DateTimeOffset Expiry);
 
     private readonly ConcurrentDictionary<string, Entry> _store = new();
 
-    public string Issue(string username)
+    public string Issue(Guid userId, string username)
+        => Issue(userId, username, LoginStamp.Now());
+
+    /// <summary>
+    /// Issues a secret that dies with any revocation of the account or of the identity in
+    /// <paramref name="stamp"/> since the login it finishes started.
+    /// </summary>
+    public string Issue(Guid userId, string username, LoginStamp stamp)
     {
         Purge();
         var secret = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-        _store[secret] = new Entry(username, DateTimeOffset.UtcNow.Add(_ttl));
+        _store[secret] = new Entry(userId, username, stamp, DateTimeOffset.UtcNow.Add(_ttl));
         return secret;
     }
 
@@ -43,10 +50,14 @@ public sealed class EphemeralSecretStore
     /// Single-use: the entry is removed whether valid or not.
     /// </summary>
     public string? Consume(string secret)
+        => ConsumeEntry(secret)?.Username;
+
+    internal Entry? ConsumeEntry(string secret)
     {
         if (!_store.TryRemove(secret, out var entry))
             return null;
-        return entry.Expiry > DateTimeOffset.UtcNow ? entry.Username : null;
+        return entry.Expiry > DateTimeOffset.UtcNow && LoginLifetime.IsCurrent(entry.UserId, entry.Stamp)
+            ? entry : null;
     }
 
     private void Purge()
