@@ -263,8 +263,12 @@ logout collects a dead one; a disabled account cannot approve a device; Jellyfin
 generic configuration endpoint does not remove a link; and the startup line says every
 guarded action exists, on each of the three servers.
 
-CodeQL runs on the pull request; mutation testing runs weekly and was not run for this
-change. Neither is reported here as a result.
+On the pull request, CodeQL flagged five notes in the new code: two loops that filter
+implicitly, now explicit, and three catch-all clauses around the cleanup of a provisional
+account and the account-created event, which are deliberate in the way earlier dismissed
+alerts are and are dismissed with that reason. Mutation testing, dispatched on the branch,
+scored **69.26 %** against a floor of 65 — down from 70.52 % at `4061035`. Which surviving mutants
+account for the drop was not analysed.
 
 ## OIDC conformance rerun
 

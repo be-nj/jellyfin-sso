@@ -71,7 +71,7 @@ only Markdown skips the heavy ones.
 | **149 end-to-end tests** | Throwaway Jellyfin container, an OIDC provider built for the suite, real browser — four of them check the harness's own reading of a browser console and need none of that |
 | **Every Jellyfin 12.x** | The same build against the oldest server the catalog offers it to and the two newest, on every pull request — and against every 12.x there is in the weekly run |
 | **16 real-provider logins** | Authentik, Keycloak and Authelia, through their own forms — including the misconfigurations their guides warn about |
-| **Mutation testing** | Weekly. Stryker breaks the code to see whether the tests notice: 70 % in the last run, floor 65 % — over the files the unit suite can reach, which is most of the plugin but not the controllers |
+| **Mutation testing** | Weekly. Stryker breaks the code to see whether the tests notice: 69 % in the last run, floor 65 % — over the files the unit suite can reach, which is most of the plugin but not the controllers |
 | **CodeQL** | Every alert fixed, or dismissed with a written reason |
 | **OIDC conformance** | The OpenID Foundation suite, run by hand against a real server, the suite playing the provider: 36 modules of the login and back-channel logout plans ([the first run](docs/reviews/2026-11-06-oidc-conformance.md)), run again on 11 November with three cold-cache discovery checks ([the rerun](docs/reviews/2026-11-10-code-security-review.md#oidc-conformance-rerun)). By hand, so not on every change |
 | **Weekly upstream run** | The same tests again, against the newest Jellyfin and the newest Authentik, Keycloak and Authelia |
@@ -204,7 +204,7 @@ Ezeqielle's. Four commits here came from GitHub's Copilot agent instead, one of 
 a Claude trailer as well. K0lin's co-author trailers are Renovate's and K0lin's own, none
 an AI's, which is why that cell says what it says rather than "none". Stars as of
 11 November 2026. *Tests* counts unit + end-to-end cases, every case
-the suites hold. Only this one is mutation tested (70 %, floor 65, over the files the unit suite reaches) and scanned by CodeQL.
+the suites hold. Only this one is mutation tested (69 %, floor 65, over the files the unit suite reaches) and scanned by CodeQL.
 
 ### What that means for this one
 
