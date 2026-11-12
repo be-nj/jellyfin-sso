@@ -13,7 +13,7 @@ recorded. On 12 November Claude Opus 5.5 was asked to check all of that work bef
 of it was committed, with three sub-agents reading the production code, the tests and the
 documentation independently of each other.
 
-Reviewed at `4061035`, plugin version `1.12.20.0`; fixes landed in `#PR`.
+Reviewed at `4061035`, plugin version `1.12.20.0`; fixes landed in `#259`.
 
 The first pass found seven things, three of them serious. The second found that the fix
 for the most serious one had opened a new hole of its own, that one Jellyfin route minting
