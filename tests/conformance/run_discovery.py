@@ -20,6 +20,7 @@ import json
 import os
 import sys
 import time
+import uuid
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from drive import (  # noqa: E402
@@ -43,19 +44,7 @@ VARIANT = {
 
 
 def ran_to_completion(log):
-    """Did the module finish its own checks before anything else arrived?
-
-    Two of these three modules are over as soon as the relying party has fetched the
-    document and the keys — which is all they test. The harness then drives a full login,
-    and the authorization request that follows arrives after the test has closed, so the
-    suite records "Illegal test state change: FINISHED -> RUNNING" and the overall verdict
-    reads FAILED. That verdict is about the harness, not about the plugin.
-
-    So the verdict is not the evidence here; the order of the log is. A module that
-    reached "Test has run to completion" with no failure before that point did the thing
-    it tests, whatever the final verdict says. Returns that, and the failures that landed
-    before completion — which are the ones that would be about the plugin.
-    """
+    """Record completion and earlier failures alongside the suite's final verdict."""
     before, finished = [], False
     for e in log:
         if e.get("result") == "FINISHED":
@@ -70,9 +59,11 @@ def main():
     base = stack()["jellyfin"]
     token = jellyfin_token(base)
     results = []
+    # A second invocation must also miss the plugin's thirty-minute discovery cache.
+    run_id = uuid.uuid4().hex[:12]
     for i, module in enumerate(MODULES, 1):
-        provider_id = f"cold{i}"
-        alias = f"jellyfin-sso-cold{i}"
+        provider_id = f"cold{i}-{run_id}"
+        alias = f"jellyfin-sso-{provider_id}"
         issuer = f"{SUITE}/test/a/{alias}/"
         redirect_uri = f"{base}/sso/oidc/callback/{provider_id}"
         print(f"[{i}/{len(MODULES)}] {module}  (provider {provider_id})", flush=True)
@@ -87,10 +78,13 @@ def main():
         time.sleep(2)
 
         configure_provider(base, token, issuer, provider_id)
-        final_url, status, body, _ = drive_login(base, provider_id)
+        # The positive modules finish after discovery/JWKS. Following the redirect
+        # would send authorization to an already finished test and turn it FAILED.
+        final_url, status, body, _ = drive_login(base, provider_id, follow_redirects=False)
 
         for _ in range(40):
-            if (suite("GET", f"/api/runner/{test_id}") or {}).get("status") == "FINISHED":
+            state = suite("GET", f"/api/info/{test_id}") or {}
+            if state.get("status") in ("FINISHED", "INTERRUPTED"):
                 break
             time.sleep(2)
         info = suite("GET", f"/api/info/{test_id}")
@@ -101,7 +95,7 @@ def main():
             "testId": test_id,
             "providerId": provider_id,
             "suiteResult": info.get("result"),
-            "stoppedBy": who_stopped(final_url, body),
+            "stoppedBy": "the driver" if status == 302 else who_stopped(final_url, body),
             "ranToCompletion": finished,
             "failuresBeforeCompletion": failed_before,
             "rpHttpStatus": status,
@@ -112,6 +106,11 @@ def main():
                 for e in log if e.get("result") in ("FAILURE", "WARNING", "REVIEW")
             ][:10],
         }
+        expected_status = 400 if module.endswith("issuer-mismatch") else 302
+        out["verdict"] = (
+            "OK" if out["suiteResult"] == "PASSED" and finished
+            and not failed_before and status == expected_status else "LOOK"
+        )
         print(f"      suite={out['suiteResult']}  stopped_by={out['stoppedBy']}  "
               f"rp={status}  ran_to_completion={finished}"
               f"{'  (failed before that)' if failed_before else ''}", flush=True)
@@ -125,7 +124,9 @@ def main():
     for r in results:
         print(f"{r['module']:58} suite={str(r['suiteResult']):8} "
               f"stopped_by={r['stoppedBy']:10} "
-              f"ran_to_completion={r['ranToCompletion']}")
+              f"ran_to_completion={r['ranToCompletion']} verdict={r['verdict']}")
+    if any(r["verdict"] != "OK" for r in results):
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

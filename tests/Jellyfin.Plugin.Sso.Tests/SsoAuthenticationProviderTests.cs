@@ -1,4 +1,7 @@
 using Jellyfin.Plugin.Sso.Auth;
+using Jellyfin.Database.Implementations.Entities;
+using MediaBrowser.Controller.Library;
+using NSubstitute;
 using MediaBrowser.Controller.Authentication;
 
 namespace Jellyfin.Plugin.Sso.Tests;
@@ -12,16 +15,21 @@ public sealed class SsoAuthenticationProviderTests
 {
     private readonly EphemeralSecretStore _secrets = new();
     private readonly SsoAuthenticationProvider _provider;
+    private readonly User _user = new("ben", "sso", "reset");
+    private readonly IUserManager _users = Substitute.For<IUserManager>();
 
     public SsoAuthenticationProviderTests()
     {
-        _provider = new SsoAuthenticationProvider(_secrets);
+        var services = Substitute.For<IServiceProvider>();
+        services.GetService(typeof(IUserManager)).Returns(_users);
+        _users.GetUserByName("ben").Returns(_user);
+        _provider = new SsoAuthenticationProvider(_secrets, services);
     }
 
     [Fact]
     public async Task A_freshly_issued_secret_authenticates_its_own_user()
     {
-        var secret = _secrets.Issue("ben");
+        var secret = _secrets.Issue(_user.Id, "ben");
 
         var result = await _provider.Authenticate("ben", secret);
 
@@ -31,7 +39,7 @@ public sealed class SsoAuthenticationProviderTests
     [Fact]
     public async Task A_secret_cannot_be_used_twice()
     {
-        var secret = _secrets.Issue("ben");
+        var secret = _secrets.Issue(_user.Id, "ben");
         await _provider.Authenticate("ben", secret);
 
         await Assert.ThrowsAsync<AuthenticationException>(() => _provider.Authenticate("ben", secret));
@@ -40,7 +48,7 @@ public sealed class SsoAuthenticationProviderTests
     [Fact]
     public async Task A_secret_issued_for_someone_else_does_not_authenticate()
     {
-        var secret = _secrets.Issue("ben");
+        var secret = _secrets.Issue(_user.Id, "ben");
 
         await Assert.ThrowsAsync<AuthenticationException>(() => _provider.Authenticate("admin", secret));
     }
@@ -53,7 +61,7 @@ public sealed class SsoAuthenticationProviderTests
     {
         // SSO accounts have no password. An empty one must never pass, which is the
         // failure mode that made password-less accounts a problem in the old plugin.
-        _secrets.Issue("ben");
+        _secrets.Issue(_user.Id, "ben");
 
         await Assert.ThrowsAsync<AuthenticationException>(() => _provider.Authenticate("ben", password));
     }
@@ -61,7 +69,7 @@ public sealed class SsoAuthenticationProviderTests
     [Fact]
     public async Task Username_matching_is_case_sensitive()
     {
-        var secret = _secrets.Issue("ben");
+        var secret = _secrets.Issue(_user.Id, "ben");
 
         await Assert.ThrowsAsync<AuthenticationException>(() => _provider.Authenticate("Ben", secret));
     }
@@ -69,7 +77,7 @@ public sealed class SsoAuthenticationProviderTests
     [Fact]
     public void Each_issued_secret_is_distinct()
     {
-        var secrets = Enumerable.Range(0, 50).Select(_ => _secrets.Issue("ben")).ToList();
+        var secrets = Enumerable.Range(0, 50).Select(_ => _secrets.Issue(_user.Id, "ben")).ToList();
 
         Assert.Equal(secrets.Count, secrets.Distinct(StringComparer.Ordinal).Count());
     }
@@ -84,5 +92,13 @@ public sealed class SsoAuthenticationProviderTests
     public async Task Password_changes_are_refused()
     {
         await Assert.ThrowsAsync<NotSupportedException>(() => _provider.ChangePassword(null!, "hunter2"));
+    }
+
+    [Fact]
+    public async Task Reusing_a_deleted_accounts_username_does_not_reuse_its_secret()
+    {
+        var secret = _secrets.Issue(_user.Id, "ben");
+        _users.GetUserByName("ben").Returns(new User("ben", "sso", "reset"));
+        await Assert.ThrowsAsync<AuthenticationException>(() => _provider.Authenticate("ben", secret));
     }
 }

@@ -143,8 +143,8 @@ def main():
         configure(base, token, issuer)
         steps = login_then_logout(base)
         for _ in range(45):
-            state = suite("GET", f"/api/runner/{test_id}")
-            if state.get("status") == "FINISHED":
+            state = suite("GET", f"/api/info/{test_id}")
+            if state.get("status") in ("FINISHED", "INTERRUPTED"):
                 break
             time.sleep(2)
         info = suite("GET", f"/api/info/{test_id}")

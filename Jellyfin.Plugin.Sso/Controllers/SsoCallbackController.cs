@@ -5,6 +5,9 @@ using Jellyfin.Plugin.Sso.Logging;
 using Jellyfin.Plugin.Sso.Oidc;
 using Jellyfin.Plugin.Sso.Provisioning;
 using Jellyfin.Plugin.Sso.Web;
+using Jellyfin.Data;
+using Jellyfin.Database.Implementations.Enums;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.QuickConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -33,6 +36,8 @@ public sealed class SsoCallbackController : SsoFlowController
     private readonly EphemeralSecretStore _secrets;
     private readonly QuickConnectApprovalStore _approvals;
     private readonly IQuickConnect _quickConnect;
+    private readonly IUserManager _users;
+    private readonly SessionRevoker _revoker;
     private readonly ILogger<SsoCallbackController> _logger;
 
     public SsoCallbackController(
@@ -46,6 +51,8 @@ public sealed class SsoCallbackController : SsoFlowController
         EphemeralSecretStore secrets,
         QuickConnectApprovalStore approvals,
         IQuickConnect quickConnect,
+        IUserManager users,
+        SessionRevoker revoker,
         ILogger<SsoCallbackController> logger)
         : base(states, oidc)
     {
@@ -57,6 +64,8 @@ public sealed class SsoCallbackController : SsoFlowController
         _secrets = secrets;
         _approvals = approvals;
         _quickConnect = quickConnect;
+        _users = users;
+        _revoker = revoker;
         _logger = logger;
     }
 
@@ -116,10 +125,17 @@ public sealed class SsoCallbackController : SsoFlowController
 
             var identity = signedIn.Identity;
 
+            // Everything this login hands out is stamped with the version it started at,
+            // so a revocation anywhere between here and the browser spending it still
+            // reaches it. The checks below only stop work that would be thrown away.
+            var stamp = new LoginStamp(pending.LoginVersion, provider.Id, identity.Sub);
+            if (Revoked(pending, identity, pending.LinkUserId))
+                return PlainText.BadRequest(RevokedMessage);
+
             // Self-service linking stops here: it attaches the identity to the account the
             // user was already signed into, and grants nothing by itself.
             if (pending.LinkUserId is { } linkUserId)
-                return CompleteSelfServiceLink(provider, identity, linkUserId);
+                return CompleteSelfServiceLink(provider, identity, linkUserId, stamp);
 
             WarnIfNoGroupsArrived(provider, identity);
 
@@ -129,16 +145,31 @@ public sealed class SsoCallbackController : SsoFlowController
             var (userId, username) = await _provisioner.ResolveAsync(provider, identity, ct)
                 .ConfigureAwait(false);
 
+            if (Revoked(pending, identity, userId))
+                return PlainText.BadRequest(RevokedMessage);
+
             await _permissions.SyncAsync(userId, identity, ct).ConfigureAwait(false);
             await _pictures.SyncAsync(userId, identity.PictureUrl, provider, ct)
                 .ConfigureAwait(false);
 
+            if (Revoked(pending, identity, userId))
+                return PlainText.BadRequest(RevokedMessage);
+
             if (pending.QuickConnectCode is not null)
-                return AskToApproveQuickConnect(userId, username, pending.QuickConnectCode);
+                return AskToApproveQuickConnect(userId, username, pending.QuickConnectCode, stamp);
 
             RememberForLogout(provider, signedIn.IdentityToken);
 
-            return CompleteWebLogin(username);
+            return CompleteWebLogin(userId, username, stamp);
+        }
+        catch (LoginRaceException ex)
+        {
+            _logger.LogWarning(
+                "SSO login for provider {Id} collided with another change to the account: {Reason}",
+                Loggable.KnownProviderId(providerId), ex.Message);
+            return PlainText.Conflict(
+                "Another login or an administrator changed this account at the same moment. "
+                + "Please sign in again.");
         }
         catch (InvalidOperationException ex)
         {
@@ -178,6 +209,15 @@ public sealed class SsoCallbackController : SsoFlowController
             return PlainText.BadRequest("This approval has expired. Start the login again.");
         }
 
+        // Jellyfin mints the device's token inside AuthorizeRequest and checks nothing
+        // about the account there; an account an administrator disabled after the login
+        // finished would otherwise still let the waiting device in.
+        if (_users.GetUserById(pending.UserId) is not { } user
+            || user.HasPermission(PermissionKind.IsDisabled))
+        {
+            return PlainText.Forbidden("This account is disabled.");
+        }
+
         var authorized = await _quickConnect.AuthorizeRequest(pending.UserId, pending.Code)
             .ConfigureAwait(false);
 
@@ -185,8 +225,29 @@ public sealed class SsoCallbackController : SsoFlowController
             return PlainText.BadRequest(
                 "Quick Connect authorization failed. The code may have expired.");
 
+        // A revocation between Consume and the token Jellyfin just minted: its sweep may
+        // have run before that token existed. Anything revoked after this check sweeps a
+        // store that already holds it.
+        if (!LoginLifetime.IsCurrent(pending.UserId, pending.Stamp))
+        {
+            await _revoker.SweepAsync(pending.UserId).ConfigureAwait(false);
+            return PlainText.BadRequest(RevokedMessage);
+        }
+
         return Content(SsoPages.QuickConnectApproved(), "text/html");
     }
+
+    private const string RevokedMessage = "This login was revoked. Start the login again.";
+
+    /// <summary>
+    /// Whether the login expired, or its identity or the account it is about to reach was
+    /// revoked, since it started.
+    /// </summary>
+    private static bool Revoked(
+        PendingStateStore.PendingState pending, OidcIdentity identity, Guid? userId)
+        => pending.Expiry <= DateTimeOffset.UtcNow
+            || !LoginLifetime.IsCurrent(pending.ProviderId, identity.Sub, pending.LoginVersion)
+            || (userId is { } id && !LoginLifetime.IsCurrent(id, pending.LoginVersion));
 
     // ──────────────────────────────────────────────────────────────────────────
     // Helpers
@@ -276,9 +337,9 @@ public sealed class SsoCallbackController : SsoFlowController
         Response.Headers.CacheControl = "no-store";
     }
 
-    private IActionResult CompleteWebLogin(string username)
+    private IActionResult CompleteWebLogin(Guid userId, string username, LoginStamp stamp)
     {
-        var secret = _secrets.Issue(username);
+        var secret = _secrets.Issue(userId, username, stamp);
 
         // The secret is in this page's body. It is single-use and lives ninety seconds,
         // and the page spends it immediately — but a shared cache or a browser's disk
@@ -296,9 +357,9 @@ public sealed class SsoCallbackController : SsoFlowController
     /// of the browser can make it.
     /// </summary>
     private IActionResult AskToApproveQuickConnect(
-        Guid userId, string username, string quickConnectCode)
+        Guid userId, string username, string quickConnectCode, LoginStamp stamp)
     {
-        var token = _approvals.Issue(userId, username, quickConnectCode);
+        var token = _approvals.Issue(userId, username, quickConnectCode, stamp);
 
         // The approval token is in this page's body and is the whole authority for letting
         // the waiting device in, so the page must not be stored anywhere.
@@ -394,10 +455,21 @@ public sealed class SsoCallbackController : SsoFlowController
 
     /// <summary>Attaches the identity to the account the user is already signed into.</summary>
     private IActionResult CompleteSelfServiceLink(
-        ProviderConfig provider, OidcIdentity identity, Guid linkUserId)
+        ProviderConfig provider, OidcIdentity identity, Guid linkUserId, LoginStamp stamp)
     {
         var config = Plugin.Instance!.Configuration;
-        var decision = SelfServiceLinks.Attach(config, provider.Id, identity.Sub, linkUserId);
+        SelfServiceLinkDecision decision;
+        lock (Plugin.ConfigurationLock)
+        {
+            // Both under the lock every link writer holds. Unlinking marks the account
+            // revoked before it removes links under this lock, so either this sees the
+            // revocation, or the unlink removes the link written here.
+            if (!config.AllowSelfServiceLinking)
+                return PlainText.Forbidden("Self-service linking is disabled.");
+            if (!LoginLifetime.IsCurrent(linkUserId, stamp))
+                return PlainText.BadRequest(RevokedMessage);
+            decision = SelfServiceLinks.Attach(config, provider.Id, identity.Sub, linkUserId);
+        }
 
         switch (decision.Outcome)
         {

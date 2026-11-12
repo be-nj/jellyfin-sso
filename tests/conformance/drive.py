@@ -150,16 +150,27 @@ def who_stopped(final_url, body):
     return "the suite" if host.startswith("localhost.emobix.co.uk") else "the plugin"
 
 
-def drive_login(base, provider_id=PROVIDER_ID, verbose=False):
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Let discovery-only checks stop before the browser visits authorization."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def drive_login(base, provider_id=PROVIDER_ID, verbose=False, *, follow_redirects=True):
     """Follow the plugin's login from the start endpoint to wherever it ends.
 
-    Returns (final_url, status, body_excerpt, hops).
+    Returns (final_url, status, body_excerpt, hops). With follow_redirects=False,
+    return the start endpoint's response after discovery without visiting the OP.
     """
     jar = http.cookiejar.CookieJar()
-    opener = urllib.request.build_opener(
+    handlers = [
         urllib.request.HTTPCookieProcessor(jar),
         urllib.request.HTTPSHandler(context=ctx),
-    )
+    ]
+    if not follow_redirects:
+        handlers.append(NoRedirect())
+    opener = urllib.request.build_opener(*handlers)
     url = f"{base}/sso/oidc/start/{provider_id}"
     hops = []
     try:

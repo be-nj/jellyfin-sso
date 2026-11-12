@@ -25,9 +25,15 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<OidcClientFactory>();
         serviceCollection.AddSingleton<ClaimsExtractor>();
         serviceCollection.AddSingleton<UserProvisioner>();
+        serviceCollection.AddSingleton<ISsoUserPersistence, SsoUserPersistence>();
         serviceCollection.AddSingleton<PermissionSync>();
         serviceCollection.AddSingleton<ProfilePictureSync>();
         serviceCollection.AddSingleton<SessionRevoker>();
+        // Every Jellyfin action that mints a token from a login, checked against SSO
+        // revocations after it ran; and a startup line saying the actions still exist.
+        serviceCollection.Configure<Microsoft.AspNetCore.Mvc.MvcOptions>(options =>
+            options.Filters.Add<NativeLoginLifetime>());
+        serviceCollection.AddHostedService<NativeLoginActionsCheck>();
         serviceCollection.AddSingleton<LoginBranding>();
 
         // One fetcher for every picture whose address came from somewhere else: the

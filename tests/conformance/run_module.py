@@ -27,23 +27,35 @@ def run(module, plan_id, variant_json=None, verbose=False):
 
     # The test is now serving its OP at the plan's alias and waiting for a login.
     for _ in range(30):
-        state = suite("GET", f"/api/runner/{test_id}")
+        state = suite("GET", f"/api/info/{test_id}")
         if state.get("status") in ("WAITING", "RUNNING", "FINISHED", "INTERRUPTED"):
             break
         time.sleep(1)
 
     configure_provider(base, token, issuer)
     final_url, status, body, _ = drive_login(base)
+    attempts = [{
+        "httpStatus": status,
+        "completed": status == 200 and "Completing login" in (body or ""),
+    }]
+    if module == "oidcc-client-test-signing-key-rotation" and attempts[0]["completed"]:
+        # This module rotates its keys at the SECOND authorization request. One
+        # successful login leaves it waiting and does not exercise the rotation.
+        final_url, status, body, _ = drive_login(base)
+        attempts.append({
+            "httpStatus": status,
+            "completed": status == 200 and "Completing login" in (body or ""),
+        })
 
     # Give the suite a moment to finish judging, then let it stop waiting.
     for _ in range(40):
-        state = suite("GET", f"/api/runner/{test_id}")
-        if state.get("status") == "FINISHED":
+        state = suite("GET", f"/api/info/{test_id}")
+        if state.get("status") in ("FINISHED", "INTERRUPTED"):
             break
         time.sleep(1)
     else:
         try:
-            suite("POST", f"/api/runner/{test_id}", {"id": test_id})
+            suite("DELETE", f"/api/runner/{test_id}")
         except Exception:  # noqa: BLE001
             pass
         time.sleep(2)
@@ -58,6 +70,7 @@ def run(module, plan_id, variant_json=None, verbose=False):
         "rpFinalUrl": final_url,
         "rpHttpStatus": status,
         "rpBody": body[:600] if body else None,
+        "loginAttempts": attempts,
         "failures": [
             {"src": e.get("src"), "msg": e.get("msg"), "result": e.get("result")}
             for e in log

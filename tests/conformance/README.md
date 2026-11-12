@@ -7,9 +7,12 @@ a logout, and then judges what the plugin did.
 
 What it found the first time it was run is in
 [docs/reviews/2026-11-06-oidc-conformance.md](../../docs/reviews/2026-11-06-oidc-conformance.md).
+The [rerun in November's code and security review](../../docs/reviews/2026-11-10-code-security-review.md#oidc-conformance-rerun)
+records the latest run and the driver corrections described below.
 
-Run by hand, not in CI. It wants two container stacks and about twenty-five minutes, which
-is the same reason the real-provider tier is run by hand.
+Run by hand, not in CI. It needs two container stacks; allow about an hour for all plans.
+The separate real-provider tier for Authentik, Keycloak and Authelia runs in the Tests
+workflow on code changes; it is not the same check as this conformance tier.
 
 ## What it needs
 
@@ -37,7 +40,7 @@ Then the plans, from the repository root:
 
 ```shell
 python3 -I tests/conformance/drive.py          # create the plan, print the issuer
-python3 -I tests/conformance/run_all.py        # the 28 login modules, ~20 minutes
+python3 -I tests/conformance/run_all.py        # the 28 login modules
 python3 -I tests/conformance/run_discovery.py  # the 3 discovery modules, cold
 python3 -I tests/conformance/run_logout.py     # the 8 back-channel logout modules
 ```
@@ -57,14 +60,18 @@ docker compose -f docker-compose-prebuilt.yml -f docker-compose.override.yml dow
 
 ## Reading a result
 
-Each script records two things per module, and the second is the one that matters:
+The login and discovery scripts record both the suite verdict and the observed flow:
 
-- **`suiteResult`** — the suite's own verdict, from the provider's side.
+- **`result` / `suiteResult`** — the suite's own verdict, from the provider's side.
 - **`stoppedBy`** — taken from the host of the last address the login reached, by the
   `who_stopped` in `drive.py` that every script shares. A login that ended on the plugin's
   own address was refused by the plugin; a login that ended on the suite's address was
   stopped by the *suite*, which for a module that requires a refusal is a finding rather
   than a pass; a login that reached `Completing login` was stopped by nobody.
+
+The logout script records the suite verdict under `result`, with browser requests in
+`steps` and diagnostic messages in `notes`. A driver verdict of `OK` in the login plan
+does not change a suite result of `FAILED`, `SKIPPED` or no result into `PASSED`.
 
 The two are not the same claim, and conflating them produced three verdicts in the first
 run that read as findings and were not. "The login did not complete" says nothing about
@@ -75,18 +82,33 @@ ended. One shared helper, so there is one answer to the question.
 `run_all.py` sorts the modules into four groups, and the verdict means something different
 in each: a login that must complete, a refusal the plugin must make, a refusal the plugin
 makes **by design** (`userinfo-bearer-body` and `userinfo-signed`, both written up in the
-review), and a module about a facility the plugin does not claim to have. The middle two
+review), and modules outside the tested profile: unsupported WebFinger, fetching
+distributed claims from a separate claims endpoint, and
+`client_secret_basic`, which needs a confidential client instead of this public client.
+The middle two
 are checked identically — the refusal has to be the plugin's own — and only labelled apart.
 
-`run_discovery.py` records two more, because for two of its three modules the suite's
-verdict is about the harness rather than the plugin:
+The regular signing-key-rotation module needs **two logins**: its second authorization
+request rotates the keys. `run_module.py` drives both and records `loginAttempts`;
+one successful login alone leaves this module waiting and does not prove rotation.
+
+The scripts poll `/api/info/{id}` for `status`; `/api/runner/{id}` does not include that
+field. A timed-out module is stopped with `DELETE /api/runner/{id}`, not `POST` (which
+starts or resumes it). The raw suite result is retained even when a module is interrupted.
+
+`run_discovery.py` stops at the start endpoint's redirect after fetching discovery and
+JWKS. It does not send an authorization request to a module that has already finished.
+For these successful discovery checks, `stoppedBy` is **`the driver`**; this is not a
+plugin refusal. The issuer-mismatch check must instead be refused with HTTP 400.
+The script also records:
 
 - **`ranToCompletion`** — did the module log `Test has run to completion`?
 - **`failuresBeforeCompletion`** — which failures landed before it did?
 
-A module that ran to completion with nothing failing first did the thing it tests, whatever
-the verdict says afterwards. It is evidence, not a pass; the verdict is still FAILED and is
-reported as FAILED.
+Its verdict is `OK` only if the suite reports `PASSED`, the module completed without an
+earlier failure, and the plugin returned the expected HTTP status. Otherwise the script
+returns a nonzero exit status. Historical reports retain their original `FAILED` verdicts
+from the earlier driver that continued into authorization after discovery was complete.
 
 The server's own log is the third source and often the clearest:
 
@@ -107,7 +129,8 @@ Four of them, each learned by getting it wrong:
 - **The plugin caches discovery documents for thirty minutes**, keyed on
   `{provider id}|{authority}`, and every module in a plan shares one issuer. A module that
   is about the discovery document therefore needs a key the plugin has not seen:
-  `run_discovery.py` gives each one its own provider id and its own plan. Restarting the
+  `run_discovery.py` gives each one its own provider id and its own plan, with a fresh
+  suffix on every invocation so reruns also miss the cache. Restarting the
   server instead does not work — Testcontainers publishes it on an ephemeral port and
   Docker hands out a new one, which invalidates the redirect URI the suite has registered.
 - **Two addresses are reached by two different parties.** The redirect URI is followed by

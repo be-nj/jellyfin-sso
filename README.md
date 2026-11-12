@@ -23,9 +23,12 @@ OpenID Connect single sign-on for Jellyfin — for households already running
 [Authentik](docs/authentik.md), [Keycloak](docs/keycloak.md) or
 [Authelia](docs/authelia.md).
 
-- **Sign in through your provider.** PKCE public client, no secret stored.
+- **Sign in through your provider.** Authorization code with PKCE. A public client
+  stores no secret; a confidential one reads its secret from an environment variable or
+  a file, never from the plugin's configuration.
 - **Groups decide access** — libraries, Live TV, downloads, deletion, collections,
-  subtitles, lyrics, parental rating, admin — reapplied on every login.
+  subtitles, lyrics, parental rating, admin — reapplied on every SSO login, except for
+  the accounts you exclude from the sync.
 - **Accounts created at first login**, existing ones [linked explicitly](docs/linking.md) —
   or no account at all, if you ask the plugin to refuse logins that match no group.
 - **Phones and TVs** via Jellyfin's [Quick Connect](docs/clients.md).
@@ -56,17 +59,21 @@ and **[Authelia](docs/img/login-flow-authelia.gif)** ([mp4](docs/img/login-flow-
 
 ## How it is tested
 
-Against real software, not mocks. Every push runs:
+Against real software wherever it can be. The unit tests stand in for Jellyfin's own
+services with substitutes, and the account writes run against a real SQLite database
+with Jellyfin's schema; everything from the end-to-end tier down is a real server. Every
+pull request and every push to `main` runs the first four rows; a change that touches
+only Markdown skips the heavy ones.
 
 | | |
 |---|---|
-| **594 unit tests** | Token validation, permissions, lockout guards, markup, the served pages |
-| **139 end-to-end tests** | Throwaway Jellyfin container, an OIDC provider built for the suite, real browser — four of them check the harness's own reading of a browser console and need none of that |
+| **630 unit tests** | Token validation, permissions, lockout guards, revocation races, account writes, markup, the served pages |
+| **149 end-to-end tests** | Throwaway Jellyfin container, an OIDC provider built for the suite, real browser — four of them check the harness's own reading of a browser console and need none of that |
 | **Every Jellyfin 12.x** | The same build against the oldest server the catalog offers it to and the two newest, on every pull request — and against every 12.x there is in the weekly run |
 | **16 real-provider logins** | Authentik, Keycloak and Authelia, through their own forms — including the misconfigurations their guides warn about |
-| **Mutation testing** | Stryker breaks the code to see whether the tests notice: 70 %, floor 65 % — over the files the unit suite can reach, which is most of the plugin but not the controllers |
+| **Mutation testing** | Weekly. Stryker breaks the code to see whether the tests notice: 69 % in the last run, floor 65 % — over the files the unit suite can reach, which is most of the plugin but not the controllers |
 | **CodeQL** | Every alert fixed, or dismissed with a written reason |
-| **OIDC conformance** | The OpenID Foundation suite, run by hand against a real server: 36 modules of the login and back-channel logout plans, the suite playing the provider ([the run](docs/reviews/2026-11-06-oidc-conformance.md)) |
+| **OIDC conformance** | The OpenID Foundation suite, run by hand against a real server, the suite playing the provider: 36 modules of the login and back-channel logout plans ([the first run](docs/reviews/2026-11-06-oidc-conformance.md)), run again on 11 November with three cold-cache discovery checks ([the rerun](docs/reviews/2026-11-10-code-security-review.md#oidc-conformance-rerun)). By hand, so not on every change |
 | **Weekly upstream run** | The same tests again, against the newest Jellyfin and the newest Authentik, Keycloak and Authelia |
 
 That provider is a provider, not a stub: discovery document, JWKS, authorization code
@@ -91,7 +98,7 @@ itself. What a client can do is one of two things — and a few can do neither.
 | | Apps |
 |---|---|
 | **In the app.** The app loads the server's own web client, so the provider button is on the login page and the provider opens where you are | **Jellyfin for Android** ✔, **Jellyfin Desktop**, LG (webOS), any browser |
-| **Quick Connect.** The app shows a six-character code; you sign in at your provider on a phone, and the app lets itself in | **Jellyfin Android TV** ✔, **Findroid** ✔, **Streamyfin** ✔, **Finamp** ✔, **Moonfin** ✔, **Wholphin** ✔, Samsung (Tizen), Swiftfin, plezy, Switchfin, Blink, Jellyfin for Roku, Jellyfin for Kodi |
+| **Quick Connect.** The app shows a six-character code; you sign in at your provider on a phone, confirm that the code on the page is the one on the device, and the app lets itself in | **Jellyfin Android TV** ✔, **Findroid** ✔, **Streamyfin** ✔, **Finamp** ✔, **Moonfin** ✔, **Wholphin** ✔, Samsung (Tizen), Swiftfin, plezy, Switchfin, Blink, Jellyfin for Roku, Jellyfin for Kodi |
 | **Neither.** A username and a password, and nothing else — an SSO account cannot sign in at all | tsukimi |
 
 ✔ means driven by hand — in an emulator against a throwaway server with this plugin
@@ -104,6 +111,8 @@ checking. [The full list, and what each check did](docs/clients.md).
 it sounds: the login happens on a device with a keyboard and a password manager, once per
 device, and no password is ever typed into a television.
 `https://<your-jellyfin>/sso/oidc/start/qc?code=<the-code>` is the address that does it.
+The page it ends on shows the code again and asks before it lets the device in, because
+a link carrying somebody else's code would otherwise sign them in as you.
 
 ## Compared with the other plugins
 
@@ -142,7 +151,7 @@ that project happened to build:
 <tr><td align="left">A ready-made example stack to try</td><td align="center">○</td><td align="center">○</td><td align="center">●</td><td align="center">○</td></tr>
 <tr><th colspan="5" align="left">Accounts</th></tr>
 <tr><td align="left">Keyed by the provider's subject</td><td align="center">●</td><td align="center">◐</td><td align="center">○</td><td align="center">◐</td></tr>
-<tr><td align="left">Users link their own account</td><td align="center">●</td><td align="center">○</td><td align="center">○</td><td align="center">○</td></tr>
+<tr><td align="left">Users link their own account</td><td align="center">●</td><td align="center">●</td><td align="center">○</td><td align="center">●</td></tr>
 <tr><td align="left">Refuse the login when no role matches</td><td align="center">●</td><td align="center">●</td><td align="center">◐</td><td align="center">●</td></tr>
 <tr><td align="left">Accounts exempt from the group sync</td><td align="center">●</td><td align="center">○</td><td align="center">○</td><td align="center">○</td></tr>
 <tr><td align="left">Last administrator never demoted</td><td align="center">●</td><td align="center">◐</td><td align="center">○</td><td align="center">○</td></tr>
@@ -152,7 +161,7 @@ that project happened to build:
 <tr><td align="left">Deletion, collections, subtitles, lyrics</td><td align="center">●</td><td align="center">○</td><td align="center">◐</td><td align="center">○</td></tr>
 <tr><td align="left">Transcoding, remote access</td><td align="center">○</td><td align="center">○</td><td align="center">●</td><td align="center">○</td></tr>
 <tr><td align="left">A fallback role, and a priority between them</td><td align="center">○</td><td align="center">○</td><td align="center">●</td><td align="center">○</td></tr>
-<tr><td align="left">Nested claim path (<code>realm_access.roles</code>)</td><td align="center">●</td><td align="center">○</td><td align="center">●</td><td align="center">○</td></tr>
+<tr><td align="left">Nested claim path (<code>realm_access.roles</code>)</td><td align="center">●</td><td align="center">●</td><td align="center">●</td><td align="center">●</td></tr>
 <tr><th colspan="5" align="left">Sessions, hardening, comfort</th></tr>
 <tr><td align="left">Single logout at the provider</td><td align="center">●</td><td align="center">○</td><td align="center">○</td><td align="center">○</td></tr>
 <tr><td align="left">Back-channel logout</td><td align="center">●</td><td align="center">○</td><td align="center">○</td><td align="center">○</td></tr>
@@ -160,16 +169,22 @@ that project happened to build:
 <tr><td align="left">An audit trail of its own</td><td align="center">○</td><td align="center">●</td><td align="center">○</td><td align="center">○</td></tr>
 <tr><td align="left">Quick Connect for phones and TVs</td><td align="center">●</td><td align="center">○</td><td align="center">●</td><td align="center">○</td></tr>
 <tr><td align="left">Login button placed for you</td><td align="center">●</td><td align="center">○</td><td align="center">●</td><td align="center">◐</td></tr>
-<tr><td align="left">Profile picture from the provider</td><td align="center">◐</td><td align="center">○</td><td align="center">●</td><td align="center">○</td></tr>
+<tr><td align="left">Profile picture from the provider</td><td align="center">◐</td><td align="center">◐</td><td align="center">●</td><td align="center">◐</td></tr>
 </tbody>
 </table>
 
 ● yes · ◐ partly · ○ not found in its sources. Where it says ◐: K0lin and 9p4 match a
-name claim against a link table an administrator keeps; K0lin's administrator guard is a
-setting you turn on; 9p4's button is a snippet you paste into the login disclaimer;
+name claim against a link table, which an administrator keeps and users can add to from
+their own linking page; K0lin's administrator guard is a setting you turn on; 9p4's
+button is a snippet you paste into the login disclaimer; K0lin and 9p4 fetch a picture
+from an address template you fill in from claims;
 Ezeqielle maps deletion, collections and subtitles but not lyrics, and can refuse
 accounts it did not create rather than refusing by role; the picture here is off until
-you switch it on, as is refusing a login that matches no mapping.
+you switch it on, as is refusing a login that matches no mapping. Quick Connect means a
+flow of the plugin's own: K0lin's and 9p4's READMEs say their logins work with clients
+that use Jellyfin's Quick Connect after a web sign-in, which is Jellyfin's feature, not
+theirs. Checked against each project's `main` on 11 November 2026; an earlier version of
+this table had self-service linking, nested claims and pictures wrong for both forks.
 
 ### Where they come from
 
@@ -178,16 +193,18 @@ same way for each of the four, this one included.
 
 | | Since | Latest | ★ | Licence | Written by AI | Tests |
 |---|---|---|---:|---|---|---|
-| **This one** | 2026-09 | v1.12.20 · 2026-11 | 3 | MIT → GPLv3 | **160 of 190** commits | 594 + 159 |
-| K0lin | 2026-06 | v5.1.1 · 2026-09 | 176 | GPL-3.0 | none from an AI | 68 |
-| Ezeqielle | 2026-05 | v1.0.10 · 2026-09 | 41 | GPL-3.0 | 33 of last 100 | 16 |
-| 9p4 | 2022-01 | v4.0.0.4 · archived | 1,453 | GPL-3.0 | none from an AI | none |
+| **This one** | 2026-09 | v1.12.20 · 2026-11 | 5 | MIT → GPLv3 | **164 of 200** commits | 630 + 169 |
+| K0lin | 2026-06 | v5.1.1 · 2026-09 | 187 | GPL-3.0 | none from an AI | about 78 |
+| Ezeqielle | 2026-05 | v1.0.10 · 2026-09 | 40 | GPL-3.0 | 33 of 82 | 16 |
+| 9p4 | 2022-01 | v4.0.0.4 · archived | 1,448 | GPL-3.0 | none from an AI | none |
 
-*Written by AI* counts commits carrying a `Co-Authored-By: Claude` trailer: Claude Opus 5
-throughout here, Opus 4.6 to 5 in Ezeqielle's. Three commits here came from GitHub's
-Copilot agent instead, and K0lin's trailers are all Renovate's, which is why that cell
-says what it says rather than "none". *Tests* counts unit + end-to-end cases, every case
-the suites hold. Only this one is mutation tested (70 %, floor 65, over the files the unit suite reaches) and scanned by CodeQL.
+*Written by AI* counts commits carrying a `Co-Authored-By: Claude` trailer, here up to
+`4061035` on 10 November 2026: Claude Opus 5 throughout here, Opus 4.6 to 5 in
+Ezeqielle's. Four commits here came from GitHub's Copilot agent instead, one of them with
+a Claude trailer as well. K0lin's co-author trailers are Renovate's and K0lin's own, none
+an AI's, which is why that cell says what it says rather than "none". Stars as of
+11 November 2026. *Tests* counts unit + end-to-end cases, every case
+the suites hold. Only this one is mutation tested (69 %, floor 65, over the files the unit suite reaches) and scanned by CodeQL.
 
 ### What that means for this one
 
@@ -221,6 +238,19 @@ the suites hold. Only this one is mutation tested (70 %, floor 65, over the file
   whoever misread the specification in the first place: eight of eight on the logout side,
   and on the login side the twenty-three modules that apply to this client, with the
   missing claim now refused by name in the server's own log.
+
+  On 10 November another AI pass reviewed the code for security and found seven more,
+  three of them serious: a one-time login secret or a Quick Connect approval fetched
+  before a back-channel logout or an unlink still worked after it; a profile-picture
+  update could write an older copy of the account back over an administrator's change;
+  and a first login that failed halfway could leave a local account without a password.
+  Its fix for the first one was then checked in turn and had made things worse in a new
+  place — one lock around every Jellyfin login on the server, so a flood of password
+  attempts could hold a back-channel logout until the provider gave up on it. That was
+  rebuilt before any of it was released
+  ([the review, the check of it, and the fixes](docs/reviews/2026-11-10-code-security-review.md)).
+  Two passes by models reading each other's work found what one pass missed, which is
+  an argument for a reader of a different kind, not for more of the same.
 
   The rest still stands: CodeQL, the test matrix and mutation testing are not a reviewer,
   and the documents under `docs/reviews/` were written by the model that wrote the code. Counting
@@ -260,12 +290,15 @@ Then **Plugins → Catalog → Authentication → SSO Authentication → Install
 > ### Before you switch
 >
 > - **Existing accounts, history and favourites stay.**
-> - **An SSO user can no longer sign in with a Jellyfin password.**
+> - **An SSO user can no longer sign in with a Jellyfin password** — unless you exclude
+>   that account from the sync, which leaves its password login alone.
 > - **Keep one local administrator** with a password — your way back in when the provider
 >   is down.
 > - **Permissions are rewritten from the groups on every login**, over anything you set by
 >   hand ([unless the user is excluded](docs/configuration.md#safety)).
-> - **Anyone your provider lets through gets an account.** Gate it there.
+> - **Anyone your provider lets through gets an account** — unless you switch on refusing
+>   logins that match no group mapping. A name that already exists here is refused until
+>   you link it. Gate it at the provider either way.
 >
 > Reversible: [uninstall path](docs/recovery.md#uninstalling).
 
@@ -297,8 +330,9 @@ differ in steps 4 and 5. Half an hour the first time.
 7. **Test with a throwaway account**, not your own: `/sso/oidc/start` in a private window,
    signed in as a spare user from that group. Their Jellyfin account appears on the spot.
 8. **Link your existing accounts.** The first SSO login for a name that already exists is
-   refused until an administrator links it ([how](docs/linking.md#manual-linking)). Leave
-   one administrator unlinked.
+   refused until an administrator links it ([how](docs/linking.md#manual-linking)), or
+   until its owner links it from their own profile while self-service linking is on
+   ([how](docs/linking.md)). Leave one administrator unlinked.
 
 Errors: [Troubleshooting](docs/troubleshooting.md). Locked out:
 [If something goes wrong](docs/recovery.md).

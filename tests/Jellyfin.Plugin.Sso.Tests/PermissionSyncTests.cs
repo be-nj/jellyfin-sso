@@ -517,6 +517,9 @@ public sealed class PermissionSyncTests : IDisposable
 
         var policy = CapturedPolicy();
         Assert.Equal(typeof(SsoAuthenticationProvider).FullName, policy.AuthenticationProviderId);
+        // The same name the account was created with; this used to write an older one
+        // back over it on every login.
+        Assert.Equal(SsoAuthenticationProvider.DefaultPasswordResetProviderId, policy.PasswordResetProviderId);
         Assert.True(policy.EnableMediaPlayback);
         // Phase 2 fields: off until they are derived from group mappings.
         Assert.False(policy.EnableLiveTvAccess);

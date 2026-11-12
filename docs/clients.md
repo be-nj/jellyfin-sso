@@ -38,7 +38,8 @@ Connect, which this plugin can complete:
 2. In the app, choose *Quick Connect* and note the code.
 3. On a phone or laptop, open
    `https://<your-jellyfin>/sso/oidc/start/qc?code=<the-code>` and sign in at your
-   provider. The app logs in by itself. With several providers this asks which one first,
+   provider. Check the code on the approval page and explicitly approve your device.
+   Only then does the app sign in. With several providers this asks which one first,
    carrying the code along.
 
 Afterwards the app holds a normal Jellyfin session — once per device, not per evening,
@@ -85,7 +86,8 @@ only thing that matters here: how a login can happen at all.
 | Switchfin | PC, PS4, PS Vita, Switch | Quick Connect | from its sources |
 | Blink | desktop (Tauri) | Quick Connect | from its sources |
 | Jellyfin for Roku | Roku | Quick Connect | from its sources |
-| Jellyfin for Kodi | Kodi | Quick Connect | from its sources |
+| JellyCon | Kodi | Quick Connect | listed in [Jellyfin’s official compatibility table](https://jellyfin.org/docs/general/server/quick-connect/#supported-clients), checked 10 November 2026 |
+| Jellyfin for Kodi | Kodi | Quick Connect | from its sources: `login_quick_connect` in `jellyfin_kodi/connect.py`, released in 2.2.0. Jellyfin's official table still lists it as unsupported, which predates that release |
 | Streamyfin (TV build) | Android TV | Quick Connect | 0.55.2 on a Sony BRAVIA 4K AE2 (Android 14, armeabi-v7a), by the maintainer: Quick Connect is a button of its own under the password form, the browser step was this plugin's SSO login, and the set was signed in. Installed by sideloading — the television build is published as an APK, not in the Play Store |
 | **tsukimi** | Linux (GTK) | **neither** | from its sources: it authenticates by username and password and has no Quick Connect, so an SSO account cannot sign in to it at all |
 

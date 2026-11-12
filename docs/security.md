@@ -46,16 +46,32 @@ The details:
   by a cookie minted when the login starts and compared when the callback arrives — a
   `state` alone is something an attacker can hold and hand to somebody else.
 - The one-time secret that completes a login is random, single-use, expires after 90
-  seconds and is never written to disk. It does reach the browser, in the body of the
+  seconds, is bound to the Jellyfin user ID and username, and is never written to disk.
+  It does reach the browser, in the body of the
   page that spends it.
 - Identity is matched by `(provider, sub)`, never by username
   ([why](linking.md#identity-matching-and-the-idp-subject)).
 - Unlinking an account ends its sessions, whether the person does it themselves or an
   administrator does it on the Links tab. Back-channel logout finds an account through its
   link and nothing else, so a link removed without that would leave tokens nobody can end.
+  Revocation also invalidates what is still on its way to becoming a session: unspent
+  login secrets, Quick Connect approvals not yet clicked, and logins that started before
+  it, for the account and for every identity linked to it. A token Jellyfin mints in the
+  moment a revocation lands — through the password and SSO login routes, including the
+  legacy user-ID one, or through Jellyfin's own Quick Connect approval — is checked after
+  it exists and taken back. None of this makes a revocation wait for a login.
+- An administrator can disable an account between its SSO login and the click that lets
+  a Quick Connect device in; the click is then refused.
+- New SSO accounts are persisted disabled and SSO-only before further provisioning.
+  A failed provisioning step attempts to remove the account; failed cleanup leaves an
+  SSO-only account rather than a passwordless local login. An administrator may need to
+  remove such an orphan before retrying the same username.
+- Profile-picture synchronization writes only image data through a tracked database
+  context; it does not save a detached account snapshot or its permissions.
 - What the plugin fetches from the provider is fetched from the provider: the discovery
   document's keys, token, userinfo and end-session endpoints have to be on the authority's
-  own host, and redirects are not followed, so none of those calls can be moved afterwards.
+  own origin. Discovery validation runs before the JWKS request, and redirects are not
+  followed, so none of those calls can be moved afterwards.
 - Names and group names from a token reach the log on one line, with control characters
   replaced. They are the one class of logged value that cannot be mapped to a closed set,
   and a name carrying a newline would otherwise write a line of its own into the log.

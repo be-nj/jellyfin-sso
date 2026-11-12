@@ -23,7 +23,7 @@ from run_module import run  # noqa: E402
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 # Modules where the plugin is expected to refuse the login. Everything else is a login
-# that should succeed, or a facility the plugin does not claim to have.
+# that should succeed, or a module outside this plan's claimed coverage.
 #
 # discovery-issuer-mismatch belongs here but cannot pass here: every module in a plan
 # shares one issuer, so by the time it runs the plugin has the discovery document cached
@@ -55,11 +55,15 @@ REFUSES_BY_DESIGN = {
     "oidcc-client-test-userinfo-signed",
 }
 
-# Modules that ask for something this plugin does not implement and does not claim to.
+# WebFinger and fetching distributed claims are not implemented. client-secret-basic
+# needs a confidential-client plan; this run configures a public client, though the
+# plugin also supports client secrets. A completed login alone does not prove support
+# for distributed claims: that module requires a request to a separate claims endpoint.
 NOT_CLAIMED = {
     "oidcc-client-test-discovery-webfinger-acct",
     "oidcc-client-test-discovery-webfinger-url",
     "oidcc-client-test-client-secret-basic",
+    "oidcc-client-test-distributed-claims",
 }
 
 

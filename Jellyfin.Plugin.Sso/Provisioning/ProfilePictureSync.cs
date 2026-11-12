@@ -38,19 +38,22 @@ public sealed class ProfilePictureSync
     private readonly IServerConfigurationManager _serverConfiguration;
     private readonly RemoteImages _images;
     private readonly ILogger<ProfilePictureSync> _logger;
+    private readonly ISsoUserPersistence _persistence;
 
     public ProfilePictureSync(
         IUserManager userManager,
         IProviderManager providerManager,
         IServerConfigurationManager serverConfiguration,
         RemoteImages images,
-        ILogger<ProfilePictureSync> logger)
+        ILogger<ProfilePictureSync> logger,
+        ISsoUserPersistence persistence)
     {
         _userManager = userManager;
         _providerManager = providerManager;
         _serverConfiguration = serverConfiguration;
         _images = images;
         _logger = logger;
+        _persistence = persistence;
     }
 
     /// <summary>
@@ -162,13 +165,7 @@ public sealed class ProfilePictureSync
             await _providerManager.SaveImage(source, picture.ContentType, path).ConfigureAwait(false);
         }
 
-        if (user.ProfileImage is not null && user.ProfileImage.Path != path)
-        {
-            await _userManager.ClearProfileImageAsync(user).ConfigureAwait(false);
-        }
-
-        user.ProfileImage = new ImageInfo(path);
-        await _userManager.UpdateUserAsync(user).ConfigureAwait(false);
+        await _persistence.SetProfileImageAsync(userId, path, ct).ConfigureAwait(false);
 
         lock (_applied)
         {

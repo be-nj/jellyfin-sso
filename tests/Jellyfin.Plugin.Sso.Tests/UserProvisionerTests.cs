@@ -19,12 +19,13 @@ public sealed class UserProvisionerTests : IDisposable
 {
     private readonly PluginHarness _harness = new();
     private readonly IUserManager _userManager = Substitute.For<IUserManager>();
+    private readonly ISsoUserPersistence _persistence = Substitute.For<ISsoUserPersistence>();
     private readonly UserProvisioner _provisioner;
     private readonly ProviderConfig _provider = new() { Id = "provider-1", Name = "Test" };
 
     public UserProvisionerTests()
     {
-        _provisioner = new UserProvisioner(_userManager, NullLogger<UserProvisioner>.Instance);
+        _provisioner = new UserProvisioner(_userManager, NullLogger<UserProvisioner>.Instance, _persistence);
     }
 
     private static User UserNamed(string name)
@@ -66,7 +67,7 @@ public sealed class UserProvisionerTests : IDisposable
         });
         // No local account of that name, so provisioning may proceed with a new user.
         var created = UserNamed("ben");
-        _userManager.CreateUserAsync("ben").Returns(created);
+        _persistence.CreateAsync("ben", Arg.Any<CancellationToken>()).Returns(created);
 
         var (userId, _) = await _provisioner.ResolveAsync(_provider, Identity("ben", "ben"));
 
@@ -92,7 +93,7 @@ public sealed class UserProvisionerTests : IDisposable
     public async Task A_new_identity_is_created_linked_and_restricted_to_sso()
     {
         var created = UserNamed("newcomer");
-        _userManager.CreateUserAsync("newcomer").Returns(created);
+        _persistence.CreateAsync("newcomer", Arg.Any<CancellationToken>()).Returns(created);
 
         var (userId, username) = await _provisioner.ResolveAsync(
             _provider, Identity("sub-123", "newcomer", "media"));
@@ -124,7 +125,7 @@ public sealed class UserProvisionerTests : IDisposable
             JellyfinUserId = goneUserId,
         });
         var created = UserNamed("ben");
-        _userManager.CreateUserAsync("ben").Returns(created);
+        _persistence.CreateAsync("ben", Arg.Any<CancellationToken>()).Returns(created);
 
         var (userId, _) = await _provisioner.ResolveAsync(_provider, Identity("ben", "ben"));
 
@@ -137,7 +138,7 @@ public sealed class UserProvisionerTests : IDisposable
     public async Task Groups_seen_at_login_are_remembered_for_the_admin_ui()
     {
         var created = UserNamed("newcomer");
-        _userManager.CreateUserAsync("newcomer").Returns(created);
+        _persistence.CreateAsync("newcomer", Arg.Any<CancellationToken>()).Returns(created);
         _harness.Configuration.SeenGroups.Add("media");
 
         await _provisioner.ResolveAsync(_provider, Identity("sub-123", "newcomer", "media", "admins"));
@@ -149,7 +150,7 @@ public sealed class UserProvisionerTests : IDisposable
     public async Task A_group_reported_twice_in_one_login_is_remembered_once()
     {
         var created = UserNamed("newcomer");
-        _userManager.CreateUserAsync("newcomer").Returns(created);
+        _persistence.CreateAsync("newcomer", Arg.Any<CancellationToken>()).Returns(created);
 
         await _provisioner.ResolveAsync(
             _provider, Identity("sub-123", "newcomer", "media", "media"));
@@ -163,7 +164,7 @@ public sealed class UserProvisionerTests : IDisposable
         // The name has to match the provider's spelling to grant anything, so the
         // autocomplete must offer both spellings rather than guess which one is meant.
         var created = UserNamed("newcomer");
-        _userManager.CreateUserAsync("newcomer").Returns(created);
+        _persistence.CreateAsync("newcomer", Arg.Any<CancellationToken>()).Returns(created);
         _harness.Configuration.SeenGroups.Add("Media");
 
         await _provisioner.ResolveAsync(_provider, Identity("sub-123", "newcomer", "media"));
@@ -177,7 +178,7 @@ public sealed class UserProvisionerTests : IDisposable
         // The names come from the provider, so an IdP with thousands of groups must not
         // grow the plugin's configuration file without end.
         var created = UserNamed("newcomer");
-        _userManager.CreateUserAsync("newcomer").Returns(created);
+        _persistence.CreateAsync("newcomer", Arg.Any<CancellationToken>()).Returns(created);
         _harness.Configuration.SeenGroups.AddRange(
             Enumerable.Range(0, PluginConfiguration.MaxSeenGroups - 1).Select(i => $"old-{i}"));
 
@@ -193,7 +194,7 @@ public sealed class UserProvisionerTests : IDisposable
     public async Task A_group_arriving_at_a_full_list_is_dropped_rather_than_swapped_in()
     {
         var created = UserNamed("newcomer");
-        _userManager.CreateUserAsync("newcomer").Returns(created);
+        _persistence.CreateAsync("newcomer", Arg.Any<CancellationToken>()).Returns(created);
         _harness.Configuration.SeenGroups.AddRange(
             Enumerable.Range(0, PluginConfiguration.MaxSeenGroups).Select(i => $"old-{i}"));
 
@@ -207,14 +208,40 @@ public sealed class UserProvisionerTests : IDisposable
     public async Task A_new_user_may_reset_their_password_the_way_jellyfin_expects()
     {
         var created = UserNamed("newcomer");
-        _userManager.CreateUserAsync("newcomer").Returns(created);
+        _persistence.CreateAsync("newcomer", Arg.Any<CancellationToken>()).Returns(created);
 
         await _provisioner.ResolveAsync(_provider, Identity("sub-123", "newcomer"));
 
         var policy = CapturedPolicy(created.Id);
         Assert.Equal(
-            "Emby.Server.Implementations.Library.DefaultPasswordResetProvider",
+            "Jellyfin.Server.Implementations.Users.DefaultPasswordResetProvider",
             policy.PasswordResetProviderId);
+        Assert.Equal(SsoAuthenticationProvider.DefaultPasswordResetProviderId, policy.PasswordResetProviderId);
+        // Through the plugin's own persistence, never Jellyfin's CreateUserAsync, which
+        // commits a passwordless local account before anything else can be set.
+        await _userManager.DidNotReceiveWithAnyArgs().CreateUserAsync(default!);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_failed_initial_policy_write_removes_the_provisional_account(bool cleanupFails)
+    {
+        var created = UserNamed("newcomer");
+        created.AuthenticationProviderId = typeof(SsoAuthenticationProvider).FullName!;
+        _persistence.CreateAsync("newcomer", Arg.Any<CancellationToken>()).Returns(created);
+        _userManager.UpdatePolicyAsync(created.Id, Arg.Any<UserPolicy>())
+            .Returns(Task.FromException(new IOException("policy failed")));
+        if (cleanupFails)
+            _userManager.DeleteUserAsync(created.Id)
+                .Returns(Task.FromException(new IOException("cleanup failed")));
+
+        var error = await Assert.ThrowsAsync<IOException>(() =>
+            _provisioner.ResolveAsync(_provider, Identity("sub", "newcomer")));
+
+        Assert.Equal("policy failed", error.Message);
+        Assert.Empty(_harness.Configuration.Links);
+        await _userManager.Received(1).DeleteUserAsync(created.Id);
     }
 
     private UserPolicy CapturedPolicy(Guid userId)

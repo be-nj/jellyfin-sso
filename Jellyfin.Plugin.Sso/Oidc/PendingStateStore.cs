@@ -32,7 +32,7 @@ public sealed class PendingStateStore
     /// <summary>Lets a test watch a login expire without waiting ten minutes.</summary>
     internal PendingStateStore(TimeSpan ttl, ILogger<PendingStateStore>? logger = null)
     {
-        _ttl = ttl;
+        _ttl = Auth.LoginLifetime.Covered(ttl);
         _logger = logger ?? NullLogger<PendingStateStore>.Instance;
     }
 
@@ -50,7 +50,8 @@ public sealed class PendingStateStore
         // non-null only for Quick Connect path
         string? QuickConnectCode = null,
         // non-null only when an existing user is linking their own account
-        Guid? LinkUserId = null);
+        Guid? LinkUserId = null,
+        long LoginVersion = 0);
 
     private readonly ConcurrentDictionary<string, PendingState> _store = new();
 
@@ -75,7 +76,8 @@ public sealed class PendingStateStore
             DateTimeOffset.UtcNow.Add(_ttl),
             browserId,
             quickConnectCode,
-            linkUserId);
+            linkUserId,
+            Auth.LoginLifetime.Version);
 
         if (_store.Count >= MaxPending)
         {

@@ -106,8 +106,7 @@ public sealed class PermissionSync
         policy.EnableAllFolders = enableAll;
         policy.EnabledFolders = enableAll ? [] : libraryIds;
         policy.AuthenticationProviderId = typeof(Auth.SsoAuthenticationProvider).FullName!;
-        policy.PasswordResetProviderId =
-            "Emby.Server.Implementations.Library.DefaultPasswordResetProvider";
+        policy.PasswordResetProviderId = Auth.SsoAuthenticationProvider.DefaultPasswordResetProviderId;
 
         // Playback — always allowed for SSO users.
         policy.EnableMediaPlayback = true;
