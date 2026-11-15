@@ -7,7 +7,8 @@ check with a click in it. Everything around the click is the harness's:
 the way [the configuration reference](../../docs/configuration.md#providers) describes,
 hands the client secret to the server as a file, and waits.
 
-Not in CI, and not part of `make e2e`.
+Not in CI, and not part of `make e2e`. What the first run found is written up in
+[docs/google.md](../../docs/google.md).
 
 ## Once: a Google OAuth client
 

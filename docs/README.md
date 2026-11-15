@@ -10,6 +10,8 @@ The [README](../README.md) installs the plugin and walks the setup. The detail i
   on the provider's side
 - [Tinyauth](tinyauth.md) — a fourth provider, guided but not in the test matrix, and what
   that costs
+- [Google](google.md) — a provider without groups that admits whoever it knows: the two
+  switches that make it usable, from one login walked by hand
 - [Configuration reference](configuration.md) — every field on the plugin page
 - [Linking accounts](linking.md) — the IdP subject, manual and self-service linking
 
