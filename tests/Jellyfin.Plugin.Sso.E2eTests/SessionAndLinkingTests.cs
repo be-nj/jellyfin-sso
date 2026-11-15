@@ -786,6 +786,60 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A provider with no groups to send, set up the way Google has to be: it creates no
+    /// accounts and does not set permissions. An existing Jellyfin account linked to it
+    /// signs in and is exactly as it was afterwards — every library it had, and its own
+    /// password login — where a login used to apply "no groups" and take the libraries
+    /// away. The server-wide rule that a login must match a group mapping does not refuse
+    /// it, and still refuses a group-less login at the provider that does manage
+    /// permissions.
+    /// </summary>
+    [Fact]
+    public async Task A_provider_without_groups_leaves_a_linked_account_as_it_was()
+    {
+        const string ProviderId = "no-groups";
+        _env.Idp.RegisteredRedirectUris.Add($"{_env.BaseUrl}/sso/oidc/callback/{ProviderId}");
+        await _env.PatchConfigAsync(config =>
+        {
+            config["RequireMappedGroup"] = true;
+            config["Providers"]!.AsArray().Add(new JsonObject
+            {
+                ["Id"] = ProviderId,
+                ["Name"] = "Provider without groups",
+                ["Enabled"] = true,
+                ["Authority"] = _env.Idp.ContainerAuthority,
+                ["ClientId"] = JellyfinEnvironment.ClientId,
+                ["CreateAccounts"] = false,
+                ["ManagePermissions"] = false,
+            });
+        });
+
+        var (member, _) = await _env.CreateLocalUserWithTokenAsync("handmade");
+        var before = await _env.UserPolicyAsync("handmade");
+        Assert.True((await PostLinkAsync(ProviderId, "sub-handmade", member)).IsSuccessStatusCode);
+
+        var login = await _env.StartWebLoginAsync(
+            new FakeUser("sub-handmade", "whatever-the-provider-calls-them", []), providerId: ProviderId);
+
+        Assert.True(login.Succeeded, login.Body);
+        var after = await _env.UserPolicyAsync("handmade");
+        foreach (var field in new[]
+                 {
+                     "EnableAllFolders", "EnabledFolders", "IsAdministrator",
+                     "AuthenticationProviderId", "EnableContentDownloading",
+                 })
+        {
+            Assert.Equal(before[field]?.ToJsonString(), after[field]?.ToJsonString());
+        }
+
+        // The rule about groups is still in force where groups are read.
+        var elsewhere = await _env.StartWebLoginAsync(
+            new FakeUser("sub-groupless", "grouplessuser", []), providerId: JellyfinEnvironment.ProviderId);
+        Assert.Equal(HttpStatusCode.Forbidden, elsewhere.CallbackStatus);
+        Assert.Contains("match one of its group mappings", elsewhere.Body);
+    }
+
+    /// <summary>
     /// The check on the provider card, asked the way the page asks it. A provider that
     /// works reports what a login would find; one whose document moves its endpoints to a
     /// host nobody named reports the refusal — the sentence that used to be readable only

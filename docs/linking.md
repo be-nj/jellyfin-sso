@@ -89,4 +89,5 @@ longer end, and Jellyfin's tokens do not expire on their own. The provider has t
 named: without one, this used to remove every link the caller had.
 
 Linking grants nothing. Libraries and the admin flag come from the groups at the next
-login.
+login — or stay as you set them by hand, at a provider with *Set permissions from this
+provider's groups* off ([Configuration](configuration.md#providers)).

@@ -30,8 +30,22 @@ public sealed class PermissionSync
         _logger = logger;
     }
 
-    public async Task SyncAsync(Guid userId, OidcIdentity identity, CancellationToken ct = default)
+    public async Task SyncAsync(
+        Guid userId, OidcIdentity identity, CancellationToken ct = default, ProviderConfig? provider = null)
     {
+        // A provider that does not manage permissions leaves the account as it is: not
+        // its libraries, not its administrator flag, not which login methods it has. The
+        // groups such a provider sends are empty, and applying "no groups" is how an
+        // account lost everything an administrator had given it by hand.
+        if (provider is { ManagePermissions: false })
+        {
+            _logger.LogInformation(
+                "SSO sync skipped for user {Id}: provider {ProviderId} does not set "
+                + "permissions from groups, permissions left as configured.",
+                userId, Loggable.KnownProviderId(provider.Id));
+            return;
+        }
+
         // One login at a time. The administrator decision below reads every account on the
         // server and the policy write that acts on it happens afterwards; two logins
         // overlapping there could demote the last two administrators at once, each having

@@ -284,6 +284,16 @@ function buildProviderCard(p, i) {
                 'accounts linked beforehand can sign in.</div>' +
         '</div>' +
         '<div class="checkboxContainer">' +
+            '<label><input type="checkbox" is="emby-checkbox" class="sso-provider-manage-permissions"' +
+            (p.ManagePermissions === false ? '' : ' checked') +
+            ' /><span>Set permissions from this provider\'s groups</span></label>' +
+            '<div class="fieldDescription">On, every login through this provider sets the ' +
+                'account\'s libraries and permissions from the group mappings. Turn it off ' +
+                'for a provider that sends no groups, such as Google: a login then leaves ' +
+                'the account as you set it by hand, and \u201cRefuse logins that match no ' +
+                'mapping\u201d does not apply to this provider.</div>' +
+        '</div>' +
+        '<div class="checkboxContainer">' +
             '<label><input type="checkbox" is="emby-checkbox" class="sso-provider-backchannel"' +
             (p.AcceptBackChannelLogout === false ? '' : ' checked') +
             ' /><span>Accept back-channel logout from this provider</span></label>' +
@@ -437,6 +447,7 @@ function collectProviders(view) {
             GroupsFromUserInfo: card.querySelector('.sso-provider-userinfo').checked,
             BrandedLoginButton: card.querySelector('.sso-provider-branded').checked,
             CreateAccounts: card.querySelector('.sso-provider-create-accounts').checked,
+            ManagePermissions: card.querySelector('.sso-provider-manage-permissions').checked,
             AcceptBackChannelLogout: card.querySelector('.sso-provider-backchannel').checked,
             ButtonColour: val('.sso-provider-colour'),
             SigningAlgorithms: val('.sso-provider-algorithms').split(/\s+/).filter(Boolean),

@@ -37,6 +37,35 @@ public sealed class LoginGateTests : IDisposable
     public void Nothing_configured_at_all_changes_nothing()
         => Assert.Null(Refusal(Identity()));
 
+    // ─── A provider whose groups are not read ─────────────────────────────────
+
+    /// <summary>
+    /// The rule asks whether a login matches a group mapping. A provider that is set not
+    /// to manage permissions — Google, which has no groups to send — would fail it at
+    /// every login, so switching the rule on would switch that provider off. Its logins
+    /// are decided by links and by whether it creates accounts instead.
+    /// </summary>
+    [Fact]
+    public void The_rule_does_not_apply_to_a_provider_that_does_not_manage_permissions()
+    {
+        Config.RequireMappedGroup = true;
+        Map("media");
+        var google = new ProviderConfig { Id = "google", ManagePermissions = false };
+
+        Assert.Null(LoginGate.Refusal(Config, Identity(), existingUserId: null, google));
+    }
+
+    /// <summary>And it still applies to every other provider on the same server.</summary>
+    [Fact]
+    public void The_rule_still_applies_to_a_provider_that_does_manage_them()
+    {
+        Config.RequireMappedGroup = true;
+        Map("media");
+        var authentik = new ProviderConfig { Id = "authentik" };
+
+        Assert.NotNull(LoginGate.Refusal(Config, Identity(), existingUserId: null, authentik));
+    }
+
     // ─── On ───────────────────────────────────────────────────────────────────
 
     [Fact]

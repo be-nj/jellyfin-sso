@@ -66,6 +66,38 @@ public sealed class PermissionSyncTests : IDisposable
     private void OtherUsers(params User[] users) => _userManager.GetUsers().Returns(users);
 
     /// <summary>
+    /// A provider that sends no groups — Google — used to take an account's libraries
+    /// away at every login, because "no groups" was applied like any other answer. With
+    /// the provider set not to manage permissions nothing about the account is written:
+    /// not its libraries, not its administrator flag, not which login it uses.
+    /// </summary>
+    [Fact]
+    public async Task A_provider_that_does_not_manage_permissions_leaves_the_account_alone()
+    {
+        ExistingUser(admin: true);
+        Map("media", admin: false, MoviesId);
+        var google = new ProviderConfig { Id = "google", ManagePermissions = false };
+
+        await _sync.SyncAsync(_userId, Identity(), default, google);
+
+        await _userManager.DidNotReceiveWithAnyArgs().UpdatePolicyAsync(default, default!);
+    }
+
+    /// <summary>The same login through a provider that does manage them is applied.</summary>
+    [Fact]
+    public async Task A_provider_that_manages_permissions_still_applies_the_groups()
+    {
+        ExistingUser(admin: false);
+        Map("media", admin: false, MoviesId);
+        var authentik = new ProviderConfig { Id = "authentik" };
+
+        await _sync.SyncAsync(_userId, Identity("media"), default, authentik);
+
+        await _userManager.Received(1).UpdatePolicyAsync(
+            _userId, Arg.Is<UserPolicy>(p => p.EnabledFolders.SequenceEqual(new[] { MoviesId })));
+    }
+
+    /// <summary>
     /// The sync used to fall back to a blank UserPolicy when it could not read the current
     /// one, and then write that — resetting every field the plugin does not own to the
     /// type's default. IsDisabled defaults to false, so a login on that path could

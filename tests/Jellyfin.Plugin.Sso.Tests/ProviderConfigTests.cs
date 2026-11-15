@@ -35,6 +35,10 @@ public sealed class ProviderConfigTests
         // no such element to read — keeps creating accounts as it did. The configuration
         // page turns it off for a provider it adds.
         Assert.True(provider.CreateAccounts);
+
+        // On: the provider's groups are the source of truth unless somebody says this
+        // provider has none.
+        Assert.True(provider.ManagePermissions);
     }
 
     /// <summary>
@@ -67,6 +71,7 @@ public sealed class ProviderConfigTests
 
         var provider = Assert.Single(config.Providers);
         Assert.True(provider.CreateAccounts);
+        Assert.True(provider.ManagePermissions);
         Assert.Empty(provider.EndpointHosts);
     }
 
