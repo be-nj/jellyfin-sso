@@ -9,6 +9,14 @@
     "imageUrl": "https://jf.be-nj.net/docs/img/icon.png",
     "versions": [
       {
+        "version": "1.12.21.0",
+        "changelog": "- **Security.** Unlinking an account or a back-channel logout now also ends what a login\n  in progress had already handed out: the one-time sign-in secret, a Quick Connect approval\n  not yet clicked, and a token Jellyfin mints at that moment, through its own password\n  login and Quick Connect page as well (#243, #250, #251). A profile-picture download no\n  longer undoes an administrator disabling the account meanwhile (#244), a new account is\n  disabled and SSO-only from the moment it is first saved (#245), and a disabled account\n  can no longer let a Quick Connect device in (#253).\n- **Google works again.** New: _Further endpoint hosts_ on the provider card names the\n  hosts a provider serves its keys and tokens from besides its issuer's. For Google:\n  `www.googleapis.com oauth2.googleapis.com openidconnect.googleapis.com` (#260).\n- **New: _Create an account at first login_**, per provider. Off, only accounts linked\n  beforehand sign in, which is what a provider that admits everyone it knows needs.\n  Existing providers keep it on; **a provider you add starts with it off** (#262).\n- **Fixes.** A first login and a self-service link racing for one identity can no longer\n  both win; switching off _Allow self-service linking_ also stops a link already started;\n  Jellyfin's own plugin-configuration endpoint can no longer drop a link without ending its\n  sessions; the `jwks_uri` host is checked before the keys are fetched (#246, #247, #249,\n  #252, #254).\n- **Also.** A login that collides with another change to the account gets \"Please sign in\n  again\" (409) instead of a configuration error, and the server log says at startup\n  whether every Jellyfin login action the revocation guard watches is present (#255, #256).\n\nNothing to do on upgrade, unless you sign in through Google: name its three hosts as above.",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/be-nj/jellyfin-sso/releases/download/v1.12.21/jellyfin-sso_1.12.21.0.zip",
+        "checksum": "ad775abacfe77e7f73e07e2da696d3fd",
+        "timestamp": "2026-11-15T16:10:30Z"
+      },
+      {
         "version": "1.12.20.0",
         "changelog": "- **Security.** Token checks tightened after the first run of the OpenID Foundation\n  conformance suite: an ID token carrying no `iat` is refused, a key a provider published\n  for encryption is no longer accepted as a signing key, and a refusal no longer names an\n  outcome that did not happen (#216, #217, #220, #221).\n- **New: _Signing algorithms_** on the provider card pins what a provider may sign a token\n  with, on the login and the back-channel logout path alike (#219, #222).\n- **Tests.** The end-to-end suite waits for the web client and the server log instead of\n  guessing how long either takes, and the conformance harness attributes a refusal to\n  whoever made it (#224, #225, #226).\n\nNothing to do on upgrade — _Signing algorithms_ is empty by default, which is what every\nearlier release did.",
         "targetAbi": "12.0.0.0",
@@ -39,14 +47,6 @@
         "sourceUrl": "https://github.com/be-nj/jellyfin-sso/releases/download/v1.12.17/jellyfin-sso_1.12.17.0.zip",
         "checksum": "435f1d6712499b222e7a3374339fd62b",
         "timestamp": "2026-11-05T01:21:16Z"
-      },
-      {
-        "version": "1.12.16.0",
-        "changelog": "- **New: refuse a login that matches no group mapping.** Off by default. With it on,\n  somebody in no mapped group is turned away instead of getting an account with no\n  libraries. Users excluded from the group sync stay exempt, and local passwords are\n  untouched (#114).\n- **Single logout names the session that is ending**, so a provider that used to ask the\n  user to confirm ends it instead. Nothing is kept while provider logout is off (#105).\n- **The login button reaches the server from apps bundling their own web client**, such as\n  Samsung's, once **Dashboard → Networking → Published server URIs** is set. Which app\n  signs in which way is now written down in `docs/clients.md` (#116, #117, #119, #120).\n\nNothing to do on upgrade.",
-        "targetAbi": "12.0.0.0",
-        "sourceUrl": "https://github.com/be-nj/jellyfin-sso/releases/download/v1.12.16/jellyfin-sso_1.12.16.0.zip",
-        "checksum": "844e0fdf4ee9911dd9751d622ec9c22d",
-        "timestamp": "2026-11-02T06:13:04Z"
       }
     ]
   }
