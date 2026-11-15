@@ -145,6 +145,13 @@ curl -X POST "https://<your-jellyfin>/sso/admin/config" \
 
 A public client with PKCE is the default and covers most setups.
 
+The secret is sent to the provider's token endpoint with HTTP Basic authentication
+(`client_secret_basic`), which is what OpenID Connect expects unless a client registered
+otherwise. If the provider's discovery document says it takes the secret as a form
+parameter and not with Basic (`client_secret_post`), the plugin sends it that way
+instead; there is nothing to set. A public client sends no credentials at all, only its
+client id.
+
 ## Sessions
 
 - **Put a login button on the login page** — on by default; writes the button into

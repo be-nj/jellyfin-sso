@@ -45,6 +45,28 @@ python3 -I tests/conformance/run_discovery.py  # the 3 discovery modules, cold
 python3 -I tests/conformance/run_logout.py     # the 8 back-channel logout modules
 ```
 
+The login plan can also be run as a **confidential client**, which is how a provider
+that requires a client secret — Google's web clients, for one — is talked to:
+
+```shell
+CONFORMANCE_CLIENT_AUTH=client_secret_basic python3 -I tests/conformance/drive.py
+python3 -I tests/conformance/run_all.py        # writes results-client_secret_basic.json
+```
+
+`drive.py` mints a secret for the run, tells the suite, and puts it into the Jellyfin
+container as a file, which is the only way the plugin takes one; the plan records the
+mode, so the runner configures the provider to match. That plan has 29 modules: the 28
+of the public client, of which `client-secret-basic` is now this client's to pass, and
+`invalid-sig-hs256`. `client_secret_post` is accepted as a value too: the suite's
+provider then advertises that method alone, and the plugin sends the secret as a form
+parameter because the discovery document says so
+([#277](https://github.com/be-nj/jellyfin-sso/issues/277) is what the first run in that
+mode found).
+
+Creating a plan drops the plugin's cached discovery document for the conformance
+provider, because a plan in another mode advertises another client authentication and the
+cache would otherwise answer with the previous plan's for half an hour.
+
 Everything a run produces lands in `tests/runs/conformance/`, which is gitignored:
 `plan.json`, `results.json`, `results-discovery.json`, `results-logout.json`, and the
 certificate and compose files the suite is started with. The suite's own web interface at
@@ -83,8 +105,8 @@ ended. One shared helper, so there is one answer to the question.
 in each: a login that must complete, a refusal the plugin must make, a refusal the plugin
 makes **by design** (`userinfo-bearer-body` and `userinfo-signed`, both written up in the
 review), and modules outside the tested profile: unsupported WebFinger, fetching
-distributed claims from a separate claims endpoint, and
-`client_secret_basic`, which needs a confidential client instead of this public client.
+distributed claims from a separate claims endpoint, and — in the public-client plan
+only — `client_secret_basic`, which needs the confidential-client plan above.
 The middle two
 are checked identically — the refusal has to be the plugin's own — and only labelled apart.
 
@@ -145,6 +167,7 @@ Four of them, each learned by getting it wrong:
 | Plan | Modules | What it is about |
 |---|---|---|
 | `oidcc-client-test-plan` | 28 | The login: ID token validation, userinfo, discovery, key rotation |
+| the same, `client_auth_type: client_secret_basic` | 29 | The same as a confidential client: the secret at the token endpoint, and a token signed with a symmetric algorithm |
 | `oidcc-client-back-channel-logout-rp-basic` | 8 | The logout token's refusals |
 
 One module needs a provider setting rather than the default shape:
@@ -159,12 +182,13 @@ it for the algorithm before the signature was ever checked — the module would 
 testing what it is for. `configure_provider` therefore defaults to no pin at all, which is
 also what an operator who never touches the field has.
 
-Both are run with `client_registration: static_client`, `client_auth_type: none`,
-`response_type: code` and `request_type: plain_http_request` — the plugin's default shape,
-a PKCE public client on the authorization code flow.
+The first and the last are run with `client_registration: static_client`,
+`client_auth_type: none`, `response_type: code` and `request_type: plain_http_request` —
+the plugin's default shape, a PKCE public client on the authorization code flow. The
+confidential run changes `client_auth_type` and nothing else.
 
 The suite offers thirty more client plans. The certification plans
 (`oidcc-client-basic-certification-test-plan` and friends) fix
-`client_auth_type: client_secret_basic`, so running those means configuring a confidential
-client and giving the secret to the container through `env:` or `file:`. The front-channel
+`client_auth_type: client_secret_basic`; the confidential run above is the same modules
+by way of the general plan, not a certification run. The front-channel
 logout and session-management plans cover features this plugin does not implement.

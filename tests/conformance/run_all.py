@@ -17,7 +17,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from drive import RUNS, who_stopped  # noqa: E402
+from drive import RUNS, plan_client_auth, results_file, who_stopped  # noqa: E402
 from run_module import run  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -41,6 +41,10 @@ MUST_REFUSE = {
     "oidcc-client-test-invalid-iss",
     "oidcc-client-test-userinfo-invalid-sub",
     "oidcc-client-test-invalid-sig-es256",
+    # Only in a confidential-client plan: a client with a secret could be sent a token
+    # signed with it, and this one's signature is broken. The plugin accepts no symmetric
+    # algorithm at all, so it refuses for the algorithm before it gets to the signature.
+    "oidcc-client-test-invalid-sig-hs256",
     "oidcc-client-test-discovery-issuer-mismatch",
 }
 
@@ -56,9 +60,10 @@ REFUSES_BY_DESIGN = {
 }
 
 # WebFinger and fetching distributed claims are not implemented. client-secret-basic
-# needs a confidential-client plan; this run configures a public client, though the
-# plugin also supports client secrets. A completed login alone does not prove support
-# for distributed claims: that module requires a request to a separate claims endpoint.
+# needs a confidential-client plan: it is out of scope for the public client and is
+# taken off this list when the plan was created with CONFORMANCE_CLIENT_AUTH set to
+# client_secret_basic. A completed login alone does not prove support for distributed
+# claims: that module requires a request to a separate claims endpoint.
 NOT_CLAIMED = {
     "oidcc-client-test-discovery-webfinger-acct",
     "oidcc-client-test-discovery-webfinger-url",
@@ -75,6 +80,11 @@ def completed(out):
 
 def main():
     plan = json.load(open(os.path.join(RUNS, "plan.json")))
+    # A plan created for client_secret_basic is the one plan in which the module of that
+    # name is this client's to pass.
+    not_claimed = NOT_CLAIMED - (
+        {"oidcc-client-test-client-secret-basic"}
+        if plan_client_auth() == "client_secret_basic" else set())
     results = []
     for i, module in enumerate(plan["modules"], 1):
         print(f"[{i}/{len(plan['modules'])}] {module}", flush=True)
@@ -87,7 +97,7 @@ def main():
         if module in MUST_REFUSE or module in REFUSES_BY_DESIGN:
             out["expected"] = "refuse by design" if module in REFUSES_BY_DESIGN else "refuse"
             out["verdict"] = "OK" if out["stoppedBy"] == "the plugin" else "LOOK"
-        elif module in NOT_CLAIMED:
+        elif module in not_claimed:
             out["expected"] = "not claimed"
             out["verdict"] = "n/a"
         else:
@@ -99,7 +109,7 @@ def main():
             flush=True,
         )
         results.append(out)
-        with open(os.path.join(RUNS, "results.json"), "w") as f:
+        with open(results_file(), "w") as f:
             json.dump(results, f, indent=2)
         time.sleep(1)
 
