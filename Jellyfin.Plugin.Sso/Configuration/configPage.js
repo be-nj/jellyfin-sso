@@ -72,7 +72,7 @@ export default function (view) {
                 setVal(view, 'LinkSub', '');
                 return populateLinkForm(view);
             })
-            .then(function () { renderLinks(view); })
+            .then(function () { renderLinks(view); renderRefused(view); })
             .catch(function (e) { Dashboard.alert(e.message); });
     });
 }
@@ -122,6 +122,7 @@ function load(view) {
         setChk(view, 'PreserveAdminPermissions', !!_config.PreserveAdminPermissions);
         renderMappings(view, _config.GroupMappings || []);
         renderLinks(view);
+        renderRefused(view);
         return populateUsers(view);
     });
 }
@@ -570,6 +571,65 @@ function collectMappings(view) {
             MaxParentalRating: rating === '' ? null : parseInt(rating, 10),
         };
     }).filter(Boolean);
+}
+
+// ─── Refused sign-ins ────────────────────────────────────────────────────────
+
+// Sign-ins the server turned away for want of a link. The button fills the provider and
+// the subject and stops there: which Jellyfin account it is stays the administrator's
+// decision, made by hand. The name shown is what the provider sent, which at some
+// providers the person chooses, so it is a label here and never a suggestion.
+function renderRefused(view) {
+    apiGet(api('refused-sign-ins')).then(function (refused) {
+        var c = view.querySelector('#RefusedSignIns'); c.innerHTML = '';
+        if (!refused || !refused.length) { return; }
+
+        var h = document.createElement('h3'); h.textContent = 'Refused sign-ins';
+        c.appendChild(h);
+        var d = document.createElement('div'); d.className = 'fieldDescription';
+        d.textContent = 'Recently turned away because no Jellyfin account is linked. The '
+            + 'name is what the provider sent and may be the person\'s own choice: link '
+            + 'only somebody you know, to the account you know is theirs.';
+        c.appendChild(d);
+
+        var t = document.createElement('table'); t.className = 'sso-links-table sso-refused-table';
+        t.innerHTML = '<thead><tr><th>When</th><th>Provider</th><th>Name sent</th><th>Subject</th><th>Why</th><th></th></tr></thead>';
+        var tb = document.createElement('tbody');
+        refused.forEach(function (r) {
+            var tr = document.createElement('tr');
+            var why = r.Reason === 'name-taken'
+                ? 'An account of that name exists'
+                : 'Provider creates no accounts';
+            [new Date(r.At).toLocaleString(), r.ProviderName, r.Name].forEach(function (v) {
+                var td = document.createElement('td'); td.textContent = v; tr.appendChild(td);
+            });
+            var tds = document.createElement('td');
+            var code = document.createElement('code'); code.textContent = r.Sub; tds.appendChild(code); tr.appendChild(tds);
+            var tdw = document.createElement('td'); tdw.textContent = why; tr.appendChild(tdw);
+            var tdb = document.createElement('td');
+            var btn = document.createElement('button');
+            btn.setAttribute('is', 'emby-button');
+            btn.type = 'button'; btn.className = 'raised sso-refused-link'; btn.innerHTML = '<span>Link\u2026</span>';
+            btn.addEventListener('click', function () {
+                view.querySelector('#LinkFormDetails').open = true;
+                setVal(view, 'LinkProviderId', r.ProviderId);
+                setVal(view, 'LinkSub', r.Sub);
+                view.querySelector('#LinkUserId').focus();
+            });
+            tdb.appendChild(btn); tr.appendChild(tdb); tb.appendChild(tr);
+        });
+        t.appendChild(tb); c.appendChild(t);
+
+        var clear = document.createElement('button');
+        clear.setAttribute('is', 'emby-button');
+        clear.type = 'button'; clear.className = 'raised sso-mt sso-refused-clear'; clear.innerHTML = '<span>Clear list</span>';
+        clear.addEventListener('click', function () {
+            apiDelete(api('refused-sign-ins'))
+                .then(function () { renderRefused(view); })
+                .catch(function (e) { Dashboard.alert(e.message); });
+        });
+        c.appendChild(clear);
+    });
 }
 
 // ─── Links ───────────────────────────────────────────────────────────────────

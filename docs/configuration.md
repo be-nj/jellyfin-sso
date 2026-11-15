@@ -266,5 +266,5 @@ Same tab as the group mappings:
 
 ## Account Links
 
-Its own tab: the links between an identity and a Jellyfin account, and the form to add
-one. See [Linking accounts](linking.md).
+Its own tab: the links between an identity and a Jellyfin account, the sign-ins recently
+refused for want of one, and the form to add a link. See [Linking accounts](linking.md).

@@ -24,6 +24,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<RateLimitFilter>();
         serviceCollection.AddSingleton<OidcClientFactory>();
         serviceCollection.AddSingleton<ClaimsExtractor>();
+        serviceCollection.AddSingleton<RefusedSignIns>();
         serviceCollection.AddSingleton<UserProvisioner>();
         serviceCollection.AddSingleton<ISsoUserPersistence, SsoUserPersistence>();
         serviceCollection.AddSingleton<PermissionSync>();

@@ -12,13 +12,15 @@ public sealed class UserProvisioner
     private readonly IUserManager _userManager;
     private readonly ILogger<UserProvisioner> _logger;
     private readonly ISsoUserPersistence _persistence;
+    private readonly RefusedSignIns _refused;
 
     public UserProvisioner(IUserManager userManager, ILogger<UserProvisioner> logger,
-        ISsoUserPersistence persistence)
+        ISsoUserPersistence persistence, RefusedSignIns? refused = null)
     {
         _userManager = userManager;
         _logger = logger;
         _persistence = persistence;
+        _refused = refused ?? new RefusedSignIns();
     }
 
     /// <summary>
@@ -104,6 +106,8 @@ public sealed class UserProvisioner
                 + "provider does not create accounts at first login. To link it: "
                 + "ProviderId={ProviderId} Sub={Sub}",
                 Loggable.KnownProviderId(provider.Id), Loggable.OneLine(identity.Sub));
+            _refused.Remember(
+                provider.Id, identity.Sub, identity.PreferredUsername, RefusedSignInReason.NoAccount);
             throw new AccountNotLinkedException();
         }
 
@@ -117,6 +121,8 @@ public sealed class UserProvisioner
                 "To link manually: ProviderId={ProviderId} Sub={Sub} JellyfinUserId={UserId}",
                 Loggable.OneLine(identity.PreferredUsername), Loggable.KnownProviderId(provider.Id),
                 Loggable.OneLine(identity.Sub), collision.Id);
+            _refused.Remember(
+                provider.Id, identity.Sub, identity.PreferredUsername, RefusedSignInReason.NameTaken);
             throw new InvalidOperationException(
                 $"Username '{identity.PreferredUsername}' already exists. " +
                 "An administrator must manually link this account.");

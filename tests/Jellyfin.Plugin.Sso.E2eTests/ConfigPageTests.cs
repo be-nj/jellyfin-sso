@@ -491,6 +491,55 @@ public sealed class ConfigPageTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// Linking somebody who was turned away, the way an administrator does it: the
+    /// refusal is on the Account Links tab, its button fills the provider and the subject,
+    /// and the account is chosen by hand — the page never proposes one, because the name
+    /// next to the subject is whatever the provider sent. Before this the subject had to
+    /// be copied out of the server log.
+    /// </summary>
+    [Fact]
+    public async Task A_refused_sign_in_is_linked_from_the_account_links_tab()
+    {
+        await _env.PatchConfigAsync(config =>
+            config["Providers"]!.AsArray()[0]!["CreateAccounts"] = false);
+        var existing = await _env.CreateLocalUserAsync("household-member");
+
+        var turnedAway = await _env.StartWebLoginAsync(
+            new FakeUser("sub-household", "Somebody <b>Else</b>", ["media"]));
+        Assert.Equal(System.Net.HttpStatusCode.Forbidden, turnedAway.CallbackStatus);
+
+        var page = await OpenConfigPageAsync();
+        await page.ClickAsync(".sso-tab[data-tab=\"links\"]");
+
+        var row = page.Locator(".sso-refused-table tbody tr");
+        await row.WaitForAsync(new LocatorWaitForOptions { Timeout = 10_000 });
+        // The name is shown as text: markup in it is not markup on this page.
+        Assert.Contains("Somebody <b>Else</b>", await row.InnerTextAsync());
+        Assert.Equal(0, await row.Locator("b").CountAsync());
+
+        await row.Locator(".sso-refused-link").ClickAsync();
+
+        Assert.Equal("sub-household", await page.InputValueAsync("#LinkSub"));
+        Assert.Equal(JellyfinEnvironment.ProviderId, await page.InputValueAsync("#LinkProviderId"));
+
+        await page.SelectOptionAsync("#LinkUserId", new SelectOptionValue { Label = "household-member" });
+        await page.ClickAsync("#AddLink");
+
+        await page.WaitForSelectorAsync(".sso-refused-table", new PageWaitForSelectorOptions
+        {
+            State = WaitForSelectorState.Detached,
+            Timeout = 10_000,
+        });
+        var link = Assert.Single((await _env.PluginConfigAsync())["Links"]!.AsArray());
+        Assert.Equal("sub-household", link!["Sub"]!.GetValue<string>());
+        Assert.Equal(existing, Guid.Parse(link["JellyfinUserId"]!.GetValue<string>()));
+
+        var login = await _env.StartWebLoginAsync(
+            new FakeUser("sub-household", "Somebody <b>Else</b>", ["media"]));
+        Assert.True(login.Succeeded, login.Body);
+    }
+
+    /// <summary>
     /// The page posts the configuration it loaded with, and both the links and the seen
     /// groups change underneath it — a login links an account, the Links tab removes one.
     /// Saving a provider therefore used to write that snapshot back: a removed link
