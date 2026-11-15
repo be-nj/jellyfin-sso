@@ -164,6 +164,23 @@ public class ProviderConfig
     public string PictureClaim { get; set; } = "picture";
 
     /// <summary>
+    /// Whether an identity this server has not seen gets a Jellyfin account at its first
+    /// login. On is right where the provider decides who may use Jellyfin at all — an
+    /// Authentik policy, a Keycloak client scope, an Authelia access rule. Off is for a
+    /// provider that admits everybody it knows, a published Google client being the
+    /// common one: there, on means every account holder can create an account here.
+    ///
+    /// Off, only an identity that is already linked signs in — by an administrator, or by
+    /// the person from the self-service page of an account they have. Nothing else is
+    /// written for an unknown one.
+    ///
+    /// True by default so that a configuration saved before this existed behaves as it
+    /// did. A provider added on the configuration page starts with it off; that default
+    /// lives in the page, because here it could not tell a new provider from an old one.
+    /// </summary>
+    public bool CreateAccounts { get; set; } = true;
+
+    /// <summary>
     /// Whether the plugin accepts back-channel logout notifications from this provider at
     /// <c>/sso/oidc/backchannel-logout/{id}</c>. On, because the endpoint acts only on a
     /// logout token the provider signed, and a provider only posts one once an

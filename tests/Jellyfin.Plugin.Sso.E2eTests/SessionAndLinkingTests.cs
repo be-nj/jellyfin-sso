@@ -786,6 +786,54 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A provider that admits everybody it knows — a published Google client — must not
+    /// thereby hand everybody an account here. With Create an account at first login off,
+    /// somebody the server has never seen is turned away with nothing written for them:
+    /// no account, no link. The log carries what an administrator needs to link them, and
+    /// once linked the same provider signs them in.
+    /// </summary>
+    [Fact]
+    public async Task A_provider_that_creates_no_accounts_signs_in_only_linked_identities()
+    {
+        const string ProviderId = "no-new-accounts";
+        _env.Idp.RegisteredRedirectUris.Add($"{_env.BaseUrl}/sso/oidc/callback/{ProviderId}");
+        await _env.PatchConfigAsync(config => config["Providers"]!.AsArray().Add(
+            new JsonObject
+            {
+                ["Id"] = ProviderId,
+                ["Name"] = "Provider that creates no accounts",
+                ["Enabled"] = true,
+                ["Authority"] = _env.Idp.ContainerAuthority,
+                ["ClientId"] = JellyfinEnvironment.ClientId,
+                ["Scopes"] = new JsonArray { "openid", "profile", "email", "groups" },
+                ["GroupsClaim"] = "groups",
+                ["CreateAccounts"] = false,
+            }));
+
+        var stranger = await _env.StartWebLoginAsync(
+            new FakeUser("sub-stranger", "strangeruser", ["media"]), providerId: ProviderId);
+
+        Assert.Equal(HttpStatusCode.Forbidden, stranger.CallbackStatus);
+        Assert.Contains("does not create one at this provider", stranger.Body);
+        Assert.Null(await _env.FindUserAsync("strangeruser"));
+        Assert.DoesNotContain(
+            (await _env.PluginConfigAsync())["Links"]!.AsArray(),
+            link => link!["Sub"]!.GetValue<string>() == "sub-stranger");
+        var log = await _env.WaitForServerLogAsync("does not create accounts at first login");
+        Assert.Contains($"ProviderId={ProviderId} Sub=sub-stranger", log);
+
+        var (known, _) = await _env.CreateLocalUserWithTokenAsync("knownuser");
+        var linked = await PostLinkAsync(ProviderId, "sub-known", known);
+        Assert.True(linked.IsSuccessStatusCode, await linked.Content.ReadAsStringAsync());
+
+        var login = await _env.StartWebLoginAsync(
+            new FakeUser("sub-known", "a-name-the-server-never-saw", ["media"]), providerId: ProviderId);
+
+        Assert.True(login.Succeeded, login.Body);
+        Assert.Null(await _env.FindUserAsync("a-name-the-server-never-saw"));
+    }
+
+    /// <summary>
     /// OIDC Core §5.3.2: the sub in a userinfo response has to be verified against the one
     /// in the ID token, and a response that names another subject must not be used. What
     /// is read from there decides a user's groups, which is to say their libraries and

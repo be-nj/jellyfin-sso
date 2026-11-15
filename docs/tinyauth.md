@@ -91,6 +91,8 @@ those attributes, which is the limitation above.
   `groups`. See [above](#before-you-start-groups).
 - *Fetch groups from userinfo endpoint*: **off**. Tinyauth puts the profile claims in the
   ID token.
+- *Create an account at first login*: **on** if every Tinyauth user should get a Jellyfin
+  account. Off, only people you [linked](linking.md) sign in.
 
 The plugin sends PKCE, Tinyauth verifies it — a wrong verifier is refused with
 `invalid_grant` — even though its discovery document does not advertise support. Nothing

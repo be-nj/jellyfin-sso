@@ -122,6 +122,15 @@ public sealed class ConfigPageTests : IAsyncLifetime
         Assert.False(added["Enabled"]!.GetValue<bool>());
         Assert.Equal("second-client", added["ClientId"]!.GetValue<string>());
         Assert.Equal("groups", added["GroupsClaim"]!.GetValue<string>());
+
+        // And it creates no accounts until somebody ticks the box: the page cannot know
+        // whether the provider being added decides who may use Jellyfin or admits
+        // everybody it knows. The provider that was already there went through the same
+        // save and keeps creating them — the upgrade must change nothing.
+        Assert.False(added["CreateAccounts"]!.GetValue<bool>());
+        Assert.True(config["Providers"]!.AsArray()
+            .First(p => p!["Id"]!.GetValue<string>() == JellyfinEnvironment.ProviderId)!["CreateAccounts"]!
+            .GetValue<bool>());
     }
 
     [Fact]

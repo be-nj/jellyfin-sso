@@ -62,6 +62,7 @@ its signature is checked, and the group names that arrive with it.
 | An avatar update restoring old account rights | The persistence operation writes image data only | `An_image_write_preserves_account_permissions_and_authentication`, `Avatar_download_must_not_undo_administrator_disabling_account` |
 | Linking while JIT provisioning is awaiting storage | All link writers check uniqueness under the configuration lock at the final write; a losing provisional account is removed | `Jit_and_self_service_link_must_not_create_two_owners_for_one_identity` |
 | Discovery naming a foreign JWKS host | Endpoint validation precedes the JWKS fetch, with shared paths permitted only on the authority's origin | `Discovery_must_check_the_jwks_host_before_sending_the_request` |
+| A provider that admits everyone creating an account for everyone | Per provider, *Create an account at first login* off: an identity without a link is refused before its name is looked at, and no account or link is written — also when a stale link was cleared on the way. Off for a provider added on the page; on for one saved before the switch existed, so an upgrade locks nobody out | `An_unknown_identity_gets_no_account_where_the_provider_creates_none`, `A_stale_link_does_not_become_a_way_to_create_an_account`, `The_refusal_says_nothing_about_which_names_exist`, `A_provider_saved_before_the_switch_existed_still_creates_accounts`, `A_provider_that_creates_no_accounts_signs_in_only_linked_identities` |
 | A host list that admits more than it names | *Further endpoint hosts* takes host names, compared whole and with their port: no wildcard, no scheme, no suffix match, and an entry that is not a host name admits nothing. Naming one host does not admit another, and a host taken off the list is refused at once rather than when the cached document expires | `A_lookalike_of_a_named_host_is_refused`, `An_entry_that_is_not_a_host_name_admits_nothing`, `Naming_one_host_does_not_admit_the_others`, `A_host_taken_off_the_list_is_not_served_from_the_cache`, `A_provider_serving_keys_and_tokens_from_a_named_host_signs_in` |
 | A logout for one account signing out another | The subject is matched by `(provider, sub)`, as a login is | `Another_users_logout_leaves_this_session_alone`, `SessionRevokerTests` |
 | Flooding the anonymous login endpoints | 60 requests per minute per address, answered with 429 and a Retry-After; the count has an end of its own | `A_caller_past_the_limit_is_turned_away_and_told_when_to_come_back`, `LoginRateLimiterTests` |
@@ -120,7 +121,10 @@ its signature is checked, and the group names that arrive with it.
   common case: a published *External* OAuth client admits every Google account, and only
   its *Internal* audience or its *Testing* status narrow that. The plugin can be pointed
   at Google since *Further endpoint hosts* exists, and it is still not documented as
-  supported — see the note in [Configuration](configuration.md).
+  supported — see the note in [Configuration](configuration.md). What the plugin can
+  decide is whether being admitted is enough for an account: with *Create an account at
+  first login* off for a provider, an identity nobody linked gets none, and a provider
+  added on the configuration page starts that way.
 
 ## How the claims are kept honest
 

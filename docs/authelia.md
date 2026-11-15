@@ -25,6 +25,9 @@ In the plugin's provider card:
 - *Scopes*: `openid profile email groups` — Authelia reports groups only when asked.
 - *Fetch groups from userinfo endpoint*: **on**. Authelia keeps groups out of the ID token
   and answers with them at the userinfo endpoint.
+- *Create an account at first login*: **on**, once the access control rule below is in
+  place. Without the rule every Authelia user gets a Jellyfin account, so leave it off
+  and [link people](linking.md) instead.
 
 Groups come from the `groups` list in Authelia's user file.
 

@@ -50,6 +50,15 @@ refused, and the log (Dashboard → **Logs**, or `docker logs jellyfin`) carries
 already exists. ProviderId=ab12… Sub=f81d4fae-7dec-11d0-a765-… JellyfinUserId=…
 ```
 
+At a provider with *Create an account at first login* off, the attempt of somebody
+without a link is refused the same way and the line reads:
+
+```
+[WRN] Jellyfin.Plugin.Sso.Provisioning.UserProvisioner: SSO login refused: no account is
+linked to this identity and the provider does not create accounts at first login. To link
+it: ProviderId=ab12… Sub=f81d4fae-7dec-11d0-a765-…
+```
+
 Copy the `Sub=` value into the form, one person at a time. Keep one administrator
 unlinked, with a password.
 
