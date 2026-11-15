@@ -12,6 +12,32 @@ in the few lines somebody reads before clicking.
 Issue and pull request numbers are given bare rather than as links: the catalog renders
 Markdown, so a link per finding would cost more characters than the lines themselves.
 
+## 1.12.21
+
+- **Security.** Unlinking an account or a back-channel logout now also ends what a login
+  in progress had already handed out: the one-time sign-in secret, a Quick Connect approval
+  not yet clicked, and a token Jellyfin mints at that moment, through its own password
+  login and Quick Connect page as well (#243, #250, #251). A profile-picture download no
+  longer undoes an administrator disabling the account meanwhile (#244), a new account is
+  disabled and SSO-only from the moment it is first saved (#245), and a disabled account
+  can no longer let a Quick Connect device in (#253).
+- **Google works again.** New: _Further endpoint hosts_ on the provider card names the
+  hosts a provider serves its keys and tokens from besides its issuer's. For Google:
+  `www.googleapis.com oauth2.googleapis.com openidconnect.googleapis.com` (#260).
+- **New: _Create an account at first login_**, per provider. Off, only accounts linked
+  beforehand sign in, which is what a provider that admits everyone it knows needs.
+  Existing providers keep it on; **a provider you add starts with it off** (#262).
+- **Fixes.** A first login and a self-service link racing for one identity can no longer
+  both win; switching off _Allow self-service linking_ also stops a link already started;
+  Jellyfin's own plugin-configuration endpoint can no longer drop a link without ending its
+  sessions; the `jwks_uri` host is checked before the keys are fetched (#246, #247, #249,
+  #252, #254).
+- **Also.** A login that collides with another change to the account gets "Please sign in
+  again" (409) instead of a configuration error, and the server log says at startup
+  whether every Jellyfin login action the revocation guard watches is present (#255, #256).
+
+Nothing to do on upgrade, unless you sign in through Google: name its three hosts as above.
+
 ## 1.12.20
 
 - **Security.** Token checks tightened after the first run of the OpenID Foundation

@@ -305,6 +305,15 @@ logins it needs. The logout plan refuses all seven broken logout tokens — `alg
 wrong algorithm, audience or issuer, a missing or wrong event, a nonce — and accepts the
 valid one, with the RS256 pin the harness sets for that plan.
 
+**Run again on 15 November, before 1.12.21**, because `#261` changed how a discovery
+document is checked and `#263` changed what happens to an identity without an account.
+Module for module the same: login plan 20 `PASSED`, 4 `FAILED`, 1 `SKIPPED`, 3 without a
+verdict, the driver's reading 22 `OK`, 2 `LOOK` and 4 `n/a` with the same two cache
+casualties; cold discovery 3 of 3; logout 8 of 8; no error in the server log. The suite
+serves every endpoint from one host, so it says nothing about *Further endpoint hosts* —
+that is covered by `A_provider_serving_keys_and_tokens_from_a_named_host_signs_in` and by
+the check against Google's live document described in `#261`.
+
 ### Corrections to the harness
 
 Made by the first pass, checked by the second, which found none of them turning a failure
