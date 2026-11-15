@@ -194,7 +194,7 @@ same way for each of the four, this one included.
 
 | | Since | Latest | ★ | Licence | Written by AI | Tests |
 |---|---|---|---:|---|---|---|
-| **This one** | 2026-09 | v1.12.20 · 2026-11 | 5 | MIT → GPLv3 | **164 of 200** commits | 666 + 175 |
+| **This one** | 2026-09 | v1.12.21 · 2026-11 | 5 | MIT → GPLv3 | **168 of 204** commits | 666 + 175 |
 | K0lin | 2026-06 | v5.1.1 · 2026-09 | 187 | GPL-3.0 | none from an AI | about 78 |
 | Ezeqielle | 2026-05 | v1.0.10 · 2026-09 | 40 | GPL-3.0 | 33 of 82 | 16 |
 | 9p4 | 2022-01 | v4.0.0.4 · archived | 1,448 | GPL-3.0 | none from an AI | none |
