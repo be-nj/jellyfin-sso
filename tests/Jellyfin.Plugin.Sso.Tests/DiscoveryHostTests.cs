@@ -187,6 +187,18 @@ public sealed class DiscoveryHostTests
         => Assert.Null(OidcClientFactory.EndpointHost(entry));
 
     /// <summary>
+    /// What the library is handed for a list: each host on the authority's scheme, as
+    /// normalised and — where that differs — as typed, because the library compares the
+    /// prefix exactly. Entries that are not host names, an empty one included, add nothing.
+    /// </summary>
+    [Fact]
+    public void Named_hosts_become_origins_as_normalised_and_as_typed()
+        => Assert.Equal(
+            ["https://www.googleapis.com", "https://WWW.GoogleAPIs.com", "https://keys.example:8443"],
+            OidcClientFactory.FurtherOrigins(
+                Google, [" WWW.GoogleAPIs.com ", "*.googleapis.com", "", null!, "keys.example:8443", "www.googleapis.com"]));
+
+    /// <summary>
     /// An entry that is not a host name admits nothing. A hand-edited configuration with a
     /// wildcard in it is therefore as strict as an empty one, not as loose as it reads.
     /// </summary>
