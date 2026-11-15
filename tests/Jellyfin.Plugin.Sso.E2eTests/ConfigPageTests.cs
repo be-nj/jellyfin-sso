@@ -491,6 +491,37 @@ public sealed class ConfigPageTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// The button on the card, pressed. The answer lands on the page, under the button,
+    /// which is the point: until now a provider could only be checked by attempting a
+    /// login and reading the server log. A card that was never saved says so instead of
+    /// reporting on a provider the server has not got.
+    /// </summary>
+    [Fact]
+    public async Task The_check_button_shows_what_the_server_found_on_the_card()
+    {
+        var page = await OpenConfigPageAsync();
+        await page.ClickAsync(".sso-tab[data-tab=\"provider\"]");
+
+        var card = page.Locator(".sso-provider").First;
+        await card.Locator(".sso-provider-check").ClickAsync();
+
+        var result = card.Locator(".sso-check-result");
+        await result.Locator("li", new LocatorLocatorOptions { HasText = "Token endpoint" })
+            .WaitForAsync(new LocatorWaitForOptions { Timeout = 15_000 });
+        var text = await result.InnerTextAsync();
+        Assert.Contains($"{_env.Idp.ContainerAuthority}/token", text);
+        Assert.Contains("Signing keys", text);
+        Assert.Equal(0, await result.Locator(".sso-check-failed").CountAsync());
+
+        await page.ClickAsync("#AddProvider");
+        var unsaved = page.Locator(".sso-provider").Last;
+        await unsaved.Locator(".sso-provider-check").ClickAsync();
+
+        await unsaved.Locator(".sso-check-failed", new LocatorLocatorOptions { HasText = "Not saved yet" })
+            .WaitForAsync(new LocatorWaitForOptions { Timeout = 15_000 });
+    }
+
+    /// <summary>
     /// Linking somebody who was turned away, the way an administrator does it: the
     /// refusal is on the Account Links tab, its button fills the provider and the subject,
     /// and the account is chosen by hand — the page never proposes one, because the name

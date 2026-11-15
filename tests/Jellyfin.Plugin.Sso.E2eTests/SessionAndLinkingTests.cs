@@ -786,6 +786,73 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// The check on the provider card, asked the way the page asks it. A provider that
+    /// works reports what a login would find; one whose document moves its endpoints to a
+    /// host nobody named reports the refusal — the sentence that used to be readable only
+    /// in the server log — with the host to name; and the answer is an administrator's.
+    /// </summary>
+    [Fact]
+    public async Task Checking_a_provider_reports_what_a_login_would_find()
+    {
+        const string Moved = "checked-second-host";
+        using var admin = JellyfinEnvironment.TrustingClient();
+        admin.DefaultRequestHeaders.Authorization = JellyfinEnvironment.TokenHeader(_env.AdminToken);
+
+        async Task<JsonNode> CheckAsync(string providerId)
+        {
+            using var response = await admin.PostAsync(
+                $"{_env.BaseUrl}/sso/admin/providers/{providerId}/check", null);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            return JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        }
+
+        static string Detail(JsonNode result, string what)
+            => result["Lines"]!.AsArray().Single(l => l!["What"]!.GetValue<string>() == what)!["Detail"]!
+                .GetValue<string>();
+
+        var good = await CheckAsync(JellyfinEnvironment.ProviderId);
+        Assert.True(good["Ok"]!.GetValue<bool>(), good.ToJsonString());
+        Assert.Equal($"Issuer {_env.Idp.ContainerAuthority}", Detail(good, "Discovery document"));
+        Assert.Equal($"{_env.Idp.ContainerAuthority}/token", Detail(good, "Token endpoint"));
+        Assert.Contains("published", Detail(good, "Signing keys"));
+
+        _env.Idp.ServiceEndpointsElsewhere = true;
+        try
+        {
+            await _env.PatchConfigAsync(config => config["Providers"]!.AsArray().Add(
+                new JsonObject
+                {
+                    ["Id"] = Moved,
+                    ["Name"] = "Provider checked with its endpoints elsewhere",
+                    ["Enabled"] = true,
+                    ["Authority"] = _env.Idp.ContainerAuthority,
+                    ["ClientId"] = JellyfinEnvironment.ClientId,
+                }));
+
+            var refused = await CheckAsync(Moved);
+
+            Assert.False(refused["Ok"]!.GetValue<bool>());
+            Assert.EndsWith(
+                $"'Further endpoint hosts' on the provider card: {_env.Idp.SecondHost}",
+                Detail(refused, "Discovery document"));
+        }
+        finally
+        {
+            _env.Idp.ServiceEndpointsElsewhere = false;
+        }
+
+        using var unknown = await admin.PostAsync($"{_env.BaseUrl}/sso/admin/providers/no-such/check", null);
+        Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
+
+        var (_, userToken) = await _env.CreateLocalUserWithTokenAsync("not-an-admin");
+        using var asUser = JellyfinEnvironment.TrustingClient();
+        asUser.DefaultRequestHeaders.Authorization = JellyfinEnvironment.TokenHeader(userToken);
+        using var forbidden = await asUser.PostAsync(
+            $"{_env.BaseUrl}/sso/admin/providers/{JellyfinEnvironment.ProviderId}/check", null);
+        Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+    }
+
+    /// <summary>
     /// A provider that admits everybody it knows — a published Google client — must not
     /// thereby hand everybody an account here. With Create an account at first login off,
     /// somebody the server has never seen is turned away with nothing written for them:

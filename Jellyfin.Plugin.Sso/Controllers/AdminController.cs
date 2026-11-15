@@ -25,6 +25,7 @@ public sealed class AdminController : ControllerBase
     private readonly SessionRevoker _revoker;
     private readonly ILogger<AdminController> _logger;
     private readonly RefusedSignIns _refused;
+    private readonly ProviderCheck _check;
 
     public AdminController(
         ILibraryManager libraryManager,
@@ -33,8 +34,10 @@ public sealed class AdminController : ControllerBase
         LoginRateLimiter limiter,
         SessionRevoker revoker,
         ILogger<AdminController> logger,
+        ProviderCheck check,
         RefusedSignIns? refused = null)
     {
+        _check = check;
         _refused = refused ?? new RefusedSignIns();
         _libraryManager = libraryManager;
         _userManager = userManager;
@@ -187,6 +190,23 @@ public sealed class AdminController : ControllerBase
     [Authorize(Policy = "RequiresElevation")]
     public IActionResult GetSeenGroups()
         => Ok(Plugin.Instance!.Configuration.SeenGroups.OrderBy(g => g));
+
+    /// <summary>
+    /// Checks one provider as it is saved: discovery, keys, and a confidential client's
+    /// secret reference. The provider is named by id and read from the configuration —
+    /// the request carries no address, so this is not a way to make the server fetch one.
+    /// </summary>
+    [HttpPost("providers/{providerId}/check")]
+    [Authorize(Policy = "RequiresElevation")]
+    public async Task<IActionResult> CheckProvider(string providerId, CancellationToken ct)
+    {
+        var provider = Plugin.Instance!.Configuration.Providers
+            .FirstOrDefault(p => string.Equals(p.Id, providerId, StringComparison.Ordinal));
+
+        return provider is null
+            ? NotFound("No such provider. Save it first.")
+            : Ok(await _check.RunAsync(provider, ct).ConfigureAwait(false));
+    }
 
     // ─── Links ───────────────────────────────────────────────────────────────
 
