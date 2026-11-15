@@ -48,7 +48,11 @@ export default function (view) {
 
     view.querySelector('#AddProvider').addEventListener('click', function () {
         var c = view.querySelector('#Providers');
-        c.appendChild(buildProviderCard({ Id: newId(), Enabled: false }, c.children.length));
+        // A new provider does not create accounts until somebody says it should: the
+        // page cannot know whether this one decides who may use Jellyfin or admits
+        // everybody it knows. Providers saved before the switch existed keep it on.
+        c.appendChild(buildProviderCard(
+            { Id: newId(), Enabled: false, CreateAccounts: false }, c.children.length));
         retitleProviders(view);
     });
 
@@ -269,6 +273,16 @@ function buildProviderCard(p, i) {
             (p.GroupsFromUserInfo ? ' checked' : '') +
             ' /><span>Fetch groups from userinfo endpoint instead of ID token</span></label></div>' +
         '<div class="checkboxContainer">' +
+            '<label><input type="checkbox" is="emby-checkbox" class="sso-provider-create-accounts"' +
+            (p.CreateAccounts === false ? '' : ' checked') +
+            ' /><span>Create an account at first login</span></label>' +
+            '<div class="fieldDescription">On, anybody this provider lets through gets a ' +
+                'Jellyfin account the first time they sign in. Turn it on where the ' +
+                'provider decides who may use Jellyfin. Leave it off for a provider that ' +
+                'admits everyone it knows, such as a public Google client: then only ' +
+                'accounts linked beforehand can sign in.</div>' +
+        '</div>' +
+        '<div class="checkboxContainer">' +
             '<label><input type="checkbox" is="emby-checkbox" class="sso-provider-backchannel"' +
             (p.AcceptBackChannelLogout === false ? '' : ' checked') +
             ' /><span>Accept back-channel logout from this provider</span></label>' +
@@ -409,6 +423,7 @@ function collectProviders(view) {
             PictureClaim: val('.sso-provider-picture-claim') || 'picture',
             GroupsFromUserInfo: card.querySelector('.sso-provider-userinfo').checked,
             BrandedLoginButton: card.querySelector('.sso-provider-branded').checked,
+            CreateAccounts: card.querySelector('.sso-provider-create-accounts').checked,
             AcceptBackChannelLogout: card.querySelector('.sso-provider-backchannel').checked,
             ButtonColour: val('.sso-provider-colour'),
             SigningAlgorithms: val('.sso-provider-algorithms').split(/\s+/).filter(Boolean),

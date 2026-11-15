@@ -162,6 +162,15 @@ public sealed class SsoCallbackController : SsoFlowController
 
             return CompleteWebLogin(userId, username, stamp);
         }
+        catch (AccountNotLinkedException)
+        {
+            // Logged where it was decided, with what an administrator needs to link it.
+            return PlainText.Forbidden(
+                "This server has no account for this sign-in and does not create one at "
+                + "this provider. Ask whoever runs it to link your account. If you already "
+                + "have a Jellyfin password, sign in with it and link this sign-in "
+                + "yourself.");
+        }
         catch (LoginRaceException ex)
         {
             _logger.LogWarning(

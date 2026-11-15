@@ -92,7 +92,22 @@ public sealed class UserProvisioner
             }
         }
 
-        // 2. No link — JIT create a new user.
+        // 2. No link, and a provider that is not to create accounts: stop here, before
+        // the name is looked at, so nothing below says anything about which names exist.
+        // Decided here and not in the controller because of the stale link above — a
+        // link to a deleted account has just been removed, and the login that removed it
+        // must not go on to create the account the switch says it may not.
+        if (!provider.CreateAccounts)
+        {
+            _logger.LogWarning(
+                "SSO login refused: no account is linked to this identity and the "
+                + "provider does not create accounts at first login. To link it: "
+                + "ProviderId={ProviderId} Sub={Sub}",
+                Loggable.KnownProviderId(provider.Id), Loggable.OneLine(identity.Sub));
+            throw new AccountNotLinkedException();
+        }
+
+        // 3. No link — JIT create a new user.
         // Reject if a local user with the same name already exists (could be an admin account).
         var collision = _userManager.GetUserByName(identity.PreferredUsername);
         if (collision is not null)

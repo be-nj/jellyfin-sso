@@ -75,8 +75,28 @@ hosts against the provider's own documentation first.
 > *Testing* admits the test users you listed, and a published *External* client admits
 > **anyone with a Google account**, each of whom gets a Jellyfin account at their first
 > login. And Google sends no groups, so no mapping ever matches: those accounts have no
-> libraries, and with *Refuse logins that match no mapping* on, only accounts
-> [linked by hand](linking.md#manual-linking) and excluded from sync get in.
+> libraries. Leave **Create an account at first login** off for such a provider, below.
+
+*Create an account at first login* decides what happens to somebody the provider vouches
+for and this server has never seen. On, they get a Jellyfin account on the spot — right
+where the provider decides who may use Jellyfin at all, with an Authentik policy, a
+Keycloak client scope or an Authelia access rule. Off, they are turned away and nothing is
+written for them; only an identity that is already linked signs in, either
+[by an administrator](linking.md#manual-linking) or by the person themselves from an
+account they already have ([self-service linking](linking.md#self-service-linking)).
+
+Off is for a provider that admits everybody it knows. With a published Google client, on
+means every Google account holder can create an account on your server. It would have no
+libraries, since Google sends no groups, and it would still be a signed-in account.
+
+A provider you add starts with it **off**, so turn it on when you finish the card if your
+provider is the kind that decides who gets in. A provider that existed before 1.12.21
+keeps it on: nothing changes on upgrade.
+
+It differs from *Refuse logins that match no mapping* [below](#safety) in two ways. That
+one is for the whole server and this one is per provider; and that one asks about groups
+at every login, also of accounts that exist, while this one only asks whether there is an
+account.
 
 A new provider is created **disabled**, and one with nothing but a display name saves — so
 you can hand its redirect URI to the provider before the rest exists.

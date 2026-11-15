@@ -134,6 +134,85 @@ public sealed class UserProvisionerTests : IDisposable
         Assert.Equal(created.Id, link.JellyfinUserId);
     }
 
+    // ─── A provider that does not create accounts ─────────────────────────────
+
+    private static ProviderConfig WithoutAccounts()
+        => new() { Id = "provider-1", Name = "Test", CreateAccounts = false };
+
+    /// <summary>
+    /// A provider that admits everybody it knows — a published Google client — would
+    /// otherwise hand every one of them an account here. With the switch off an identity
+    /// nobody linked is turned away and nothing at all is written for it.
+    /// </summary>
+    [Fact]
+    public async Task An_unknown_identity_gets_no_account_where_the_provider_creates_none()
+    {
+        await Assert.ThrowsAsync<AccountNotLinkedException>(
+            () => _provisioner.ResolveAsync(WithoutAccounts(), Identity("sub-123", "newcomer", "media")));
+
+        await _persistence.DidNotReceiveWithAnyArgs().CreateAsync(default!, default);
+        Assert.Empty(_harness.Configuration.Links);
+    }
+
+    /// <summary>The switch is about new accounts. A linked one signs in as it always did.</summary>
+    [Fact]
+    public async Task A_linked_identity_signs_in_where_the_provider_creates_no_accounts()
+    {
+        var linked = UserNamed("ben");
+        _userManager.GetUserById(linked.Id).Returns(linked);
+        _harness.Configuration.Links.Add(new LinkConfig
+        {
+            ProviderId = "provider-1",
+            Sub = "ben",
+            JellyfinUserId = linked.Id,
+        });
+
+        var (userId, _) = await _provisioner.ResolveAsync(WithoutAccounts(), Identity("ben", "ben"));
+
+        Assert.Equal(linked.Id, userId);
+    }
+
+    /// <summary>
+    /// The refusal comes before the name is looked at. An existing account of the same
+    /// name is answered with "already exists" elsewhere, which tells whoever asks that the
+    /// name is taken; a provider open to everyone is exactly who should not be told.
+    /// </summary>
+    [Fact]
+    public async Task The_refusal_says_nothing_about_which_names_exist()
+    {
+        _userManager.GetUserByName("admin").Returns(UserNamed("admin"));
+
+        await Assert.ThrowsAsync<AccountNotLinkedException>(
+            () => _provisioner.ResolveAsync(WithoutAccounts(), Identity("sub-123", "admin")));
+
+        _userManager.DidNotReceiveWithAnyArgs().GetUserByName(default!);
+    }
+
+    /// <summary>
+    /// A link to an account that has since been deleted is cleared on the way, and the
+    /// login that cleared it must not then create the account. This is why the decision
+    /// sits in the provisioner: a check before it would have seen a link and waved the
+    /// login through.
+    /// </summary>
+    [Fact]
+    public async Task A_stale_link_does_not_become_a_way_to_create_an_account()
+    {
+        var goneUserId = Guid.NewGuid();
+        _userManager.GetUserById(goneUserId).Returns((User?)null);
+        _harness.Configuration.Links.Add(new LinkConfig
+        {
+            ProviderId = "provider-1",
+            Sub = "ben",
+            JellyfinUserId = goneUserId,
+        });
+
+        await Assert.ThrowsAsync<AccountNotLinkedException>(
+            () => _provisioner.ResolveAsync(WithoutAccounts(), Identity("ben", "ben")));
+
+        await _persistence.DidNotReceiveWithAnyArgs().CreateAsync(default!, default);
+        Assert.Empty(_harness.Configuration.Links);
+    }
+
     [Fact]
     public async Task Groups_seen_at_login_are_remembered_for_the_admin_ui()
     {

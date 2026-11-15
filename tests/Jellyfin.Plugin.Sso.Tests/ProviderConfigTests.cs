@@ -30,6 +30,44 @@ public sealed class ProviderConfigTests
         // On: the endpoint acts only on a token the provider signed, and a provider only
         // posts one once an administrator has registered the URL with it.
         Assert.True(provider.AcceptBackChannelLogout);
+
+        // On here, so that a configuration saved before the switch existed — which has
+        // no such element to read — keeps creating accounts as it did. The configuration
+        // page turns it off for a provider it adds.
+        Assert.True(provider.CreateAccounts);
+    }
+
+    /// <summary>
+    /// The upgrade itself: a provider as an earlier release wrote it to disk, read back
+    /// by the serializer Jellyfin uses for plugin configuration. It must come back
+    /// creating accounts, or an upgrade would lock out everybody who has not signed in
+    /// before.
+    /// </summary>
+    [Fact]
+    public void A_provider_saved_before_the_switch_existed_still_creates_accounts()
+    {
+        const string Saved = """
+            <?xml version="1.0" encoding="utf-8"?>
+            <PluginConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+              <Providers>
+                <ProviderConfig>
+                  <Id>old</Id>
+                  <Name>Authentik</Name>
+                  <Enabled>true</Enabled>
+                  <Authority>https://auth.example.com/application/o/jellyfin/</Authority>
+                  <ClientId>jellyfin</ClientId>
+                </ProviderConfig>
+              </Providers>
+            </PluginConfiguration>
+            """;
+
+        using var reader = new StringReader(Saved);
+        var config = (PluginConfiguration)new System.Xml.Serialization.XmlSerializer(
+            typeof(PluginConfiguration)).Deserialize(reader)!;
+
+        var provider = Assert.Single(config.Providers);
+        Assert.True(provider.CreateAccounts);
+        Assert.Empty(provider.EndpointHosts);
     }
 
     [Fact]
