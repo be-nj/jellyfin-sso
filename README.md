@@ -67,8 +67,8 @@ only Markdown skips the heavy ones.
 
 | | |
 |---|---|
-| **630 unit tests** | Token validation, permissions, lockout guards, revocation races, account writes, markup, the served pages |
-| **149 end-to-end tests** | Throwaway Jellyfin container, an OIDC provider built for the suite, real browser — four of them check the harness's own reading of a browser console and need none of that |
+| **661 unit tests** | Token validation, permissions, lockout guards, revocation races, account writes, markup, the served pages |
+| **154 end-to-end tests** | Throwaway Jellyfin container, an OIDC provider built for the suite, real browser — four of them check the harness's own reading of a browser console and need none of that |
 | **Every Jellyfin 12.x** | The same build against the oldest server the catalog offers it to and the two newest, on every pull request — and against every 12.x there is in the weekly run |
 | **16 real-provider logins** | Authentik, Keycloak and Authelia, through their own forms — including the misconfigurations their guides warn about |
 | **Mutation testing** | Weekly. Stryker breaks the code to see whether the tests notice: 69 % in the last run, floor 65 % — over the files the unit suite can reach, which is most of the plugin but not the controllers |
@@ -193,7 +193,7 @@ same way for each of the four, this one included.
 
 | | Since | Latest | ★ | Licence | Written by AI | Tests |
 |---|---|---|---:|---|---|---|
-| **This one** | 2026-09 | v1.12.20 · 2026-11 | 5 | MIT → GPLv3 | **164 of 200** commits | 630 + 169 |
+| **This one** | 2026-09 | v1.12.20 · 2026-11 | 5 | MIT → GPLv3 | **164 of 200** commits | 661 + 174 |
 | K0lin | 2026-06 | v5.1.1 · 2026-09 | 187 | GPL-3.0 | none from an AI | about 78 |
 | Ezeqielle | 2026-05 | v1.0.10 · 2026-09 | 40 | GPL-3.0 | 33 of 82 | 16 |
 | 9p4 | 2022-01 | v4.0.0.4 · archived | 1,448 | GPL-3.0 | none from an AI | none |

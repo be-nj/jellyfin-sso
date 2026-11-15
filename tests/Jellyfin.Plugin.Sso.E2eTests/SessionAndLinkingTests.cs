@@ -727,6 +727,65 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// The other half of that rule, and the reason it has an exception. Google's issuer is
+    /// accounts.google.com and it serves its keys, its token endpoint and userinfo from
+    /// three googleapis.com hosts, so the rule above refused every Google login. A
+    /// provider's document still cannot vouch for where it points; the administrator who
+    /// configured the provider can, under Further endpoint hosts.
+    ///
+    /// Two providers over one document that moves those endpoints to a second host name:
+    /// the one without the host is refused and the log says which host to name, the one
+    /// with it signs in — which takes the keys and the token from the second host, so a
+    /// host that was accepted on paper and then not usable would fail here.
+    /// </summary>
+    [Fact]
+    public async Task A_provider_serving_keys_and_tokens_from_a_named_host_signs_in()
+    {
+        const string Unnamed = "second-host-unnamed";
+        const string Named = "second-host-named";
+
+        JsonObject Provider(string id, params string[] hosts) => new()
+        {
+            ["Id"] = id,
+            ["Name"] = id,
+            ["Enabled"] = true,
+            ["Authority"] = _env.Idp.ContainerAuthority,
+            ["ClientId"] = JellyfinEnvironment.ClientId,
+            ["Scopes"] = new JsonArray { "openid", "profile", "email", "groups" },
+            ["GroupsClaim"] = "groups",
+            ["EndpointHosts"] = new JsonArray(hosts.Select(h => (JsonNode)h).ToArray()),
+        };
+
+        _env.Idp.ServiceEndpointsElsewhere = true;
+        _env.Idp.RegisteredRedirectUris.Add($"{_env.BaseUrl}/sso/oidc/callback/{Named}");
+        try
+        {
+            await _env.PatchConfigAsync(config =>
+            {
+                config["Providers"]!.AsArray().Add(Provider(Unnamed));
+                config["Providers"]!.AsArray().Add(Provider(Named, _env.Idp.SecondHost));
+            });
+
+            using var client = JellyfinEnvironment.TrustingClient(followRedirects: false);
+            var refused = await client.GetAsync($"{_env.BaseUrl}/sso/oidc/start/{Unnamed}");
+
+            Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+            var log = await _env.WaitForServerLogAsync("Further endpoint hosts");
+            Assert.Contains($"token_endpoint on {_env.Idp.SecondHost}", log);
+            Assert.Contains($"jwks_uri on {_env.Idp.SecondHost}", log);
+
+            var login = await _env.StartWebLoginAsync(
+                new FakeUser("sub-second-host", "secondhostuser", ["media"]), providerId: Named);
+
+            Assert.True(login.Succeeded, login.Body);
+        }
+        finally
+        {
+            _env.Idp.ServiceEndpointsElsewhere = false;
+        }
+    }
+
+    /// <summary>
     /// OIDC Core §5.3.2: the sub in a userinfo response has to be verified against the one
     /// in the ID token, and a response that names another subject must not be used. What
     /// is read from there decides a user's groups, which is to say their libraries and

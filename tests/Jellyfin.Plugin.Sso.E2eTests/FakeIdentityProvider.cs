@@ -192,6 +192,20 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
     public bool EndSessionElsewhere { get; set; }
 
     /// <summary>
+    /// When true the discovery document puts the keys, the token endpoint and userinfo on
+    /// <see cref="SecondHost"/> while the issuer stays where it is — the layout Google
+    /// publishes, with one second host standing in for its three. The plugin refuses it
+    /// until an administrator names that host for the provider.
+    /// </summary>
+    public bool ServiceEndpointsElsewhere { get; set; }
+
+    /// <summary>
+    /// A second name for this same provider, as the Jellyfin container resolves it: the
+    /// container maps it to the Docker host and the certificate carries it.
+    /// </summary>
+    public string SecondHost => $"{TestCertificate.ConformanceHostName}:{Port}";
+
+    /// <summary>
     /// When true the userinfo endpoint answers about a different subject than the ID token
     /// named. OIDC Core forbids using such a response, because what is read from it
     /// decides a user's groups.
@@ -231,6 +245,7 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
         NextPictureUrl = null;
         UserInfoFails = false;
         EndSessionElsewhere = false;
+        ServiceEndpointsElsewhere = false;
         UserInfoAnswersAboutSomebodyElse = false;
         NextAuthorizeError = null;
         BeforeAvatar = null;
@@ -243,6 +258,9 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
         return idp;
     }
 
+    private string ServiceBase
+        => ServiceEndpointsElsewhere ? $"https://{SecondHost}" : ContainerAuthority;
+
     private void MapEndpoints(WebApplication app)
     {
         app.MapGet("/.well-known/openid-configuration", () => Results.Json(new Dictionary<string, object>
@@ -251,9 +269,9 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
             // The browser follows this one, so it must be host-resolvable.
             ["authorization_endpoint"] = AuthorizeEndpoint,
             // Jellyfin calls these server-side from inside the container.
-            ["token_endpoint"] = $"{ContainerAuthority}/token",
-            ["userinfo_endpoint"] = $"{ContainerAuthority}/userinfo",
-            ["jwks_uri"] = $"{ContainerAuthority}/jwks",
+            ["token_endpoint"] = $"{ServiceBase}/token",
+            ["userinfo_endpoint"] = $"{ServiceBase}/userinfo",
+            ["jwks_uri"] = $"{ServiceBase}/jwks",
             // On the authority's host, as every real provider's is: the plugin sends a
             // user's ID token here as a logout hint and refuses a document that moves it
             // elsewhere. EndSessionElsewhere is how a test watches it refuse.

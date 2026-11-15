@@ -168,6 +168,141 @@ public sealed class SecurityRegressionTests
         Assert.DoesNotContain("attacker.example", requests);
     }
 
+    private const string GoogleDocument = """{"issuer":"https://accounts.google.com","authorization_endpoint":"https://accounts.google.com/o/oauth2/v2/auth","device_authorization_endpoint":"https://oauth2.googleapis.com/device/code","token_endpoint":"https://oauth2.googleapis.com/token","userinfo_endpoint":"https://openidconnect.googleapis.com/v1/userinfo","revocation_endpoint":"https://oauth2.googleapis.com/revoke","jwks_uri":"https://www.googleapis.com/oauth2/v3/certs"}""";
+
+    private const string PlainDocument = """{"issuer":"https://idp.example","jwks_uri":"https://idp.example/keys","token_endpoint":"https://idp.example/token"}""";
+
+    private static (OidcClientFactory Factory, HttpClient Client, List<string> Requests) GoogleShaped()
+    {
+        var factory = new OidcClientFactory(NullLogger<OidcClientFactory>.Instance);
+        var requests = new List<string>();
+        var client = new HttpClient(new Handler(request =>
+        {
+            requests.Add(request.RequestUri!.Host);
+            var json = request.RequestUri.AbsolutePath.EndsWith("openid-configuration", StringComparison.Ordinal)
+                ? request.RequestUri.Host == "accounts.google.com" ? GoogleDocument : PlainDocument
+                : """{"keys":[]}""";
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) });
+        }));
+        typeof(OidcClientFactory).GetField("_http", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(factory, client);
+        return (factory, client, requests);
+    }
+
+    /// <summary>
+    /// The shape of Google's own document, through the real fetch: refused with nothing
+    /// asked of the other hosts, and refused in the plugin's words rather than the
+    /// library's, because only those say what to do about it.
+    /// </summary>
+    [Fact]
+    public async Task Googles_document_is_refused_by_name_until_its_hosts_are_named()
+    {
+        var (factory, client, requests) = GoogleShaped();
+        using var _ = factory;
+        using var __ = client;
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => factory.GetDiscoveryDocumentAsync(
+            new ProviderConfig { Id = "google", Authority = "https://accounts.google.com" }));
+
+        Assert.Contains("Further endpoint hosts", ex.Message, StringComparison.Ordinal);
+        Assert.EndsWith("www.googleapis.com oauth2.googleapis.com openidconnect.googleapis.com", ex.Message, StringComparison.Ordinal);
+        Assert.Equal(["accounts.google.com"], requests);
+    }
+
+    [Fact]
+    public async Task Googles_document_is_accepted_with_its_hosts_named_and_the_keys_come_from_there()
+    {
+        var (factory, client, requests) = GoogleShaped();
+        using var _ = factory;
+        using var __ = client;
+
+        var document = await factory.GetDiscoveryDocumentAsync(new ProviderConfig
+        {
+            Id = "google",
+            Authority = "https://accounts.google.com",
+            EndpointHosts = ["www.googleapis.com", "oauth2.googleapis.com", "openidconnect.googleapis.com"],
+        });
+
+        Assert.False(document.IsError, document.Error);
+        Assert.Equal("https://oauth2.googleapis.com/token", document.TokenEndpoint);
+        Assert.Equal(["accounts.google.com", "www.googleapis.com"], requests);
+    }
+
+    /// <summary>
+    /// Naming the key host does not admit the token host: the document is refused before
+    /// the keys are fetched from the host that was named.
+    /// </summary>
+    [Fact]
+    public async Task Naming_one_host_does_not_admit_the_others()
+    {
+        var (factory, client, requests) = GoogleShaped();
+        using var _ = factory;
+        using var __ = client;
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => factory.GetDiscoveryDocumentAsync(
+            new ProviderConfig { Id = "google", Authority = "https://accounts.google.com", EndpointHosts = ["www.googleapis.com"] }));
+
+        Assert.EndsWith("oauth2.googleapis.com openidconnect.googleapis.com", ex.Message, StringComparison.Ordinal);
+        Assert.Equal(["accounts.google.com"], requests);
+    }
+
+    /// <summary>
+    /// A host taken off the list stops being trusted with the save, not half an hour
+    /// later when the document accepted with it leaves the cache.
+    /// </summary>
+    [Fact]
+    public async Task A_host_taken_off_the_list_is_not_served_from_the_cache()
+    {
+        var (factory, client, _) = GoogleShaped();
+        using var __ = factory;
+        using var ___ = client;
+        var provider = new ProviderConfig
+        {
+            Id = "google",
+            Authority = "https://accounts.google.com",
+            EndpointHosts = ["www.googleapis.com", "oauth2.googleapis.com", "openidconnect.googleapis.com"],
+        };
+        Assert.False((await factory.GetDiscoveryDocumentAsync(provider)).IsError);
+
+        provider.EndpointHosts = [];
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => factory.GetDiscoveryDocumentAsync(provider));
+    }
+
+    /// <summary>
+    /// A key rotation is answered by dropping the cached document, and that has to work
+    /// for a provider with further hosts as it does for one without. The first version of
+    /// the host list put it into the cache key, which only the fetch then knew about:
+    /// the drop missed, and every login after a rotation was checked against the old
+    /// keys. The end-to-end suite found it; this is the test that should have.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_forgotten_document_is_fetched_again(bool withFurtherHosts)
+    {
+        var (factory, client, requests) = GoogleShaped();
+        using var _ = factory;
+        using var __ = client;
+        var provider = withFurtherHosts
+            ? new ProviderConfig
+            {
+                Id = "google",
+                Authority = "https://accounts.google.com",
+                EndpointHosts = ["www.googleapis.com", "oauth2.googleapis.com", "openidconnect.googleapis.com"],
+            }
+            : new ProviderConfig { Id = "plain", Authority = "https://idp.example" };
+
+        await factory.GetDiscoveryDocumentAsync(provider);
+        await factory.GetDiscoveryDocumentAsync(provider);
+        var cached = requests.Count;
+
+        factory.Forget(provider);
+        await factory.GetDiscoveryDocumentAsync(provider);
+
+        Assert.Equal(2, cached);
+        Assert.Equal(4, requests.Count);
+    }
+
     [Fact]
     public void A_whole_configuration_saved_through_jellyfin_keeps_the_live_links()
     {

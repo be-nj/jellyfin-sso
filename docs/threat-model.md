@@ -10,7 +10,7 @@ reader who trusts neither the author nor a model can check the claims one by one
 - **The identity provider**, for who a person is and which groups they hold. The plugin
   verifies that the statement came from that provider and was meant for this server; it
   cannot judge whether the provider's answer is correct.
-- **TLS to the provider.** Discovery and JWKS are fetched over the configured issuer URL, and the discovery document cannot move them elsewhere: its issuer has to match the authority, and its keys, token, userinfo and end-session endpoints — the ones the plugin hands something to, the last of them a user's own ID token — have to be on the authority's own host. Redirects are not followed, so none of those calls can be moved after the check. The authorize endpoint is not among them, and the reason is at the call: nothing is handed to it, and where a provider puts the form people type into is its own arrangement. The paths are the provider's business — Authentik's differ from its issuer by design — the host is not.
+- **TLS to the provider.** Discovery and JWKS are fetched over the configured issuer URL, and the discovery document cannot move them elsewhere: its issuer has to match the authority, and its keys, token, userinfo and end-session endpoints — the ones the plugin hands something to, the last of them a user's own ID token — have to be on the authority's own host. Redirects are not followed, so none of those calls can be moved after the check. The authorize endpoint is not among them, and the reason is at the call: nothing is handed to it, and where a provider puts the form people type into is its own arrangement. The paths are the provider's business — Authentik's differ from its issuer by design — the host is not. A provider that documents a layout across several hosts, as Google does, is admitted those hosts only when an administrator names them on the provider card (*Further endpoint hosts*, empty by default). That moves the trust from the document to the person who configured the provider, which is where the issuer URL's own trust comes from; it also means a host named there is trusted exactly as far as the issuer's.
   A provider reached over plain HTTP, or with a certificate the server does not trust, is
   outside what this plugin can repair.
 - **Jellyfin's own enforcement** of the user policy this plugin writes.
@@ -62,6 +62,7 @@ its signature is checked, and the group names that arrive with it.
 | An avatar update restoring old account rights | The persistence operation writes image data only | `An_image_write_preserves_account_permissions_and_authentication`, `Avatar_download_must_not_undo_administrator_disabling_account` |
 | Linking while JIT provisioning is awaiting storage | All link writers check uniqueness under the configuration lock at the final write; a losing provisional account is removed | `Jit_and_self_service_link_must_not_create_two_owners_for_one_identity` |
 | Discovery naming a foreign JWKS host | Endpoint validation precedes the JWKS fetch, with shared paths permitted only on the authority's origin | `Discovery_must_check_the_jwks_host_before_sending_the_request` |
+| A host list that admits more than it names | *Further endpoint hosts* takes host names, compared whole and with their port: no wildcard, no scheme, no suffix match, and an entry that is not a host name admits nothing. Naming one host does not admit another, and a host taken off the list is refused at once rather than when the cached document expires | `A_lookalike_of_a_named_host_is_refused`, `An_entry_that_is_not_a_host_name_admits_nothing`, `Naming_one_host_does_not_admit_the_others`, `A_host_taken_off_the_list_is_not_served_from_the_cache`, `A_provider_serving_keys_and_tokens_from_a_named_host_signs_in` |
 | A logout for one account signing out another | The subject is matched by `(provider, sub)`, as a login is | `Another_users_logout_leaves_this_session_alone`, `SessionRevokerTests` |
 | Flooding the anonymous login endpoints | 60 requests per minute per address, answered with 429 and a Retry-After; the count has an end of its own | `A_caller_past_the_limit_is_turned_away_and_told_when_to_come_back`, `LoginRateLimiterTests` |
 | A picture claim, or a brand document, pointing the server at something else | One fetcher for all of them, documents included: absolute `http(s)` only, at most three redirects **with every hop checked, not just the first**, a size counted while the body arrives rather than read off a header, and only the image types Jellyfin's own pipeline reads — SVG is a document that can carry script, and is refused. A logo is fetched only from the provider's own host. A picture may come from anywhere public, and from the provider's host, but not from a private or loopback address unless the operator turns that on. Nothing that comes back can fail a login, and the whole fetch has one deadline — headers, redirects and body, because the body used to have none | `OutboundAddressesTests`, `RemoteImageDeadlineTests`, `A_redirect_to_somewhere_else_inside_the_network_is_not_followed`, `A_picture_that_is_not_an_image_is_refused_and_the_login_still_works` |
@@ -115,8 +116,11 @@ its signature is checked, and the group names that arrive with it.
   [Configuration](configuration.md).
 - **The plugin cannot restrict who a provider admits.** That gate belongs at the provider
   (Authentik policies, Keycloak client scopes, Authelia access rules). Providers without
-  per-application assignment — Google among them — therefore admit anyone with an
-  account, which is why they are not documented as supported.
+  per-application assignment therefore admit anyone with an account. Google is the
+  common case: a published *External* OAuth client admits every Google account, and only
+  its *Internal* audience or its *Testing* status narrow that. The plugin can be pointed
+  at Google since *Further endpoint hosts* exists, and it is still not documented as
+  supported — see the note in [Configuration](configuration.md).
 
 ## How the claims are kept honest
 

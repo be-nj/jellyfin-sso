@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net.Http.Headers;
+using System.Text.Json;
 using Duende.IdentityModel;
 using Duende.IdentityModel.Client;
 using Microsoft.IdentityModel.Tokens;
@@ -25,7 +26,12 @@ public sealed class OidcClientFactory : IDisposable
     /// </summary>
     private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(30);
 
-    private sealed record CacheEntry(DiscoveryDocumentResponse Document, DateTimeOffset Expiry);
+    /// <summary>
+    /// <c>Hosts</c> is the list of further endpoint hosts the document was accepted with.
+    /// It is part of the entry and not of the key, so that there is one entry per
+    /// provider for <see cref="Forget"/> to drop and none left behind by an edited list.
+    /// </summary>
+    private sealed record CacheEntry(DiscoveryDocumentResponse Document, DateTimeOffset Expiry, string Hosts);
 
     private readonly HttpClient _http;
     private readonly ILogger<OidcClientFactory> _logger;
@@ -59,9 +65,15 @@ public sealed class OidcClientFactory : IDisposable
         // would otherwise keep talking to the old provider until Jellyfin restarts.
         var cacheKey = $"{provider.Id}|{provider.Authority}";
 
+        // A document is good for the hosts it was accepted with. A host an administrator
+        // takes off the list must stop being trusted at once, not when the document that
+        // was accepted with it expires.
+        var hosts = string.Join(' ', provider.EndpointHosts);
+
         if (_cache.TryGetValue(cacheKey, out var cached)
             && !cached.Document.IsError
-            && cached.Expiry > DateTimeOffset.UtcNow)
+            && cached.Expiry > DateTimeOffset.UtcNow
+            && string.Equals(cached.Hosts, hosts, StringComparison.Ordinal))
         {
             return cached.Document;
         }
@@ -73,12 +85,14 @@ public sealed class OidcClientFactory : IDisposable
         // document naming signing keys on another host must be refused before anything is
         // fetched from there. Its issuer and HTTPS checks stay on as well.
         //
-        // Two allowances. Authentik publishes endpoints on a path shared between
+        // Three allowances. Authentik publishes endpoints on a path shared between
         // applications (/application/o/token/) while the issuer is per application, so the
         // configured origin is allowed, not only the issuer's path; the host check after
-        // the fetch still holds the endpoints the plugin uses to that origin. And Duende
+        // the fetch still holds the endpoints the plugin uses to that origin. Duende
         // compares host and prefix exactly, so the origin is given both as typed and as
-        // normalised.
+        // normalised. And a provider that really does serve its keys and its token
+        // endpoint from other hosts — Google does, from three of them — is allowed the
+        // hosts an administrator named for it, and no others.
         //
         // Endpoints the plugin never calls are left out of Duende's check. A provider that
         // puts device authorization or introspection on another host is not handing this
@@ -86,6 +100,8 @@ public sealed class OidcClientFactory : IDisposable
         // login and every back-channel logout of that provider.
         var policy = new DiscoveryPolicy { ValidateEndpoints = true };
         foreach (var origin in Origins(provider.Authority))
+            policy.AdditionalEndpointBaseAddresses.Add(origin);
+        foreach (var origin in FurtherOrigins(provider.Authority, provider.EndpointHosts))
             policy.AdditionalEndpointBaseAddresses.Add(origin);
         foreach (var unused in EndpointsNotCalled)
             policy.EndpointValidationExcludeList.Add(unused);
@@ -98,15 +114,19 @@ public sealed class OidcClientFactory : IDisposable
 
         var doc = await _http.GetDiscoveryDocumentAsync(request, ct).ConfigureAwait(false);
 
-        if (doc.IsError)
-            throw new InvalidOperationException(
-                $"OIDC discovery failed for {provider.Authority}: {doc.Error}");
-
-        RequireEndpointsOnTheAuthoritysHost(
+        // Before the library's own error, because this one can be acted on. Duende stops
+        // at the first endpoint it dislikes and names an address; the plugin's check
+        // names every host at once together with the setting that would admit them.
+        // Duende empties the document it refused, so the endpoints are read from the
+        // text it was sent. On a document that never arrived there is nothing to read,
+        // and this passes straight through to the library's error.
+        var published = PublishedEndpoints(doc.Raw);
+        RequireEndpointsOnKnownHosts(
             provider.Authority,
-            ("jwks_uri", doc.JwksUri),
-            ("token_endpoint", doc.TokenEndpoint),
-            ("userinfo_endpoint", doc.UserInfoEndpoint),
+            provider.EndpointHosts,
+            ("jwks_uri", published("jwks_uri")),
+            ("token_endpoint", published("token_endpoint")),
+            ("userinfo_endpoint", published("userinfo_endpoint")),
             // The one that was written down, tested, and then not passed in. A logout
             // sends the user's own ID token to this address as an id_token_hint, so it
             // belongs with the three above: these are the addresses the plugin hands
@@ -118,9 +138,13 @@ public sealed class OidcClientFactory : IDisposable
             // arrangement: a login UI on its own hostname is a layout several products
             // offer. There is nothing to win either, since whoever can write this document
             // can serve a form on the authority's own host just as easily.
-            ("end_session_endpoint", doc.EndSessionEndpoint));
+            ("end_session_endpoint", published("end_session_endpoint")));
 
-        _cache[cacheKey] = new CacheEntry(doc, DateTimeOffset.UtcNow.Add(CacheTtl));
+        if (doc.IsError)
+            throw new InvalidOperationException(
+                $"OIDC discovery failed for {provider.Authority}: {doc.Error}");
+
+        _cache[cacheKey] = new CacheEntry(doc, DateTimeOffset.UtcNow.Add(CacheTtl), hosts);
         return doc;
     }
 
@@ -141,32 +165,120 @@ public sealed class OidcClientFactory : IDisposable
         "check_session_iframe",
     ];
 
+    /// <summary>
+    /// Reads endpoint addresses out of a discovery document as it was sent, whether or
+    /// not the library went on to accept it. Anything that is not a JSON object with
+    /// string members has no endpoints to speak of.
+    /// </summary>
+    private static Func<string, string?> PublishedEndpoints(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return _ => null;
+
+        try
+        {
+            using var parsed = JsonDocument.Parse(raw);
+            if (parsed.RootElement.ValueKind != JsonValueKind.Object)
+                return _ => null;
+
+            var members = parsed.RootElement.EnumerateObject()
+                .Where(member => member.Value.ValueKind == JsonValueKind.String)
+                .GroupBy(member => member.Name, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.Last().Value.GetString(), StringComparer.Ordinal);
+            return name => members.GetValueOrDefault(name);
+        }
+        catch (JsonException)
+        {
+            return _ => null;
+        }
+    }
+
     /// <summary>The authority's origin as typed and as normalised, without duplicates.</summary>
     internal static IEnumerable<string> Origins(string authority)
     {
         var normalised = new Uri(authority).GetLeftPart(UriPartial.Authority);
         yield return normalised;
 
-        var schemeEnd = authority.IndexOf("://", StringComparison.Ordinal);
-        if (schemeEnd < 0)
-            yield break;
-        var pathStart = authority.IndexOfAny(['/', '?', '#'], schemeEnd + 3);
-        var typed = pathStart < 0 ? authority : authority[..pathStart];
-        if (!string.Equals(typed, normalised, StringComparison.Ordinal))
+        var typed = TypedOrigin(authority);
+        if (typed is not null && !string.Equals(typed, normalised, StringComparison.Ordinal))
             yield return typed;
     }
 
+    /// <summary>Scheme, host and port of an address exactly as it was written.</summary>
+    private static string? TypedOrigin(string url)
+    {
+        var schemeEnd = url.IndexOf("://", StringComparison.Ordinal);
+        if (schemeEnd < 0)
+            return null;
+        var pathStart = url.IndexOfAny(['/', '?', '#'], schemeEnd + 3);
+        return pathStart < 0 ? url : url[..pathStart];
+    }
+
     /// <summary>
-    /// Refuses a discovery document that moves an endpoint to another host.
+    /// The further endpoint hosts as origins Duende can compare against: on the
+    /// authority's scheme, as typed and as normalised, for the reason given at
+    /// <see cref="Origins"/>. An entry that is not a host name is left out, which makes a
+    /// hand-edited configuration stricter rather than looser.
+    /// </summary>
+    internal static IEnumerable<string> FurtherOrigins(string authority, IEnumerable<string> hosts)
+    {
+        var scheme = new Uri(authority).Scheme;
+        foreach (var entry in hosts)
+        {
+            if (EndpointHost(entry) is not { } host)
+                continue;
+
+            yield return $"{scheme}://{host}";
+            var typed = entry.Trim();
+            if (!string.Equals(typed, host, StringComparison.Ordinal))
+                yield return $"{scheme}://{typed}";
+        }
+    }
+
+    /// <summary>
+    /// A further endpoint host in the form it is compared in — a host name, with a port
+    /// where the endpoints use one that is not the scheme's own — or null for anything
+    /// else. No scheme, no path, and no wildcard: a list that can only name hosts cannot
+    /// be made to mean "anywhere", which is what the rule it loosens exists to prevent.
+    /// </summary>
+    internal static string? EndpointHost(string? entry)
+    {
+        var typed = entry?.Trim();
+        if (string.IsNullOrEmpty(typed)
+            || typed.IndexOfAny(['/', '\\', '*', '@', '?', '#', ' ', '\t']) >= 0
+            || !Uri.TryCreate("https://" + typed, UriKind.Absolute, out var uri)
+            || uri.HostNameType == UriHostNameType.Unknown
+            || uri.Host.Length == 0
+            || (!string.Equals(uri.Authority, typed, StringComparison.OrdinalIgnoreCase)
+                // The scheme's own port written out, which Uri drops from Authority.
+                && !string.Equals($"{uri.Host}:{uri.Port}", typed, StringComparison.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
+        return uri.Authority;
+    }
+
+    /// <summary>
+    /// Refuses a discovery document that moves an endpoint to a host nobody named.
     ///
     /// The paths are the provider's business — Authentik's differ from its issuer by
     /// design — but the host is not. These four are where the client secret and the
     /// authorization code are sent, where the keys that decide whether a token is genuine
     /// come from, and where a user's ID token is sent as a logout hint. A document that
-    /// names another host for any of them is not a layout quirk.
+    /// names another host for any of them is not a layout quirk — unless it is the
+    /// provider's documented layout, as Google's is, and then the administrator who
+    /// configured the provider says so under <em>Further endpoint hosts</em>. The
+    /// document cannot say it for itself.
+    ///
+    /// Every host is named in one message, with the line to paste into that field: the
+    /// refusal is read in a log by somebody who wants to sign in, and one host per
+    /// attempt would be three attempts for Google.
     /// </summary>
-    internal static void RequireEndpointsOnTheAuthoritysHost(
-        string? authorityUrl, params (string Name, string? Value)[] endpoints)
+    internal static void RequireEndpointsOnKnownHosts(
+        string? authorityUrl,
+        IEnumerable<string> furtherHosts,
+        params (string Name, string? Value)[] endpoints)
     {
         if (!Uri.TryCreate(authorityUrl, UriKind.Absolute, out var authority))
         {
@@ -174,6 +286,13 @@ public sealed class OidcClientFactory : IDisposable
                 $"The authority '{authorityUrl}' is not an absolute URL.");
         }
 
+        var known = furtherHosts
+            .Select(EndpointHost)
+            .OfType<string>()
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var moved = new List<string>();
+        var hosts = new List<string>();
         foreach (var (name, value) in endpoints)
         {
             if (string.IsNullOrEmpty(value))
@@ -181,14 +300,39 @@ public sealed class OidcClientFactory : IDisposable
                 continue;
             }
 
-            if (!Uri.TryCreate(value, UriKind.Absolute, out var endpoint)
-                || !string.Equals(endpoint.Host, authority.Host, StringComparison.OrdinalIgnoreCase))
+            if (!Uri.TryCreate(value, UriKind.Absolute, out var endpoint))
             {
-                throw new InvalidOperationException(
-                    $"The discovery document for {authorityUrl} puts its {name} on another "
-                    + "host. Refusing it: that endpoint decides whether a login is genuine.");
+                moved.Add($"{name} somewhere that is not an address");
+                continue;
             }
+
+            if (string.Equals(endpoint.Host, authority.Host, StringComparison.OrdinalIgnoreCase)
+                || known.Contains(endpoint.Authority))
+            {
+                continue;
+            }
+
+            moved.Add($"{name} on {endpoint.Authority}");
+            if (!hosts.Contains(endpoint.Authority, StringComparer.OrdinalIgnoreCase))
+                hosts.Add(endpoint.Authority);
         }
+
+        if (moved.Count == 0)
+        {
+            return;
+        }
+
+        var message = $"The discovery document for {authorityUrl} puts an endpoint on another "
+            + $"host: {string.Join(", ", moved)}. Refusing it: these endpoints decide whether "
+            + "a login is genuine.";
+        if (hosts.Count > 0)
+        {
+            message += " If the provider documents this layout, as Google does, name the "
+                + "hosts under 'Further endpoint hosts' on the provider card: "
+                + string.Join(' ', hosts);
+        }
+
+        throw new InvalidOperationException(message);
     }
 
     /// <summary>

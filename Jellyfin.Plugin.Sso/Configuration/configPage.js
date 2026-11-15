@@ -223,6 +223,7 @@ function buildProviderCard(p, i) {
     var logoutUri = server + '/sso/oidc/backchannel-logout/' + card.dataset.providerId;
     var scopes = (p.Scopes || []).join(' ');
     var algorithms = (p.SigningAlgorithms || []).join(' ');
+    var endpointHosts = (p.EndpointHosts || []).join(' ');
 
     card.innerHTML =
         '<summary class="sso-card-summary">' +
@@ -312,6 +313,18 @@ function buildProviderCard(p, i) {
                 'published. <code>RS256</code> is what almost every provider uses; the ' +
                 'rest are RS384, RS512, PS256, PS384, PS512, ES256, ES384 and ES512.</div>' +
         '</div>' +
+        '<div class="inputContainer">' +
+            '<input type="text" is="emby-input" class="sso-provider-endpoint-hosts" ' +
+                'label="Further endpoint hosts (space separated, empty = the issuer\'s host only)" ' +
+                'value="' + escAttr(endpointHosts) + '" />' +
+            '<div class="fieldDescription">Leave empty unless a login fails with ' +
+                '\u201cputs an endpoint on another host\u201d in the server log. The plugin ' +
+                'takes signing keys and tokens only from the issuer\'s own host; a provider ' +
+                'that serves them from other hosts needs those named here. For Google: ' +
+                '<code>www.googleapis.com oauth2.googleapis.com ' +
+                'openidconnect.googleapis.com</code>. Host names only, no ' +
+                '<code>https://</code> and no wildcards.</div>' +
+        '</div>' +
         '<div class="sso-copy-list">' +
             copyRow('Redirect URI for your provider', redirectUri) +
             copyRow('Login URL', server + loginUrl) +
@@ -399,6 +412,7 @@ function collectProviders(view) {
             AcceptBackChannelLogout: card.querySelector('.sso-provider-backchannel').checked,
             ButtonColour: val('.sso-provider-colour'),
             SigningAlgorithms: val('.sso-provider-algorithms').split(/\s+/).filter(Boolean),
+            EndpointHosts: val('.sso-provider-endpoint-hosts').split(/\s+/).filter(Boolean),
         };
     }).filter(Boolean);
 }

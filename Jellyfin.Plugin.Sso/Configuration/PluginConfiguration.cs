@@ -193,6 +193,22 @@ public class ProviderConfig
     public List<string> SigningAlgorithms { get; set; } = [];
 
     /// <summary>
+    /// Hosts besides the issuer's own that this provider's discovery document may put its
+    /// signing keys, token, userinfo and end-session endpoints on. Empty — the default —
+    /// holds all four to the issuer's host, which is right for every provider that runs
+    /// on one name.
+    ///
+    /// Google does not: its issuer is <c>accounts.google.com</c> and it serves the keys
+    /// from <c>www.googleapis.com</c>, the token endpoint from
+    /// <c>oauth2.googleapis.com</c> and userinfo from
+    /// <c>openidconnect.googleapis.com</c>. Those are named here, by the administrator
+    /// who knows which provider this is, because the document cannot vouch for where it
+    /// points. Host names only, with a port where it is not the scheme's own; see
+    /// <see cref="Oidc.OidcClientFactory.EndpointHost"/>.
+    /// </summary>
+    public List<string> EndpointHosts { get; set; } = [];
+
+    /// <summary>
     /// When true the login button is painted in the provider's own colour, with its mark
     /// in black or white on top. Off, the button looks like Jellyfin's other buttons and
     /// carries the provider's colour on its left edge alone.
