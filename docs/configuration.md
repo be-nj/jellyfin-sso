@@ -67,10 +67,10 @@ name what the provider documents and not what a log line happens to ask for: che
 hosts against the provider's own documentation first.
 
 > **Google, specifically.** Naming those three hosts is what a Google login needs from
-> this field, and it was checked against Google's live discovery document and keys. A
-> complete Google login has not been run by this project — there is no Google client in
-> the test matrix — so treat it as untested, not as supported. Two things follow from how
-> Google works rather than from this plugin. Google decides who may sign in: an OAuth
+> this field. A complete Google login was walked by hand once, on 16 November 2026, and
+> the [Google guide](google.md) is written from it; Google is not in the test matrix CI
+> runs, so it is checked less than the three providers that are. Two things follow from
+> how Google works rather than from this plugin. Google decides who may sign in: an OAuth
 > client with the audience *Internal* admits your Workspace organisation, one left in
 > *Testing* admits the test users you listed, and a published *External* client admits
 > **anyone with a Google account**, each of whom gets a Jellyfin account at their first

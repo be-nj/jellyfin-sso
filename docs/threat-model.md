@@ -123,8 +123,8 @@ its signature is checked, and the group names that arrive with it.
   per-application assignment therefore admit anyone with an account. Google is the
   common case: a published *External* OAuth client admits every Google account, and only
   its *Internal* audience or its *Testing* status narrow that. The plugin can be pointed
-  at Google since *Further endpoint hosts* exists, and it is still not documented as
-  supported — see the note in [Configuration](configuration.md). What the plugin can
+  at Google since *Further endpoint hosts* exists; the [Google guide](google.md) says how,
+  from one login walked by hand, and Google is not in the test matrix. What the plugin can
   decide is whether being admitted is enough for an account: with *Create an account at
   first login* off for a provider, an identity nobody linked gets none, and a provider
   added on the configuration page starts that way.
