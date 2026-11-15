@@ -223,16 +223,12 @@ public sealed class OidcClientFactory : IDisposable
     internal static IEnumerable<string> FurtherOrigins(string authority, IEnumerable<string> hosts)
     {
         var scheme = new Uri(authority).Scheme;
-        foreach (var entry in hosts)
-        {
-            if (EndpointHost(entry) is not { } host)
-                continue;
-
-            yield return $"{scheme}://{host}";
-            var typed = entry.Trim();
-            if (!string.Equals(typed, host, StringComparison.Ordinal))
-                yield return $"{scheme}://{typed}";
-        }
+        return hosts
+            .Select(entry => (Typed: entry?.Trim() ?? string.Empty, Host: EndpointHost(entry)))
+            .Where(entry => entry.Host is not null)
+            .SelectMany(entry => new[] { entry.Host!, entry.Typed })
+            .Distinct(StringComparer.Ordinal)
+            .Select(host => $"{scheme}://{host}");
     }
 
     /// <summary>
