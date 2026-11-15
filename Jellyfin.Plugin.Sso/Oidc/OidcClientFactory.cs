@@ -370,6 +370,16 @@ public sealed class OidcClientFactory : IDisposable
         {
             var secret = ResolveSecret(provider.ConfidentialSecretRef);
             req.ClientSecret = secret;
+            req.ClientCredentialStyle = SecretStyleFor(disco.TokenEndpointAuthenticationMethodsSupported);
+        }
+        else
+        {
+            // A public client has nothing to authenticate with, and says who it is with
+            // client_id in the form (RFC 6749 §4.1.3). The library's default style put
+            // the id into a Basic header with an empty password instead: an attempt to
+            // authenticate, which the providers this is tested against forgive and a
+            // stricter one answers with invalid_client.
+            req.ClientCredentialStyle = ClientCredentialStyle.PostBody;
         }
 
         var response = await _http.RequestAuthorizationCodeTokenAsync(req, ct).ConfigureAwait(false);
@@ -377,6 +387,26 @@ public sealed class OidcClientFactory : IDisposable
             throw new InvalidOperationException($"Token exchange failed: {response.Error}");
 
         return response;
+    }
+
+    /// <summary>
+    /// How the client secret is sent to the token endpoint. HTTP Basic, which is what
+    /// OpenID Connect expects of a client that registered nothing else, and what a
+    /// provider that publishes no list is taken to support — unless the provider's own
+    /// discovery document says it takes the secret as a form parameter and does not take
+    /// Basic. Then the form it is, because the alternative is a login that cannot work
+    /// and an operator hunting for a setting that does not exist.
+    ///
+    /// Read from the document rather than configured: the provider knows which it
+    /// accepts, and a field for it would be one more thing to get wrong.
+    /// </summary>
+    internal static ClientCredentialStyle SecretStyleFor(IEnumerable<string>? supported)
+    {
+        var methods = supported?.ToList() ?? [];
+        return methods.Contains("client_secret_post", StringComparer.Ordinal)
+            && !methods.Contains("client_secret_basic", StringComparer.Ordinal)
+                ? ClientCredentialStyle.PostBody
+                : ClientCredentialStyle.AuthorizationHeader;
     }
 
     /// <summary>

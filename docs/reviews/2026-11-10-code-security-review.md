@@ -314,6 +314,29 @@ serves every endpoint from one host, so it says nothing about *Further endpoint 
 that is covered by `A_provider_serving_keys_and_tokens_from_a_named_host_signs_in` and by
 the check against Google's live document described in `#261`.
 
+**As a confidential client, 15 November.** The one conformance item this review left open
+([#258](https://github.com/be-nj/jellyfin-sso/issues/258)): every run so far was a public
+PKCE client, and a provider that requires a client secret — Google's web clients do — goes
+through code no outside party had judged. The login plan was run with
+`client_auth_type: client_secret_basic`, the secret reaching the server as a file. Of its
+29 modules, 22 `PASSED` — `client-secret-basic` among them, and `invalid-sig-hs256`, where
+the plugin refuses a token signed with a symmetric algorithm before it looks at the
+signature — and the rest are the public run's: `userinfo-bearer-body` `FAILED` by design,
+the two cache casualties `FAILED`, `idtoken-sig-none` `SKIPPED`, and the three modules
+without a verdict for features the plugin does not implement.
+
+It also found two things. With `client_auth_type: client_secret_post` the first module
+failed at `Couldn't find client credentials in form post`: the plugin sent the secret with
+HTTP Basic and had no other way, so a provider set to accept the form parameter alone
+could not be used ([#277](https://github.com/be-nj/jellyfin-sso/issues/277)). And the test
+written for that showed a public client sending a Basic header too, with its client id and
+an empty password, where RFC 6749 has it name itself in the form — forgiven by every
+provider and by the suite, and still an attempt to authenticate that a strict provider may
+refuse ([#278](https://github.com/be-nj/jellyfin-sso/issues/278)). Both are fixed: the
+form is used where the discovery document lists it and not Basic, and a public client
+sends `client_id` and no header. The `client_secret_post` module passes, and the public
+plan was run again in full on the changed build with the same verdicts as before.
+
 ### Corrections to the harness
 
 Made by the first pass, checked by the second, which found none of them turning a failure

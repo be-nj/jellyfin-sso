@@ -8,6 +8,7 @@ and then judges what the RP did.
 """
 import json
 import os
+import secrets
 import ssl
 import subprocess
 import sys
@@ -34,6 +35,18 @@ RUNS = os.path.join(REPO, "tests", "runs", "conformance")
 PROVIDER_ID = "conformance"
 CLIENT_ID = "jellyfin-sso-conformance"
 ALIAS = "jellyfin-sso"
+
+# How the client authenticates at the token endpoint. "none" is the public PKCE client
+# every earlier run used. CONFORMANCE_CLIENT_AUTH=client_secret_basic or
+# client_secret_post creates the plan for a confidential client instead: the suite then
+# expects the secret at the token endpoint in that form and fails the login without it.
+# Chosen when the plan is created and recorded in plan.json, so the runners that follow
+# configure the plugin to match the plan rather than the environment they happen to have.
+CLIENT_AUTH_MODES = ("none", "client_secret_basic", "client_secret_post")
+
+# Where the confidential client's secret is put inside the Jellyfin container. The plugin
+# takes a secret by reference only, from a file or an environment variable.
+SECRET_PATH = "/config/conformance-client-secret"
 
 os.makedirs(RUNS, exist_ok=True)
 
@@ -98,8 +111,30 @@ def jellyfin(base, token, method, path, body=None):
         return json.loads(raw) if raw else None
 
 
+def plan_client_auth():
+    """The client authentication the current login plan was created for."""
+    try:
+        with open(os.path.join(RUNS, "plan.json")) as f:
+            return json.load(f).get("clientAuth", "none")
+    except FileNotFoundError:
+        return "none"
+
+
+def results_file(name="results"):
+    """Results of a confidential-client run are kept beside the public client's."""
+    mode = plan_client_auth()
+    return os.path.join(RUNS, f"{name}.json" if mode == "none" else f"{name}-{mode}.json")
+
+
+def install_client_secret(container, secret):
+    """Hands the secret to the server the only way the plugin accepts one: as a file."""
+    subprocess.run(
+        ["docker", "exec", "-i", container, "sh", "-c", f"umask 077 && cat > {SECRET_PATH}"],
+        input=secret, text=True, check=True)
+
+
 def configure_provider(
-    base, token, issuer, provider_id=PROVIDER_ID, algorithms=()
+    base, token, issuer, provider_id=PROVIDER_ID, algorithms=(), confidential=False
 ):
     """Point the plugin at the suite's OP, as an operator would.
 
@@ -127,6 +162,10 @@ def configure_provider(
             "GroupsFromUserInfo": False,
             "AcceptBackChannelLogout": True,
             "SigningAlgorithms": list(algorithms),
+            # 1 is OidcClientType.Confidential. The reference names where the secret is;
+            # the configuration never holds it.
+            "ClientType": 1 if confidential else 0,
+            "ConfidentialSecretRef": f"file:{SECRET_PATH}" if confidential else None,
         }
     ]
     config["LoginRequestsPerMinute"] = 0
@@ -192,17 +231,28 @@ def main():
     print(f"jellyfin      {base}")
     print(f"redirect_uri  {redirect_uri}")
 
+    client_auth = os.environ.get("CONFORMANCE_CLIENT_AUTH", "none")
+    if client_auth not in CLIENT_AUTH_MODES:
+        raise SystemExit(f"CONFORMANCE_CLIENT_AUTH must be one of {', '.join(CLIENT_AUTH_MODES)}")
+    print(f"client auth   {client_auth}")
+
     variant = {
         "client_registration": "static_client",
         "response_type": "code",
-        "client_auth_type": "none",
+        "client_auth_type": client_auth,
         "request_type": "plain_http_request",
         "response_mode": "default",
     }
+    client = {"client_id": CLIENT_ID, "redirect_uri": redirect_uri}
+    if client_auth != "none":
+        # Minted for this run and known to two parties: the suite, which is told it here,
+        # and the throwaway server, which reads it from the file. It is not printed.
+        client["client_secret"] = secrets.token_urlsafe(32)
+        install_client_secret(s["container"], client["client_secret"])
     config = {
         "alias": ALIAS,
-        "description": "jellyfin-sso: PKCE public client, authorization code flow",
-        "client": {"client_id": CLIENT_ID, "redirect_uri": redirect_uri},
+        "description": f"jellyfin-sso: authorization code flow with PKCE, client auth {client_auth}",
+        "client": client,
     }
     plan = suite(
         "POST",
@@ -212,10 +262,23 @@ def main():
     )
     plan_id = plan["id"]
     modules = [m["testModule"] for m in plan["modules"]]
+
+    # A new plan can change what the suite's provider says about itself — the client
+    # authentication it advertises, for one — while the plugin still holds the discovery
+    # document of the plan before, for half an hour. The provider check fetches it afresh,
+    # and drops the cached one first, which is all that is wanted here: no module is
+    # running yet, so the fetch itself may well fail, and a server that has never seen
+    # this provider answers 404.
+    try:
+        jellyfin(base, token, "POST", f"/sso/admin/providers/{PROVIDER_ID}/check")
+    except urllib.error.HTTPError:
+        pass
     print(f"plan          {plan_id}  ({len(modules)} modules)")
     print(f"issuer        {SUITE}/test/a/{ALIAS}/")
     with open(os.path.join(RUNS, "plan.json"), "w") as f:
-        json.dump({"planId": plan_id, "modules": modules, "redirectUri": redirect_uri}, f, indent=2)
+        json.dump(
+            {"planId": plan_id, "modules": modules, "redirectUri": redirect_uri, "clientAuth": client_auth},
+            f, indent=2)
     for m in modules:
         print("   -", m)
 

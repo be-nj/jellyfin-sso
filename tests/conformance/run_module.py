@@ -7,7 +7,8 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from drive import (  # noqa: E402
-    ALIAS, RUNS, SUITE, PROVIDER_ID, configure_provider, drive_login, jellyfin_token, stack, suite,
+    ALIAS, RUNS, SUITE, PROVIDER_ID, configure_provider, drive_login, jellyfin_token,
+    plan_client_auth, stack, suite,
 )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -32,7 +33,7 @@ def run(module, plan_id, variant_json=None, verbose=False):
             break
         time.sleep(1)
 
-    configure_provider(base, token, issuer)
+    configure_provider(base, token, issuer, confidential=plan_client_auth() != "none")
     final_url, status, body, _ = drive_login(base)
     attempts = [{
         "httpStatus": status,
