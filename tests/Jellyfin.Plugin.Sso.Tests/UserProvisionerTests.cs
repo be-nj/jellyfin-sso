@@ -20,12 +20,14 @@ public sealed class UserProvisionerTests : IDisposable
     private readonly PluginHarness _harness = new();
     private readonly IUserManager _userManager = Substitute.For<IUserManager>();
     private readonly ISsoUserPersistence _persistence = Substitute.For<ISsoUserPersistence>();
+    private readonly RefusedSignIns _refused = new();
     private readonly UserProvisioner _provisioner;
     private readonly ProviderConfig _provider = new() { Id = "provider-1", Name = "Test" };
 
     public UserProvisionerTests()
     {
-        _provisioner = new UserProvisioner(_userManager, NullLogger<UserProvisioner>.Instance, _persistence);
+        _provisioner = new UserProvisioner(
+            _userManager, NullLogger<UserProvisioner>.Instance, _persistence, _refused);
     }
 
     private static User UserNamed(string name)
@@ -152,6 +154,39 @@ public sealed class UserProvisionerTests : IDisposable
 
         await _persistence.DidNotReceiveWithAnyArgs().CreateAsync(default!, default);
         Assert.Empty(_harness.Configuration.Links);
+
+        // And it is on the list an administrator links from, with the subject the form
+        // needs and the name only as a label.
+        var refused = Assert.Single(_refused.Recent());
+        Assert.Equal(("provider-1", "sub-123", "newcomer"), (refused.ProviderId, refused.Sub, refused.Name));
+        Assert.Equal(RefusedSignInReason.NoAccount, refused.Reason);
+    }
+
+    /// <summary>
+    /// The older refusal — a first login for a name that already exists — is listed too,
+    /// so linking an existing account no longer starts with a search through the log.
+    /// </summary>
+    [Fact]
+    public async Task A_first_login_for_a_name_that_exists_is_listed_for_linking()
+    {
+        _userManager.GetUserByName("ben").Returns(UserNamed("ben"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _provisioner.ResolveAsync(_provider, Identity("sub-ben", "ben")));
+
+        var refused = Assert.Single(_refused.Recent());
+        Assert.Equal(("sub-ben", RefusedSignInReason.NameTaken), (refused.Sub, refused.Reason));
+    }
+
+    /// <summary>A login that succeeds leaves nothing on that list.</summary>
+    [Fact]
+    public async Task A_login_that_gets_an_account_is_not_listed_as_refused()
+    {
+        _persistence.CreateAsync("newcomer", Arg.Any<CancellationToken>()).Returns(UserNamed("newcomer"));
+
+        await _provisioner.ResolveAsync(_provider, Identity("sub-123", "newcomer"));
+
+        Assert.Empty(_refused.Recent());
     }
 
     /// <summary>The switch is about new accounts. A linked one signs in as it always did.</summary>

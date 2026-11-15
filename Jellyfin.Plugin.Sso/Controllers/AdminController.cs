@@ -24,6 +24,7 @@ public sealed class AdminController : ControllerBase
     private readonly LoginRateLimiter _limiter;
     private readonly SessionRevoker _revoker;
     private readonly ILogger<AdminController> _logger;
+    private readonly RefusedSignIns _refused;
 
     public AdminController(
         ILibraryManager libraryManager,
@@ -31,8 +32,10 @@ public sealed class AdminController : ControllerBase
         LoginBranding branding,
         LoginRateLimiter limiter,
         SessionRevoker revoker,
-        ILogger<AdminController> logger)
+        ILogger<AdminController> logger,
+        RefusedSignIns? refused = null)
     {
+        _refused = refused ?? new RefusedSignIns();
         _libraryManager = libraryManager;
         _userManager = userManager;
         _branding = branding;
@@ -254,7 +257,49 @@ public sealed class AdminController : ControllerBase
             Plugin.Instance.SaveConfiguration();
         }
 
+        _refused.Forget(link.ProviderId, link.Sub);
         return Ok();
+    }
+
+    /// <summary>
+    /// The sign-ins recently refused for want of a link, for the Account Links tab. An
+    /// identity that has been linked since — here, or from the self-service page — is
+    /// left out, so the list is always what is still to do.
+    /// </summary>
+    [HttpGet("refused-sign-ins")]
+    [Authorize(Policy = "RequiresElevation")]
+    public IActionResult GetRefusedSignIns()
+    {
+        var config = Plugin.Instance!.Configuration;
+        var recent = _refused.Recent();
+
+        lock (Plugin.ConfigurationLock)
+        {
+            return Ok(recent
+                .Where(r => !config.Links.Any(l =>
+                    l.ProviderId == r.ProviderId
+                    && string.Equals(l.Sub, r.Sub, StringComparison.Ordinal)))
+                .Select(r => new
+                {
+                    r.ProviderId,
+                    ProviderName = config.Providers
+                        .FirstOrDefault(p => p.Id == r.ProviderId)?.Name ?? r.ProviderId,
+                    r.Sub,
+                    r.Name,
+                    Reason = r.Reason == RefusedSignInReason.NameTaken ? "name-taken" : "no-account",
+                    r.At,
+                })
+                .ToList());
+        }
+    }
+
+    /// <summary>Empties that list — after a burst of strangers at an open provider, say.</summary>
+    [HttpDelete("refused-sign-ins")]
+    [Authorize(Policy = "RequiresElevation")]
+    public IActionResult ClearRefusedSignIns()
+    {
+        _refused.Clear();
+        return NoContent();
     }
 
     /// <summary>

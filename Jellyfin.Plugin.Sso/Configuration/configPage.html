@@ -320,9 +320,10 @@
         <!-- Account Links -->
         <div class="sso-panel" data-panel="links" hidden>
           <div class="verticalSection">
-            <div class="fieldDescription sso-intro">New SSO users are linked automatically (JIT). Use this only to connect existing local Jellyfin accounts.</div>
+            <div class="fieldDescription sso-intro">A provider that creates accounts at first login links them by itself. Link by hand to connect an existing Jellyfin account, or to let somebody in at a provider that creates none.</div>
             <div id="Links" class="sso-mt"></div>
-            <details class="sso-mt">
+            <div id="RefusedSignIns" class="sso-mt"></div>
+            <details class="sso-mt" id="LinkFormDetails">
               <summary class="sso-link-form-summary">Add manual link</summary>
               <div class="sso-link-form">
                 <div class="selectContainer">
@@ -335,8 +336,8 @@
                   <input id="LinkSub" type="text" is="emby-input" label="OIDC subject (sub)" />
                   <div class="fieldDescription">
                     The user's stable identifier at the provider. Tip: have them try an SSO
-                    login once. It is refused, and Jellyfin's log then prints the value
-                    after <code>Sub=</code>.
+                    login once. It is refused and then listed above, with a button that
+                    fills this form.
                   </div>
                 </div>
                 <button is="emby-button" type="button" id="AddLink" class="raised">Link Account</button>

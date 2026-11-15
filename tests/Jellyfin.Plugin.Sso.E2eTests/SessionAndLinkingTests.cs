@@ -822,15 +822,36 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
         var log = await _env.WaitForServerLogAsync("does not create accounts at first login");
         Assert.Contains($"ProviderId={ProviderId} Sub=sub-stranger", log);
 
-        var (known, _) = await _env.CreateLocalUserWithTokenAsync("knownuser");
-        var linked = await PostLinkAsync(ProviderId, "sub-known", known);
+        // The refusal is also on the list the Account Links tab shows, so nobody has to
+        // read that log line: the subject the form needs, the name as a label, and why.
+        var refused = Assert.Single(await _env.RefusedSignInsAsync());
+        Assert.Equal("sub-stranger", refused!["Sub"]!.GetValue<string>());
+        Assert.Equal(ProviderId, refused["ProviderId"]!.GetValue<string>());
+        Assert.Equal("strangeruser", refused["Name"]!.GetValue<string>());
+        Assert.Equal("no-account", refused["Reason"]!.GetValue<string>());
+
+        var (known, knownToken) = await _env.CreateLocalUserWithTokenAsync("knownuser");
+        var linked = await PostLinkAsync(ProviderId, "sub-stranger", known);
         Assert.True(linked.IsSuccessStatusCode, await linked.Content.ReadAsStringAsync());
 
+        // Linked, so no longer something to do.
+        Assert.Empty(await _env.RefusedSignInsAsync());
+
         var login = await _env.StartWebLoginAsync(
-            new FakeUser("sub-known", "a-name-the-server-never-saw", ["media"]), providerId: ProviderId);
+            new FakeUser("sub-stranger", "strangeruser", ["media"]), providerId: ProviderId);
 
         Assert.True(login.Succeeded, login.Body);
-        Assert.Null(await _env.FindUserAsync("a-name-the-server-never-saw"));
+        Assert.Null(await _env.FindUserAsync("strangeruser"));
+
+        // The list names people who tried to get in. It is an administrator's to read.
+        using var asUser = JellyfinEnvironment.TrustingClient();
+        asUser.DefaultRequestHeaders.Authorization = JellyfinEnvironment.TokenHeader(knownToken);
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await asUser.GetAsync($"{_env.BaseUrl}/sso/admin/refused-sign-ins")).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await asUser.DeleteAsync($"{_env.BaseUrl}/sso/admin/refused-sign-ins")).StatusCode);
     }
 
     /// <summary>

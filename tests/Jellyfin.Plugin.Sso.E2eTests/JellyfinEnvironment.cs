@@ -132,6 +132,10 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
             await RemoveLinkAsync(Guid.Parse(link!["JellyfinUserId"]!.GetValue<string>()));
         }
 
+        // The list of refused sign-ins lives in the server's memory, so it outlives the
+        // class that filled it unless it is emptied here.
+        (await _admin.DeleteAsync("/sso/admin/refused-sign-ins")).EnsureSuccessStatusCode();
+
         foreach (var user in await ListUsersAsync())
         {
             var name = user!["Name"]!.GetValue<string>();
@@ -460,6 +464,10 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
     }
 
     /// <summary>Removes a link the way the Links tab does.</summary>
+    /// <summary>The sign-ins the server refused for want of a link, as the Links tab reads them.</summary>
+    public async Task<JsonArray> RefusedSignInsAsync()
+        => (JsonNode.Parse(await _admin.GetStringAsync("/sso/admin/refused-sign-ins")) as JsonArray)!;
+
     public async Task RemoveLinkAsync(Guid jellyfinUserId)
     {
         using var response = await _admin.DeleteAsync($"/sso/admin/links/{jellyfinUserId}");

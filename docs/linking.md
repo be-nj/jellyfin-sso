@@ -43,15 +43,25 @@ client and every link breaks at once. [Tinyauth](tinyauth.md) has the rest.
 with Authentik's username mode, the username.
 
 Otherwise you cannot know it in advance: let the person log in once. The attempt is
-refused, and the log (Dashboard → **Logs**, or `docker logs jellyfin`) carries the value:
+refused, and the tab then lists it under **Refused sign-ins** — when, at which provider,
+the name the provider sent, the subject, and why. **Link…** fills the provider and the
+subject into the form; the Jellyfin user is yours to choose.
+
+It is yours to choose on purpose. The name in that list is whatever the provider sent, and
+at a provider where people pick their own display name — Google is one — anybody can be
+called *admin*. The plugin never matches an identity to an account by name, and the page
+does not suggest one either. Link somebody you know to the account you know is theirs.
+
+The list is a convenience kept in the server's memory: the fifty most recent refusals, a
+day at most, gone at a restart, and **Clear list** empties it. A linked identity drops off
+it. The server log carries the same value, for when the list no longer does:
 
 ```
 [WRN] Jellyfin.Plugin.Sso.Provisioning.UserProvisioner: SSO JIT blocked: username 'ben'
 already exists. ProviderId=ab12… Sub=f81d4fae-7dec-11d0-a765-… JellyfinUserId=…
 ```
 
-At a provider with *Create an account at first login* off, the attempt of somebody
-without a link is refused the same way and the line reads:
+and, at a provider with *Create an account at first login* off:
 
 ```
 [WRN] Jellyfin.Plugin.Sso.Provisioning.UserProvisioner: SSO login refused: no account is
@@ -59,8 +69,7 @@ linked to this identity and the provider does not create accounts at first login
 it: ProviderId=ab12… Sub=f81d4fae-7dec-11d0-a765-…
 ```
 
-Copy the `Sub=` value into the form, one person at a time. Keep one administrator
-unlinked, with a password.
+One person at a time. Keep one administrator unlinked, with a password.
 
 ## Self-service linking
 
