@@ -29,9 +29,21 @@ public static class LoginGate
 {
     /// <summary>What to tell the log, or null when the login may go ahead.</summary>
     public static LoginRefusal? Refusal(
-        PluginConfiguration config, OidcIdentity identity, Guid? existingUserId)
+        PluginConfiguration config,
+        OidcIdentity identity,
+        Guid? existingUserId,
+        ProviderConfig? provider = null)
     {
         if (!config.RequireMappedGroup)
+        {
+            return null;
+        }
+
+        // A provider whose groups are not read has no groups to match. Holding its logins
+        // to this rule would refuse every one of them, which is not a second lock but a
+        // provider that cannot be used; who gets in there is decided by the links and by
+        // whether the provider creates accounts.
+        if (provider is { ManagePermissions: false })
         {
             return null;
         }

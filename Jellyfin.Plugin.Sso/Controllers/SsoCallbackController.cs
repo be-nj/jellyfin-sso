@@ -137,7 +137,8 @@ public sealed class SsoCallbackController : SsoFlowController
             if (pending.LinkUserId is { } linkUserId)
                 return CompleteSelfServiceLink(provider, identity, linkUserId, stamp);
 
-            WarnIfNoGroupsArrived(provider, identity);
+            if (provider.ManagePermissions)
+                WarnIfNoGroupsArrived(provider, identity);
 
             if (RefuseUnmatchedLogin(provider, identity) is { } refused)
                 return refused;
@@ -148,7 +149,7 @@ public sealed class SsoCallbackController : SsoFlowController
             if (Revoked(pending, identity, userId))
                 return PlainText.BadRequest(RevokedMessage);
 
-            await _permissions.SyncAsync(userId, identity, ct).ConfigureAwait(false);
+            await _permissions.SyncAsync(userId, identity, ct, provider).ConfigureAwait(false);
             await _pictures.SyncAsync(userId, identity.PictureUrl, provider, ct)
                 .ConfigureAwait(false);
 
@@ -433,7 +434,7 @@ public sealed class SsoCallbackController : SsoFlowController
     {
         var config = Plugin.Instance!.Configuration;
         var refusal = LoginGate.Refusal(
-            config, identity, UserProvisioner.LinkedUserId(provider, identity));
+            config, identity, UserProvisioner.LinkedUserId(provider, identity), provider);
 
         if (refusal is null)
         {

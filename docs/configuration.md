@@ -75,7 +75,8 @@ hosts against the provider's own documentation first.
 > *Testing* admits the test users you listed, and a published *External* client admits
 > **anyone with a Google account**, each of whom gets a Jellyfin account at their first
 > login. And Google sends no groups, so no mapping ever matches: those accounts have no
-> libraries. Leave **Create an account at first login** off for such a provider, below.
+> libraries. For such a provider, leave **Create an account at first login** off and turn
+> **Set permissions from this provider's groups** off as well, both below.
 
 *Create an account at first login* decides what happens to somebody the provider vouches
 for and this server has never seen. On, they get a Jellyfin account on the spot — right
@@ -97,6 +98,20 @@ It differs from *Refuse logins that match no mapping* [below](#safety) in two wa
 one is for the whole server and this one is per provider; and that one asks about groups
 at every login, also of accounts that exist, while this one only asks whether there is an
 account.
+
+*Set permissions from this provider's groups* is on by default, and it is the plugin's
+normal working: every login sets the account's libraries, permissions and administrator
+flag from the [group mappings](#group-mappings), and takes away what the groups no longer
+grant. A provider that sends no groups breaks that — "no groups" is applied like any other
+answer, so the first login leaves the account without a library. Off, a login through
+this provider leaves the account exactly as you set it by hand: its libraries, its
+administrator flag, and its own password login. That is what *Excluded from sync* does for
+one account, done for everybody who signs in through this provider.
+
+Two consequences. *Refuse logins that match no mapping* does not apply to such a provider,
+since no login there could ever match; who gets in is decided by the links and by *Create
+an account at first login*. And an account linked to two providers follows whichever it
+last signed in through — the one that sets permissions sets them, the other leaves them.
 
 **Check saved settings**, at the foot of the card, asks the server to look at the provider
 the way a login is about to: it fetches the discovery document and the keys and lists

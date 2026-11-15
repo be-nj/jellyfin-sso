@@ -181,6 +181,21 @@ public class ProviderConfig
     public bool CreateAccounts { get; set; } = true;
 
     /// <summary>
+    /// Whether a login through this provider sets the account's libraries, permissions
+    /// and administrator flag from the groups the provider sent. On — the default, and
+    /// what the plugin is built around: the provider's groups are the source of truth.
+    ///
+    /// Off is for a provider that has no groups to send, Google being the common one.
+    /// There, "the groups" are always empty, and applying them takes an account's
+    /// libraries away at every login. Off, a login through this provider leaves the
+    /// account exactly as an administrator set it, the way
+    /// <see cref="PluginConfiguration.SyncExcludedUserIds"/> does for one account — and
+    /// <see cref="PluginConfiguration.RequireMappedGroup"/> does not apply to it, because
+    /// a rule about groups has nothing to ask a provider whose groups are not read.
+    /// </summary>
+    public bool ManagePermissions { get; set; } = true;
+
+    /// <summary>
     /// Whether the plugin accepts back-channel logout notifications from this provider at
     /// <c>/sso/oidc/backchannel-logout/{id}</c>. On, because the endpoint acts only on a
     /// logout token the provider signed, and a provider only posts one once an
