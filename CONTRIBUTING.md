@@ -147,6 +147,19 @@ Worth running after anything that touches token validation, the discovery docume
 the logout endpoints. What it found the first time is in
 [docs/reviews/2026-11-06-oidc-conformance.md](docs/reviews/2026-11-06-oidc-conformance.md).
 
+### Google, by hand
+
+```bash
+make google     # then open the address tests/runs/google/ready.json names, and sign in
+```
+
+A complete login against Google, clicked by a person: Google cannot be started in a
+container and its login form is not for a script to drive. The harness does everything
+around the click — a throwaway Jellyfin on a fixed port so the redirect URI can be
+registered beforehand, the client secret handed over as a file — and writes what Google
+sent to `tests/runs/google/result.json`. It needs a Google OAuth client and a credentials
+file that is never committed; [tests/google/README.md](tests/google/README.md) has both.
+
 ### Cutting a release
 
 ```bash

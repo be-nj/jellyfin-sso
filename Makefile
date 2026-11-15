@@ -16,7 +16,7 @@ EXTRA_DLLS := Duende.IdentityModel.dll \
               Microsoft.IdentityModel.Tokens.dll \
               System.IdentityModel.Tokens.Jwt.dll
 
-.PHONY: build publish deploy test e2e screenshots demo clean
+.PHONY: build publish deploy test e2e screenshots demo google clean
 
 build:
 	dotnet build $(PLUGIN_SRC) -c Release
@@ -82,6 +82,14 @@ screenshots:
 stack:
 	$(MAKE) e2e E2E_FILTER='--filter "FullyQualifiedName~ManualStackTests"' \
 	  E2E_EXTRA_ENV='-e E2E_IDP_PLAIN_AUTHORIZE=1 -e E2E_STACK_MINUTES=$(E2E_STACK_MINUTES)'
+
+# A complete login against Google, clicked by a person: Jellyfin on a fixed port, because
+# the redirect URI has to be registered with Google beforehand, and the client's id and
+# secret read from tests/runs/google/client.env. tests/google/README.md has the steps.
+# Writes tests/runs/google/ready.json when it is time to click, and result.json after.
+google:
+	$(MAKE) e2e E2E_FILTER='--filter "FullyQualifiedName~GoogleLoginTests"' \
+	  E2E_EXTRA_ENV='-e E2E_JELLYFIN_PORT=8097 -e E2E_STACK_MINUTES=$(E2E_STACK_MINUTES)'
 
 demo:
 	$(MAKE) e2e E2E_FILTER='--filter "Category=Demo"'

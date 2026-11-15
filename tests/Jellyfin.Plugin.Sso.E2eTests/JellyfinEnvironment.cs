@@ -57,6 +57,12 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
 
     public string AdminUserName => AdminUser;
 
+    /// <summary>The host port a run asked for through E2E_JELLYFIN_PORT, or null for any.</summary>
+    public static int? FixedHostPort
+        => int.TryParse(Environment.GetEnvironmentVariable("E2E_JELLYFIN_PORT"), out var port) && port > 0
+            ? port
+            : null;
+
     public string ServerId { get; private set; } = string.Empty;
 
     public string MoviesLibraryId { get; private set; } = string.Empty;
@@ -74,7 +80,10 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
         Idp = await FakeIdentityProvider.StartAsync(Certificate);
 
         _jellyfin = new ContainerBuilder($"jellyfin/jellyfin:{ServerImageTag(repoRoot)}")
-            .WithPortBinding(8096, true)
+            // A port Docker picks, unless a run asks for one: a provider nobody here
+            // controls has the redirect URI registered with it in advance, and that
+            // needs an address known before the container exists. See GoogleLoginTests.
+            .WithPortBinding(FixedHostPort ?? 0, 8096)
             // Lets the server call the fake provider running in the test process.
             .WithExtraHost("host.docker.internal", "host-gateway")
             // And the conformance suite, which runs in its own containers and publishes
