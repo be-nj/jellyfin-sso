@@ -71,7 +71,10 @@ The details:
 - What the plugin fetches from the provider is fetched from the provider: the discovery
   document's keys, token, userinfo and end-session endpoints have to be on the authority's
   own origin. Discovery validation runs before the JWKS request, and redirects are not
-  followed, so none of those calls can be moved afterwards.
+  followed, so none of those calls can be moved afterwards. The one way to widen that is
+  an administrator naming further hosts for a provider that documents such a layout
+  (*Further endpoint hosts*, empty by default — Google needs it); the document cannot
+  widen it for itself, and the list takes host names only, never a wildcard.
 - Names and group names from a token reach the log on one line, with control characters
   replaced. They are the one class of logged value that cannot be mapped to a closed set,
   and a name carrying a newline would otherwise write a line of its own into the log.

@@ -86,6 +86,23 @@ public sealed class AdminController : ControllerBase
                     + string.Join(", ", OidcClientFactory.AsymmetricSigningAlgorithms)
                     + ", or leave the field empty for all of them. Nothing was saved.");
             }
+
+            // Refused here for the same reason. An entry that is not a host name is left
+            // out when the list is used, so a typo would look saved and then admit
+            // nothing — and somebody who wrote https://… or *.example.com meant something
+            // this field does not do.
+            var badHost = provider.EndpointHosts
+                .Where(entry => !string.IsNullOrWhiteSpace(entry))
+                .FirstOrDefault(entry => OidcClientFactory.EndpointHost(entry) is null);
+
+            if (badHost is not null)
+            {
+                return BadRequest(
+                    $"Provider '{provider.Id}': '{badHost}' is not a host name. Further "
+                    + "endpoint hosts are names like www.googleapis.com, with a port where "
+                    + "one is needed and without https://, a path or a wildcard. Nothing "
+                    + "was saved.");
+            }
         }
 
         // A library is named by its Jellyfin id, and the sync parses those ids on every

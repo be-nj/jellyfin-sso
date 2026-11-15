@@ -429,6 +429,59 @@ public sealed class ConfigPageTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// Further endpoint hosts name hosts. A scheme, a path or a wildcard is somebody
+    /// meaning something the field does not do, and an entry that is not a host name
+    /// admits nothing when the list is used — so it is refused here, where it can be
+    /// said, rather than saved and then silently ignored.
+    /// </summary>
+    [Theory]
+    [InlineData("*.googleapis.com")]
+    [InlineData("https://www.googleapis.com")]
+    [InlineData("www.googleapis.com/oauth2/v3/certs")]
+    public async Task An_endpoint_host_that_is_not_a_host_name_is_refused(string entry)
+    {
+        var result = await _env.TrySaveConfigAsync(config =>
+            config["Providers"]!.AsArray()[0]!["EndpointHosts"] = new JsonArray { entry });
+
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, result.Status);
+        Assert.Contains("is not a host name", result.Body);
+
+        var saved = await _env.PluginConfigAsync();
+        Assert.Empty(saved["Providers"]!.AsArray()[0]!["EndpointHosts"]!.AsArray());
+    }
+
+    /// <summary>
+    /// And through the page, which is where an administrator meets the field: what is
+    /// typed into the card is what the server stores, one host per word.
+    /// </summary>
+    [Fact]
+    public async Task Further_endpoint_hosts_typed_into_the_card_are_saved()
+    {
+        var page = await OpenConfigPageAsync();
+        await page.ClickAsync(".sso-tab[data-tab=\"provider\"]");
+
+        await page.Locator(".sso-provider").First.Locator(".sso-provider-endpoint-hosts")
+            .FillAsync("www.googleapis.com  oauth2.googleapis.com");
+        await page.ClickAsync("#Save");
+
+        try
+        {
+            var config = await WaitForConfigAsync(c => c["Providers"]!.AsArray()[0]!["EndpointHosts"]!
+                .AsArray().Count == 2);
+            Assert.Equal(
+                ["www.googleapis.com", "oauth2.googleapis.com"],
+                config["Providers"]!.AsArray()[0]!["EndpointHosts"]!.AsArray().Select(h => h!.GetValue<string>()));
+        }
+        finally
+        {
+            // Put back, so the provider the rest of the suite signs in through is the
+            // default shape again.
+            await _env.TrySaveConfigAsync(config =>
+                config["Providers"]!.AsArray()[0]!["EndpointHosts"] = new JsonArray());
+        }
+    }
+
+    /// <summary>
     /// The page posts the configuration it loaded with, and both the links and the seen
     /// groups change underneath it — a login links an account, the Links tab removes one.
     /// Saving a provider therefore used to write that snapshot back: a removed link

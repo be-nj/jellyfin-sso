@@ -43,6 +43,41 @@ the nonce are. What it removes is the provider's freedom to pick a weaker key ou
 own set after the fact, and it is what the
 [conformance suite](reviews/2026-11-06-oidc-conformance.md) asks a client to do.
 
+*Further endpoint hosts* is empty by default, and for a provider that runs on one host
+name it stays empty. The plugin takes signing keys and tokens only from the host of the
+issuer URL: the discovery document says where they are, and a document that could send the
+plugin anywhere for the keys that decide whether a login is genuine would be deciding that
+for itself. A few providers do serve them from other hosts. Google's issuer is
+`accounts.google.com`, and it publishes its keys on `www.googleapis.com`, its token
+endpoint on `oauth2.googleapis.com` and userinfo on `openidconnect.googleapis.com`; until
+those are named, every login there is refused and the server log says so:
+
+```
+The discovery document for https://accounts.google.com puts an endpoint on another host:
+jwks_uri on www.googleapis.com, token_endpoint on oauth2.googleapis.com, … name the hosts
+under 'Further endpoint hosts' on the provider card: www.googleapis.com
+oauth2.googleapis.com openidconnect.googleapis.com
+```
+
+The last line is what goes into the field: host names separated by spaces, with a port
+where the endpoints use one, and nothing else — no `https://`, no path and no wildcard,
+all of which are refused when you save. A host you name is trusted for this provider's
+keys, token, userinfo and end-session endpoints as far as the issuer's own host is, so
+name what the provider documents and not what a log line happens to ask for: check the
+hosts against the provider's own documentation first.
+
+> **Google, specifically.** Naming those three hosts is what a Google login needs from
+> this field, and it was checked against Google's live discovery document and keys. A
+> complete Google login has not been run by this project — there is no Google client in
+> the test matrix — so treat it as untested, not as supported. Two things follow from how
+> Google works rather than from this plugin. Google decides who may sign in: an OAuth
+> client with the audience *Internal* admits your Workspace organisation, one left in
+> *Testing* admits the test users you listed, and a published *External* client admits
+> **anyone with a Google account**, each of whom gets a Jellyfin account at their first
+> login. And Google sends no groups, so no mapping ever matches: those accounts have no
+> libraries, and with *Refuse logins that match no mapping* on, only accounts
+> [linked by hand](linking.md#manual-linking) and excluded from sync get in.
+
 A new provider is created **disabled**, and one with nothing but a display name saves — so
 you can hand its redirect URI to the provider before the rest exists.
 
