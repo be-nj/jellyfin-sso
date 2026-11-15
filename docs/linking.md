@@ -74,7 +74,10 @@ One person at a time. Keep one administrator unlinked, with a password.
 ## Self-service linking
 
 With **Let users link their own account** enabled, a signed-in user links themselves at
-**`/sso/link`**: the page uses the session the web client stored, runs the OIDC flow and
+**`/sso/link`**. Nothing in Jellyfin's own pages leads there, so the plugin says it where
+it is needed: somebody whose sign-in is refused because no account is linked is told to
+sign in with their Jellyfin password and open that address. Otherwise, send people the
+link. The page uses the session the web client stored, runs the OIDC flow and
 attaches the identity. An identity already linked to a different Jellyfin account is
 refused; only an administrator can move a link.
 

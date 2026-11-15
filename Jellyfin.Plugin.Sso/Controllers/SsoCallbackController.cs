@@ -166,11 +166,7 @@ public sealed class SsoCallbackController : SsoFlowController
         catch (AccountNotLinkedException)
         {
             // Logged where it was decided, with what an administrator needs to link it.
-            return PlainText.Forbidden(
-                "This server has no account for this sign-in and does not create one at "
-                + "this provider. Ask whoever runs it to link your account. If you already "
-                + "have a Jellyfin password, sign in with it and link this sign-in "
-                + "yourself.");
+            return PlainText.Forbidden(NoAccountMessage(SsoAddress.For(Request).BaseUri));
         }
         catch (LoginRaceException ex)
         {
@@ -430,6 +426,24 @@ public sealed class SsoCallbackController : SsoFlowController
     /// The answer to the browser names no group: the person in front of it cannot act on
     /// the detail, and the detail came from somebody else's token.
     /// </summary>
+    /// <summary>
+    /// What somebody without an account is told. The second half is the only place the
+    /// self-service linking page is ever pointed at — nothing in Jellyfin's own pages
+    /// leads there — and it is said only while that page would let them in.
+    /// </summary>
+    internal static string NoAccountMessage(string baseUri)
+    {
+        const string Refusal =
+            "This server has no account for this sign-in and does not create one at this "
+            + "provider. Ask whoever runs it to link your account.";
+
+        return Plugin.Instance?.Configuration is { AllowSelfServiceLinking: true }
+            ? Refusal + " If you already have a Jellyfin account, sign in to Jellyfin with "
+                + $"its password first, then open {baseUri}/sso/link to link this sign-in "
+                + "yourself."
+            : Refusal;
+    }
+
     private IActionResult? RefuseUnmatchedLogin(ProviderConfig provider, OidcIdentity identity)
     {
         var config = Plugin.Instance!.Configuration;
