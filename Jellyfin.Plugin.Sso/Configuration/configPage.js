@@ -346,7 +346,19 @@ function buildProviderCard(p, i) {
             copyRow('Back-channel logout URL', logoutUri) +
             copyRow('Provider ID', card.dataset.providerId) +
         '</div>' +
+        '<div class="sso-check">' +
+            '<button type="button" is="emby-button" class="raised sso-provider-check">' +
+                '<span>Check saved settings</span></button>' +
+            '<div class="fieldDescription">Fetches this provider\'s discovery document ' +
+                'and keys the way a login would, from the settings as they were last ' +
+                'saved. Nobody is signed in.</div>' +
+            '<ul class="sso-check-result" hidden></ul>' +
+        '</div>' +
         '</div>';
+
+    card.querySelector('.sso-provider-check').addEventListener('click', function () {
+        checkProvider(card);
+    });
 
     card.querySelector('.sso-provider-remove').addEventListener('click', function () {
         card.remove();
@@ -571,6 +583,42 @@ function collectMappings(view) {
             MaxParentalRating: rating === '' ? null : parseInt(rating, 10),
         };
     }).filter(Boolean);
+}
+
+// ─── Provider check ──────────────────────────────────────────────────────────
+
+// Asks the server to look at this provider as a login would and lists what it found.
+// Every line is written as text: an endpoint address or a refusal comes from the
+// provider's own document.
+function checkProvider(card) {
+    var list = card.querySelector('.sso-check-result');
+    var show = function (lines) {
+        list.innerHTML = '';
+        lines.forEach(function (line) {
+            var li = document.createElement('li');
+            li.className = line.Ok ? 'sso-check-ok' : 'sso-check-failed';
+            var what = document.createElement('strong');
+            what.textContent = (line.Ok ? '\u2713 ' : '\u2717 ') + line.What + ': ';
+            li.appendChild(what);
+            li.appendChild(document.createTextNode(line.Detail));
+            list.appendChild(li);
+        });
+        list.hidden = false;
+    };
+
+    show([{ Ok: true, What: 'Checking', Detail: 'asking the provider\u2026' }]);
+    fetch(api('providers/' + encodeURIComponent(card.dataset.providerId) + '/check'),
+        { method: 'POST', headers: authHeaders() })
+        .then(function (r) {
+            if (r.status === 404) {
+                return { Lines: [{ Ok: false, What: 'Not saved yet', Detail: 'Save the provider, then check it.' }] };
+            }
+            return checkOk(r).json();
+        })
+        .then(function (result) { show(result.Lines || []); })
+        .catch(function (e) {
+            show([{ Ok: false, What: 'Check failed', Detail: e.message }]);
+        });
 }
 
 // ─── Refused sign-ins ────────────────────────────────────────────────────────

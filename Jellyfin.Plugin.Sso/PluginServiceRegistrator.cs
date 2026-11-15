@@ -23,6 +23,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // Resolved per request by [ServiceFilter] on the anonymous login endpoints.
         serviceCollection.AddSingleton<RateLimitFilter>();
         serviceCollection.AddSingleton<OidcClientFactory>();
+        serviceCollection.AddSingleton<ProviderCheck>();
         serviceCollection.AddSingleton<ClaimsExtractor>();
         serviceCollection.AddSingleton<RefusedSignIns>();
         serviceCollection.AddSingleton<UserProvisioner>();

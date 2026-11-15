@@ -44,7 +44,7 @@ own set after the fact, and it is what the
 [conformance suite](reviews/2026-11-06-oidc-conformance.md) asks a client to do.
 
 *Further endpoint hosts* is empty by default, and for a provider that runs on one host
-name it stays empty. The plugin takes signing keys and tokens only from the host of the
+name it stays empty. **Check saved settings**, below, says whether yours needs it. The plugin takes signing keys and tokens only from the host of the
 issuer URL: the discovery document says where they are, and a document that could send the
 plugin anywhere for the keys that decide whether a login is genuine would be deciding that
 for itself. A few providers do serve them from other hosts. Google's issuer is
@@ -97,6 +97,14 @@ It differs from *Refuse logins that match no mapping* [below](#safety) in two wa
 one is for the whole server and this one is per provider; and that one asks about groups
 at every login, also of accounts that exist, while this one only asks whether there is an
 account.
+
+**Check saved settings**, at the foot of the card, asks the server to look at the provider
+the way a login is about to: it fetches the discovery document and the keys and lists
+what it found — the issuer, the endpoints, how many keys, and for a confidential client
+whether the secret is where its reference says. A refusal is shown in full, so a provider
+whose endpoints are on hosts you have not named tells you which to name without anybody
+attempting a login. It checks the settings as last **saved**, signs nobody in and stores
+nothing; a provider you have not enabled yet can be checked first.
 
 A new provider is created **disabled**, and one with nothing but a display name saves — so
 you can hand its redirect URI to the provider before the rest exists.
