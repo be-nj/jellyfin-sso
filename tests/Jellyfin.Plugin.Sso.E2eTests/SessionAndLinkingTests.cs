@@ -936,6 +936,9 @@ public sealed class SessionAndLinkingTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.Forbidden, stranger.CallbackStatus);
         Assert.Contains("does not create one at this provider", stranger.Body);
+        // And where somebody who does have an account can link this sign-in themselves:
+        // the one place the self-service page is pointed at, by the address they came in on.
+        Assert.Contains($"{_env.BaseUrl}/sso/link", stranger.Body);
         Assert.Null(await _env.FindUserAsync("strangeruser"));
         Assert.DoesNotContain(
             (await _env.PluginConfigAsync())["Links"]!.AsArray(),
