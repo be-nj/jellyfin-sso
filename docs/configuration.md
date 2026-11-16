@@ -205,6 +205,12 @@ avatars from a second machine on the same network; it changes nothing else. The 
 knows whether it changed — but only written when its bytes differ, so the clients' image
 tags stay put.
 
+Once in a while Jellyfin removes a picture that was just written. Its activity update for
+another device of the same person saves a copy of the account read a moment before the
+write, and that copy has no picture. The next login puts the picture back. Jellyfin's own
+avatar upload is exposed to the same thing, and no plugin can take the lock that would
+prevent it, because Jellyfin reads that copy before taking the lock.
+
 ## Group Mappings
 
 One card per group: *Group name*, *Libraries*, **Admin (all libraries)**, *Live TV
