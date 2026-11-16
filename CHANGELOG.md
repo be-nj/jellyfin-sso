@@ -12,6 +12,27 @@ in the few lines somebody reads before clicking.
 Issue and pull request numbers are given bare rather than as links: the catalog renders
 Markdown, so a link per finding would cost more characters than the lines themselves.
 
+## 1.12.22
+
+- **Linking without the server log.** The _Account Links_ tab lists the sign-ins that were
+  refused for want of an account, and a button fills the link form. The refusal itself
+  tells somebody with a Jellyfin password where to link their own sign-in (#267, #270).
+- **New: _Check saved settings_** on the provider card shows what the server finds at the
+  provider — endpoints, keys, the client secret's reference — or the refusal in full,
+  instead of one sentence in the browser and the reason in the log (#268).
+- **New: _Set permissions from this provider's groups_**, per provider. Off, a login
+  leaves an account's libraries and permissions as you set them — for a provider that
+  sends no groups. With _Create an account at first login_ off as well, that is the
+  setup for **Google**, which now has [a guide](https://github.com/be-nj/jellyfin-sso/blob/main/docs/google.md)
+  written from a login walked by hand (#269, #271).
+- **Fixes.** A client secret is sent as a form parameter where the provider's discovery
+  document asks for that and not for HTTP Basic, and a public client no longer sends a
+  Basic header with an empty password (#277, #278).
+
+Nothing to do on upgrade. The last fix changes the token request of every public client
+to the form the specification describes; if a login that worked stops at the provider
+after this update, that is where to look.
+
 ## 1.12.21
 
 - **Security.** Unlinking an account or a back-channel logout now also ends what a login
