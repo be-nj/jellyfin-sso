@@ -212,7 +212,7 @@ internal static class BrowserSupport
     /// never finished, and the problem is upstream of anything this wait can see.
     /// </summary>
     public static async Task WaitForSignedInAsync(
-        IPage page, string name, IEnumerable<string>? consoleMessages = null)
+        IPage page, string name, IEnumerable<string>? consoleMessages = null, int timeoutMs = WebClientTimeout)
     {
         try
         {
@@ -220,28 +220,54 @@ internal static class BrowserSupport
                 "() => !!(window.ApiClient && window.ApiClient.accessToken() "
                 + "&& window.ApiClient.getCurrentUserId())",
                 null,
-                new PageWaitForFunctionOptions { Timeout = WebClientTimeout });
+                new PageWaitForFunctionOptions { Timeout = timeoutMs });
         }
         catch (TimeoutException)
         {
             await CaptureAsync(page, name);
 
+            var refused = PageConsole.RefusalsOf(page);
             Assert.Fail(
                 $"The web client never adopted the SSO session within "
-                + $"{WebClientTimeout / 1000} s.\n"
+                + $"{timeoutMs / 1000} s.\n"
                 + $"url:         {page.Url}\n"
                 + $"credentials: {await DescribeAsync(page, CredentialsProbe)}\n"
+                + $"server says: {await DescribeAsync(page, StoredTokenProbe)}\n"
                 + $"ApiClient:   {await DescribeAsync(page, ApiClientProbe)}\n"
-                + $"console:     {string.Join(" | ", consoleMessages ?? [])}");
+                + $"refused:     {(refused.Count == 0 ? "nothing" : string.Join(" | ", refused))}\n"
+                // Errors only, unless a caller chose what to pass: jellyfin-web logs the
+                // stored credentials, access token included, at debug level.
+                + $"console:     {string.Join(" | ", consoleMessages ?? PageConsole.ErrorsOf(page))}");
         }
     }
 
+    // Whether a token is stored is said; the token itself never is.
     private const string CredentialsProbe =
         "() => { const raw = localStorage.getItem('jellyfin_credentials');"
         + " if (!raw) return 'none in localStorage';"
         + " try { const s = (JSON.parse(raw).Servers || [])[0];"
-        + " return s ? ('for ' + s.UserName + ' at ' + s.ManualAddress) : 'written but empty'; }"
+        + " return s ? ('for ' + s.UserName + ' at ' + s.ManualAddress"
+        + " + (s.AccessToken ? ', with a token' : ', without a token')) : 'written but empty'; }"
         + " catch (e) { return 'unreadable: ' + e.message; } }";
+
+    /// <summary>
+    /// Asks the server, from the page, what it makes of the token the page has stored.
+    /// The question #282 could not answer: a web client that stays on the login page with
+    /// credentials in storage either never tried them, or tried them and was refused.
+    ///
+    /// The two look like this. Refused: jellyfin-web's first authenticated request,
+    /// <c>GET /System/Info</c>, comes back 401 and it deletes the token it had stored, so
+    /// the credentials read "without a token" and the refused list carries the 401.
+    /// Never used: the credentials still read "with a token", and this probe gets 200 for
+    /// it.
+    /// </summary>
+    private const string StoredTokenProbe =
+        "async () => { const raw = localStorage.getItem('jellyfin_credentials');"
+        + " const s = raw ? (JSON.parse(raw).Servers || [])[0] : null;"
+        + " if (!s || !s.AccessToken) return 'no stored token to ask about';"
+        + " const r = await fetch((s.ManualAddress || '') + '/Users/Me',"
+        + " { headers: { Authorization: 'MediaBrowser Token=\"' + s.AccessToken + '\"' } });"
+        + " return 'GET /Users/Me with the stored token -> ' + r.status; }";
 
     private const string ApiClientProbe =
         "() => !window.ApiClient ? 'not created yet \u2014 the client is still starting'"

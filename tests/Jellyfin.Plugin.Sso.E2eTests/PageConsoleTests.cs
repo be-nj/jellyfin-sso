@@ -39,6 +39,25 @@ public class PageConsoleTests
             ["error: TypeError: t.value.pause is not a function"]));
     }
 
+    /// <summary>
+    /// jellyfin-web writes its stored credentials to the console, and failure messages
+    /// print the console. What a token looks like in each place it appears is masked; the
+    /// rest of the line stays readable.
+    /// </summary>
+    [Theory]
+    [InlineData(
+        "log: Stored JSON credentials: {\"Servers\":[{\"AccessToken\":\"0123456789abcdef0123456789abcdef\",\"UserName\":\"ben\"}]}",
+        "log: Stored JSON credentials: {\"Servers\":[{\"AccessToken\":\"***\",\"UserName\":\"ben\"}]}")]
+    [InlineData(
+        "debug: header MediaBrowser Token=\"0123456789abcdef0123456789abcdef\", Client=\"web\"",
+        "debug: header MediaBrowser Token=\"***\", Client=\"web\"")]
+    [InlineData(
+        "debug: requesting url: http://jf/Videos/1/stream?api_key=0123456789abcdef&Static=true",
+        "debug: requesting url: http://jf/Videos/1/stream?api_key=***&Static=true")]
+    [InlineData("debug: nothing secret here", "debug: nothing secret here")]
+    public void Tokens_in_the_console_are_masked_as_they_are_recorded(string logged, string kept)
+        => Assert.Equal(kept, PageConsole.Masked(logged));
+
     [Fact]
     public void An_empty_console_is_not_a_crash()
     {
