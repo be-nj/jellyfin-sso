@@ -30,11 +30,13 @@ internal static class BrowserSupport
     /// The network errors a CI runner produces while Docker is still rearranging itself,
     /// as Chromium reports them.
     ///
-    /// Starting or stopping a container creates or tears down a bridge network and
-    /// rewrites firewall rules, and a navigation in flight while that happens is
-    /// abandoned. It says nothing about the server or the page: one of three matrix jobs
-    /// failed with ERR_NETWORK_CHANGED on a navigation 237 milliseconds into a test, and
-    /// the other two did not.
+    /// Starting or stopping a container changes the host's interfaces, and Chromium ends
+    /// every request in flight when it sees an address change — up to two seconds after
+    /// the start returned, when the kernel finishes the new interface's IPv6 address.
+    /// It says nothing about the server or the page: one of three matrix jobs failed with
+    /// ERR_NETWORK_CHANGED on a navigation 237 milliseconds into a test, and the other two
+    /// did not. <see cref="HostNetwork"/> now waits that out wherever a container starts
+    /// or stops during a run; this list is for what a runner does besides.
     ///
     /// One list, because there were two of them. RealIdentityProviderTests kept its own,
     /// and the two had diverged: this one knew ERR_CONNECTION_REFUSED and

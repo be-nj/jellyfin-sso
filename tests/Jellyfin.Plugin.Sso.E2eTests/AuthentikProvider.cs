@@ -132,6 +132,7 @@ internal sealed class AuthentikProvider : IRealIdentityProvider
         // The test process cannot resolve host.docker.internal — that name exists for the
         // server container and, through a resolver rule, for the browser.
         await provider.BootstrapAsync(redirectUri, $"https://localhost:{port}");
+        await HostNetwork.SettleAsync();
         return provider;
 
         static ContainerBuilder Authentik(string command) => new ContainerBuilder(Image)
@@ -262,6 +263,7 @@ internal sealed class AuthentikProvider : IRealIdentityProvider
         }
 
         await _network.DeleteAsync();
+        await HostNetwork.SettleAsync();
     }
 
     // ─── API bootstrap ────────────────────────────────────────────────────────
