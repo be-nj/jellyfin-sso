@@ -142,7 +142,7 @@ public sealed class OidcClientFactory : IDisposable
 
         if (doc.IsError)
             throw new InvalidOperationException(
-                $"OIDC discovery failed for {provider.Authority}: {doc.Error}");
+                $"OIDC discovery failed for {provider.Authority}: {ProviderSaid(doc.Error)}");
 
         _cache[cacheKey] = new CacheEntry(doc, DateTimeOffset.UtcNow.Add(CacheTtl), hosts);
         return doc;
@@ -384,10 +384,20 @@ public sealed class OidcClientFactory : IDisposable
 
         var response = await _http.RequestAuthorizationCodeTokenAsync(req, ct).ConfigureAwait(false);
         if (response.IsError)
-            throw new InvalidOperationException($"Token exchange failed: {response.Error}");
+            throw new InvalidOperationException($"Token exchange failed: {ProviderSaid(response.Error)}");
 
         return response;
     }
+
+    /// <summary>
+    /// What a provider answered a failed request with, made fit for a log line. These
+    /// strings come out of the provider's response — an <c>error</c> member, an issuer the
+    /// document named — and every one of them ends up in an exception message that is
+    /// logged. Left as sent, a newline in one writes a line of its own into the server
+    /// log, timestamp and level included. The provider is trusted for who a person is;
+    /// that is no reason to let it write the log.
+    /// </summary>
+    private static string ProviderSaid(string? text) => Logging.Loggable.OneLine(text);
 
     /// <summary>
     /// How the client secret is sent to the token endpoint. HTTP Basic, which is what
@@ -424,7 +434,7 @@ public sealed class OidcClientFactory : IDisposable
         var response = await _http.GetUserInfoAsync(request, ct).ConfigureAwait(false);
 
         if (response.IsError)
-            throw new InvalidOperationException($"Userinfo request failed: {response.Error}");
+            throw new InvalidOperationException($"Userinfo request failed: {ProviderSaid(response.Error)}");
 
         return response;
     }
