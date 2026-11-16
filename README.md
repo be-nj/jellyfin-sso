@@ -69,7 +69,7 @@ only Markdown skips the heavy ones.
 
 | | |
 |---|---|
-| **706 unit tests** | Token validation, permissions, lockout guards, revocation races, account writes, markup, the served pages |
+| **707 unit tests** | Token validation, permissions, lockout guards, revocation races, account writes, markup, the served pages |
 | **164 end-to-end tests** | Throwaway Jellyfin container, an OIDC provider built for the suite, real browser — eight of them check the harness's own reading of a browser console and need none of that |
 | **Every Jellyfin 12.x** | The same build against the oldest server the catalog offers it to and the two newest, on every pull request — and against every 12.x there is in the weekly run |
 | **16 real-provider logins** | Authentik, Keycloak and Authelia, through their own forms — including the misconfigurations their guides warn about |

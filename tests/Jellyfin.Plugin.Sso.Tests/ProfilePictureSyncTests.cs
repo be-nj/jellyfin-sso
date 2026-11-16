@@ -205,6 +205,30 @@ public sealed class ProfilePictureSyncTests : IDisposable
             "profile.jpg", _userManager.GetUserById(_userId)!.ProfileImage!.Path, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Jellyfin can take the picture away again. Its activity update saves a copy of the
+    /// whole account that it read a moment earlier, and a copy read before the picture was
+    /// written has none, so UserManager.UpdateUserAsync removes the row. Its per-user lock
+    /// does not prevent that, because the copy is read outside it, and Jellyfin's own
+    /// avatar upload is exposed the same way. The promise is that the next login puts the
+    /// picture back, although the bytes are the ones already written once.
+    /// </summary>
+    [Fact]
+    public async Task A_picture_Jellyfin_removed_again_comes_back_at_the_next_login()
+    {
+        _handler.Respond(HttpStatusCode.OK, "image/png", Png);
+        var sync = Sync();
+        await sync.SyncAsync(_userId, "https://idp.example.com/avatar.png", Idp);
+
+        _userManager.GetUserById(_userId)!.ProfileImage = null;
+        await sync.SyncAsync(_userId, "https://idp.example.com/avatar.png", Idp);
+
+        Assert.Equal(2, await SavedImages());
+        await _persistence.Received(2).SetProfileImageAsync(
+            _userId, Arg.Any<string>(), Arg.Any<CancellationToken>());
+        Assert.NotNull(_userManager.GetUserById(_userId)!.ProfileImage);
+    }
+
     // ─── Where it writes ──────────────────────────────────────────────────────
 
     [Theory]
