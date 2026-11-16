@@ -2,7 +2,7 @@
 
 [Documentation index](README.md) · [README](../README.md)
 
-Two things that affect how you run this:
+Three things that affect how you run this:
 
 - **Revocation is not immediate.** Removing someone from a group at the provider changes
   nothing until their next login, and Jellyfin sessions last a long time. To cut someone
@@ -13,6 +13,12 @@ Two things that affect how you run this:
   the group mapping is written over it again.
 - **No password and no client secret is stored.** The plugin never sees a password, and
   the default client holds no secret — PKCE proves it started the login.
+- **API keys survive a revocation.** Ending somebody's sessions — an unlink, a
+  back-channel logout — ends the tokens Jellyfin issued to their devices. It does not
+  touch API keys made under Dashboard → **API Keys**: Jellyfin keeps those for the
+  server, not for the person who created them, and they carry administrator rights. An
+  administrator whose access is taken away at the provider keeps every key they made.
+  Review that list when an administrator leaves.
 
 The details:
 
@@ -76,5 +82,7 @@ The details:
   (*Further endpoint hosts*, empty by default — Google needs it); the document cannot
   widen it for itself, and the list takes host names only, never a wildcard.
 - Names and group names from a token reach the log on one line, with control characters
-  replaced. They are the one class of logged value that cannot be mapped to a closed set,
-  and a name carrying a newline would otherwise write a line of its own into the log.
+  replaced, and so does what a provider answers a failed request with — the error it
+  names at the token endpoint, the issuer a refused discovery document claims. Those
+  values cannot be mapped to a closed set, and one carrying a newline would otherwise
+  write a line of its own into the log.

@@ -93,6 +93,12 @@ its signature is checked, and the group names that arrive with it.
   ([the conformance run](reviews/2026-11-06-oidc-conformance.md)). That is the honest
   status of this document: it is a record of what has been thought about, not evidence
   that enough has been.
+- **API keys are outside revocation.** Revoking an account ends its device tokens.
+  API keys from Dashboard → **API Keys** belong to the server in Jellyfin's model, not to
+  the administrator who made one, so an administrator revoked at the provider keeps the
+  keys they created. The plugin has no record of who made which key and does not try to
+  guess. [Security notes](security.md) says to review the list when an administrator
+  leaves.
 - **A group change waits for the next login.** Removing someone from a group at the
   provider changes their permissions only when they sign in again. A session *ended* at
   the provider now ends in Jellyfin too, where the provider sends back-channel logout
