@@ -127,8 +127,10 @@ public sealed class PrefixedDeploymentTests : IAsyncLifetime
         var page = await traced.NewPageAsync();
 
         // Through the retrying helper: this class starts a container of its own moments
-        // before navigating, and Docker rearranging its networks abandons a navigation in
-        // flight with ERR_NETWORK_CHANGED. One of three matrix jobs failed exactly there.
+        // before navigating, and the host announcing that container's address abandons
+        // whatever is in flight with ERR_NETWORK_CHANGED. One of three matrix jobs failed
+        // exactly there. PrefixedProxy now waits for that announcement (HostNetwork); the
+        // retry stays for whatever else a runner's network does.
         var landed = await BrowserSupport.GotoAsync(page, $"{_proxy.BaseUrl}/sso/oidc/start");
 
         try

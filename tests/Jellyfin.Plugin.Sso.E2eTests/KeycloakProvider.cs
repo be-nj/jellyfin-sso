@@ -95,6 +95,7 @@ internal sealed class KeycloakProvider : IRealIdentityProvider
             .Build();
 
         await container.StartAsync();
+        await HostNetwork.SettleAsync();
         return new KeycloakProvider(container, port);
     }
 
@@ -123,7 +124,11 @@ internal sealed class KeycloakProvider : IRealIdentityProvider
         await page.ClickAsync("#kc-login");
     }
 
-    public async ValueTask DisposeAsync() => await _container.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await _container.DisposeAsync();
+        await HostNetwork.SettleAsync();
+    }
 
     private static JsonNode RealmJson() => new JsonObject
     {

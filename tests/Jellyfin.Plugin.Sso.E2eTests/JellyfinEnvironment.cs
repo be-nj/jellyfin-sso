@@ -107,6 +107,7 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
             .Build();
 
         await _jellyfin.StartAsync();
+        await HostNetwork.SettleAsync();
 
         BaseUrl = $"http://{_jellyfin.Hostname}:{_jellyfin.GetMappedPublicPort(8096)}";
         _admin = new HttpClient { BaseAddress = new Uri(BaseUrl) };

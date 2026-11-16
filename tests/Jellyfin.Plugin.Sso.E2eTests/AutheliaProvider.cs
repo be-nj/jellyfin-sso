@@ -81,6 +81,7 @@ internal sealed class AutheliaProvider : IRealIdentityProvider
             .Build();
 
         await container.StartAsync();
+        await HostNetwork.SettleAsync();
         return new AutheliaProvider(container, authority, serverBaseUrl);
     }
 
@@ -109,7 +110,11 @@ internal sealed class AutheliaProvider : IRealIdentityProvider
         await page.ClickAsync("#sign-in-button");
     }
 
-    public async ValueTask DisposeAsync() => await _container.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await _container.DisposeAsync();
+        await HostNetwork.SettleAsync();
+    }
 
     /// <summary>
     /// Authelia's file backend stores argon2id digests, and its own CLI is the only

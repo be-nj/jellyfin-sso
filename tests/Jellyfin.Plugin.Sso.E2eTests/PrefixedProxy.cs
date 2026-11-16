@@ -67,11 +67,22 @@ internal sealed class PrefixedProxy : IAsyncDisposable
 
         await nginx.StartAsync();
 
+        // The tests navigate straight after this, and a started container is not yet a
+        // quiet network: HostNetwork says why. Both CI sightings of ERR_NETWORK_CHANGED in
+        // the regular tier were in the class that starts this proxy.
+        await HostNetwork.SettleAsync();
+
         return new PrefixedProxy(
             nginx, $"https://{TestCertificate.HostName}:{port}{Prefix}");
     }
 
-    public async ValueTask DisposeAsync() => await _nginx.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await _nginx.DisposeAsync();
+
+        // The next class's first navigation would otherwise run into the teardown.
+        await HostNetwork.SettleAsync();
+    }
 
     internal async Task<string> LogsAsync()
     {

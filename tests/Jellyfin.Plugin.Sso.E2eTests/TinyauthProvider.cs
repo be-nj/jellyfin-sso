@@ -154,6 +154,7 @@ internal sealed class TinyauthProvider : IRealIdentityProvider
             .Build();
 
         await proxy.StartAsync();
+        await HostNetwork.SettleAsync();
 
         return new TinyauthProvider(tinyauth, proxy, network, authority);
     }
@@ -195,6 +196,7 @@ internal sealed class TinyauthProvider : IRealIdentityProvider
         await _proxy.DisposeAsync();
         await _tinyauth.DisposeAsync();
         await _network.DisposeAsync();
+        await HostNetwork.SettleAsync();
     }
 
     /// <summary>
