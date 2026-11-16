@@ -9,6 +9,14 @@
     "imageUrl": "https://jf.be-nj.net/docs/img/icon.png",
     "versions": [
       {
+        "version": "1.12.22.0",
+        "changelog": "- **Linking without the server log.** The _Account Links_ tab lists the sign-ins that were\n  refused for want of an account, and a button fills the link form. The refusal itself\n  tells somebody with a Jellyfin password where to link their own sign-in (#267, #270).\n- **New: _Check saved settings_** on the provider card shows what the server finds at the\n  provider — endpoints, keys, the client secret's reference — or the refusal in full,\n  instead of one sentence in the browser and the reason in the log (#268).\n- **New: _Set permissions from this provider's groups_**, per provider. Off, a login\n  leaves an account's libraries and permissions as you set them — for a provider that\n  sends no groups. With _Create an account at first login_ off as well, that is the\n  setup for **Google**, which now has [a guide](https://github.com/be-nj/jellyfin-sso/blob/main/docs/google.md)\n  written from a login walked by hand (#269, #271).\n- **Fixes.** A client secret is sent as a form parameter where the provider's discovery\n  document asks for that and not for HTTP Basic, and a public client no longer sends a\n  Basic header with an empty password (#277, #278).\n\nNothing to do on upgrade. The last fix changes the token request of every public client\nto the form the specification describes; if a login that worked stops at the provider\nafter this update, that is where to look.",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/be-nj/jellyfin-sso/releases/download/v1.12.22/jellyfin-sso_1.12.22.0.zip",
+        "checksum": "bafcfe9820a4666a23134032c42ac383",
+        "timestamp": "2026-11-16T00:23:03Z"
+      },
+      {
         "version": "1.12.21.0",
         "changelog": "- **Security.** Unlinking an account or a back-channel logout now also ends what a login\n  in progress had already handed out: the one-time sign-in secret, a Quick Connect approval\n  not yet clicked, and a token Jellyfin mints at that moment, through its own password\n  login and Quick Connect page as well (#243, #250, #251). A profile-picture download no\n  longer undoes an administrator disabling the account meanwhile (#244), a new account is\n  disabled and SSO-only from the moment it is first saved (#245), and a disabled account\n  can no longer let a Quick Connect device in (#253).\n- **Google works again.** New: _Further endpoint hosts_ on the provider card names the\n  hosts a provider serves its keys and tokens from besides its issuer's. For Google:\n  `www.googleapis.com oauth2.googleapis.com openidconnect.googleapis.com` (#260).\n- **New: _Create an account at first login_**, per provider. Off, only accounts linked\n  beforehand sign in, which is what a provider that admits everyone it knows needs.\n  Existing providers keep it on; **a provider you add starts with it off** (#262).\n- **Fixes.** A first login and a self-service link racing for one identity can no longer\n  both win; switching off _Allow self-service linking_ also stops a link already started;\n  Jellyfin's own plugin-configuration endpoint can no longer drop a link without ending its\n  sessions; the `jwks_uri` host is checked before the keys are fetched (#246, #247, #249,\n  #252, #254).\n- **Also.** A login that collides with another change to the account gets \"Please sign in\n  again\" (409) instead of a configuration error, and the server log says at startup\n  whether every Jellyfin login action the revocation guard watches is present (#255, #256).\n\nNothing to do on upgrade, unless you sign in through Google: name its three hosts as above.",
         "targetAbi": "12.0.0.0",
@@ -39,14 +47,6 @@
         "sourceUrl": "https://github.com/be-nj/jellyfin-sso/releases/download/v1.12.18/jellyfin-sso_1.12.18.0.zip",
         "checksum": "9bff75b3c3c85af5a83b7783379e6109",
         "timestamp": "2026-11-05T04:13:37Z"
-      },
-      {
-        "version": "1.12.17.0",
-        "changelog": "A security release. A review of the whole plugin found thirteen defects, all fixed.\n\n- **Any account holder could make themselves an administrator.** A pending login was not\n  tied to the browser that began it; a cookie binds the flow now (#126–#138).\n- **Also fixed.** The client secret was readable by anonymous callers, two server-side\n  request forgeries returned their response, a blank `sub` collapsed users into one\n  account, a logout token could be replayed, and the approval and logout pages could be\n  framed or triggered from any site.\n- **Four behaviour changes, none needing action on an ordinary setup.**\n  `DELETE /sso/link/self` now requires `?providerId=…`; profile pictures are no longer\n  fetched from private addresses, which _Allow profile pictures from this network_ lifts; a\n  discovery document must keep `jwks_uri`, `token_endpoint` and `userinfo_endpoint` on the\n  authority's host; and a `ConfidentialSecretRef` must use `env:` or `file:`.\n\n**If you pasted a literal client secret into `ConfidentialSecretRef`, rotate it** — it was\nreadable by anyone who could trigger a callback.",
-        "targetAbi": "12.0.0.0",
-        "sourceUrl": "https://github.com/be-nj/jellyfin-sso/releases/download/v1.12.17/jellyfin-sso_1.12.17.0.zip",
-        "checksum": "435f1d6712499b222e7a3374339fd62b",
-        "timestamp": "2026-11-05T01:21:16Z"
       }
     ]
   }
