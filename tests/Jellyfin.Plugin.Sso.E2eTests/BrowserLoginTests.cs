@@ -126,6 +126,14 @@ public sealed class BrowserLoginTests : IAsyncLifetime
         await BrowserSupport.GotoAsync(page, "/sso/oidc/start");
         await WaitForWebAppAsync(page, "reload");
 
+        // Reload only once the web client holds the session, not as soon as the address
+        // reads /web/. On every start jellyfin-web checks its stored token with
+        // GET /System/Info, and if that request fails for any reason — a reload cancelling
+        // it included — it deletes the token from localStorage and shows the login page.
+        // Reloading on the address alone sometimes landed inside that request: that was
+        // #282, a test signing itself out rather than the session failing to survive.
+        await WaitForSignedInAsync(page, "reload-before");
+
         await page.ReloadAsync();
         await WaitForSignedInAsync(page, "reload");
 
