@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 
 namespace Jellyfin.Plugin.Sso.E2eTests;
@@ -18,9 +19,10 @@ namespace Jellyfin.Plugin.Sso.E2eTests;
 /// can say what the client was doing. The table holds weak references to the pages, so a
 /// closed page takes its messages with it.
 /// </summary>
-internal static class PageConsole
+internal static partial class PageConsole
 {
     private static readonly ConditionalWeakTable<IPage, List<string>> Messages = new();
+    private static readonly ConditionalWeakTable<IPage, List<string>> Refusals = new();
 
     /// <summary>Starts recording. Called for every page <see cref="TracedContext"/> opens.</summary>
     internal static void Record(IPage page)
@@ -31,10 +33,57 @@ internal static class PageConsole
         {
             lock (lines)
             {
-                lines.Add($"{message.Type}: {message.Text}");
+                lines.Add($"{message.Type}: {Masked(message.Text)}");
+            }
+        };
+
+        // And every answer the server refused. A web client that drops a session does so
+        // after a request comes back 401, and nothing in the console says which request
+        // that was (#282). Path and status only: query strings carry tokens.
+        var refused = Refusals.GetOrCreateValue(page);
+        page.Response += (_, response) =>
+        {
+            if (response.Status < 400)
+            {
+                return;
+            }
+
+            var path = Uri.TryCreate(response.Url, UriKind.Absolute, out var uri)
+                ? uri.AbsolutePath
+                : "(unparseable address)";
+            lock (refused)
+            {
+                refused.Add($"{response.Request.Method} {path} -> {response.Status}");
             }
         };
     }
+
+    /// <summary>Every request of this page the server answered with 400 or worse, oldest first.</summary>
+    internal static IReadOnlyList<string> RefusalsOf(IPage page)
+    {
+        if (!Refusals.TryGetValue(page, out var refused))
+        {
+            return [];
+        }
+
+        lock (refused)
+        {
+            return [.. refused];
+        }
+    }
+
+    /// <summary>
+    /// jellyfin-web logs its stored credentials, access token included, at debug level, and
+    /// three failure messages print the whole console into a CI log. The tokens belong to a
+    /// throwaway server and still have no business there, so they are masked as they are
+    /// recorded, for every reader at once.
+    /// </summary>
+    internal static string Masked(string text)
+        => Secrets().Replace(text, match => match.Groups["keep"].Value + "***");
+
+    [GeneratedRegex("""(?<keep>"AccessToken"\s*:\s*")[^"]*|(?<keep>Token=\\?")[^"\\]*|(?<keep>api_key=)[^&\s"]*""",
+        RegexOptions.IgnoreCase)]
+    private static partial Regex Secrets();
 
     /// <summary>Everything this page has logged, oldest first.</summary>
     internal static IReadOnlyList<string> Of(IPage page)
