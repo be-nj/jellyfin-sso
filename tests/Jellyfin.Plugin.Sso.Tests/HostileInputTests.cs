@@ -25,6 +25,9 @@ public sealed class HostileInputTests
         "/jellyfin\r\nX-Injected: 1", "/%2e%2e/%2e%2e", "/jellyfin?x=1#y",
         "/jellyfin<script>alert(1)</script>", "/jellyfin'\"<>", "\0", " ", "/".PadRight(300, 'a'),
         "jellyfin", "/jellyfin/", "///", "/‮", "/ü", "/jellyfin\u0000",
+        // An empty segment in the middle, which random input produces about once in sixty
+        // runs and the rule let through until #296.
+        "/jellyfin//sub", "/r//./-/-./%%.rt.l/%-//ft-zVt%..6",
     ];
 
     private static IEnumerable<string> Inputs()
