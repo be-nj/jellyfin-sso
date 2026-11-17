@@ -7,6 +7,7 @@ using Jellyfin.Plugin.Sso.Provisioning;
 using Jellyfin.Plugin.Sso.Web;
 using Jellyfin.Data;
 using Jellyfin.Database.Implementations.Enums;
+using MediaBrowser.Common.Extensions;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.QuickConnect;
 using Microsoft.AspNetCore.Authorization;
@@ -231,8 +232,18 @@ public sealed class SsoCallbackController : SsoFlowController
             return PlainText.Forbidden("This account is disabled.");
         }
 
-        var authorized = await _quickConnect.AuthorizeRequest(pending.UserId, quickConnectCode)
-            .ConfigureAwait(false);
+        bool authorized;
+        try
+        {
+            authorized = await _quickConnect.AuthorizeRequest(pending.UserId, quickConnectCode)
+                .ConfigureAwait(false);
+        }
+        catch (ResourceNotFoundException)
+        {
+            // Jellyfin's answer to a code no device is waiting with: a typo, once the code
+            // is typed in, rather than a fault.
+            authorized = false;
+        }
 
         if (!authorized)
             return PlainText.BadRequest(
