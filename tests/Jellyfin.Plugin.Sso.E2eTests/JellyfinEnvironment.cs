@@ -79,34 +79,41 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
         Certificate = TestCertificate.Create(Path.Combine(WorkDirectory, "certs"));
         Idp = await FakeIdentityProvider.StartAsync(Certificate);
 
-        _jellyfin = new ContainerBuilder($"jellyfin/jellyfin:{ServerImageTag(repoRoot)}")
-            // A port Docker picks, unless a run asks for one: a provider nobody here
-            // controls has the redirect URI registered with it in advance, and that
-            // needs an address known before the container exists. See GoogleLoginTests.
-            .WithPortBinding(FixedHostPort ?? 0, 8096)
-            // Lets the server call the fake provider running in the test process.
-            .WithExtraHost("host.docker.internal", "host-gateway")
-            // And the conformance suite, which runs in its own containers and publishes
-            // itself on the Docker host under this name. Inside a container the name
-            // resolves to 127.0.0.1, which would be the server itself.
-            .WithExtraHost(TestCertificate.ConformanceHostName, "host-gateway")
-            .WithBindMount(pluginDir, $"/config/plugins/SSO Authentication_{PluginVersion}", AccessMode.ReadWrite)
-            .WithBindMount(mediaDir, "/media", AccessMode.ReadOnly)
-            .WithBindMount(Certificate.CertificatePath, "/usr/local/share/ca-certificates/e2e-idp.crt", AccessMode.ReadOnly)
-            // The fake provider serves HTTPS with a self-signed certificate, so the server
-            // has to trust it before Jellyfin starts.
-            .WithEntrypoint("/bin/sh", "-c")
-            // The server resolves the bundled web client relative to its working directory.
-            .WithWorkingDirectory("/jellyfin")
-            .WithCommand("update-ca-certificates > /dev/null && exec /jellyfin/jellyfin")
-            // /System/Info/Public answers long before the server is usable; the startup
-            // wizard endpoints reply 503 with Retry-After until it is.
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r
-                .ForPath("/Startup/User")
-                .ForPort(8096)))
-            .Build();
+        var image = $"jellyfin/jellyfin:{ServerImageTag(repoRoot)}";
+        // The largest image here, and pulled fresh for every server version a run covers.
+        // A pull that fails part-way would otherwise read as "No such image"; see ImagePull.
+        await ImagePull.RetryAsync(image, async log =>
+        {
+            _jellyfin = new ContainerBuilder(image)
+                .WithLogger(log)
+                // A port Docker picks, unless a run asks for one: a provider nobody here
+                // controls has the redirect URI registered with it in advance, and that
+                // needs an address known before the container exists. See GoogleLoginTests.
+                .WithPortBinding(FixedHostPort ?? 0, 8096)
+                // Lets the server call the fake provider running in the test process.
+                .WithExtraHost("host.docker.internal", "host-gateway")
+                // And the conformance suite, which runs in its own containers and publishes
+                // itself on the Docker host under this name. Inside a container the name
+                // resolves to 127.0.0.1, which would be the server itself.
+                .WithExtraHost(TestCertificate.ConformanceHostName, "host-gateway")
+                .WithBindMount(pluginDir, $"/config/plugins/SSO Authentication_{PluginVersion}", AccessMode.ReadWrite)
+                .WithBindMount(mediaDir, "/media", AccessMode.ReadOnly)
+                .WithBindMount(Certificate.CertificatePath, "/usr/local/share/ca-certificates/e2e-idp.crt", AccessMode.ReadOnly)
+                // The fake provider serves HTTPS with a self-signed certificate, so the server
+                // has to trust it before Jellyfin starts.
+                .WithEntrypoint("/bin/sh", "-c")
+                // The server resolves the bundled web client relative to its working directory.
+                .WithWorkingDirectory("/jellyfin")
+                .WithCommand("update-ca-certificates > /dev/null && exec /jellyfin/jellyfin")
+                // /System/Info/Public answers long before the server is usable; the startup
+                // wizard endpoints reply 503 with Retry-After until it is.
+                .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r
+                    .ForPath("/Startup/User")
+                    .ForPort(8096)))
+                .Build();
 
-        await _jellyfin.StartAsync();
+            await _jellyfin.StartAsync();
+        });
         await HostNetwork.SettleAsync();
 
         BaseUrl = $"http://{_jellyfin.Hostname}:{_jellyfin.GetMappedPublicPort(8096)}";
