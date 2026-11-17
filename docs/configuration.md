@@ -270,6 +270,16 @@ With `all=https://your-jellyfin` set, the button carries that address and works 
 apps too. Use the address people actually open; it is the same value Jellyfin hands to
 clients for everything else.
 
+### Public address
+
+*Public address* (on the provider tab) is the plugin's own: the address people open
+Jellyfin at, with its sub-path if it has one. Set, the redirect URI the provider is given,
+the cookies and the links in the plugin's pages are built from it alone. Empty, they are
+built from each request's `Host` and `X-Forwarded-Host`, `-Proto` and `-Prefix` headers,
+which the plugin reads from whoever sent the request: then only an exact redirect URI
+registered at the provider keeps a forged header from sending the login's code to another
+host. Set it whenever the address is known.
+
 ## Safety
 
 Same tab as the group mappings:
