@@ -219,4 +219,14 @@ public sealed class SsoPagesTests
         Assert.DoesNotContain("input[type=\"password\"]", script, StringComparison.Ordinal);
         Assert.DoesNotContain("document.querySelector('form')", script, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Without_a_code_from_the_link_the_approval_asks_for_it()
+    {
+        var page = SsoPages.ApproveQuickConnect(string.Empty, "ben", string.Empty, "token");
+
+        Assert.Contains("name=\"code\"", page);
+        Assert.Contains("Type the code your device is showing", page);
+        Assert.DoesNotContain("A device is waiting with this code", page);
+    }
 }

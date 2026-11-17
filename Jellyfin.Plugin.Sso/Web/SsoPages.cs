@@ -243,13 +243,24 @@ internal static class SsoPages
             """,
             $"""
             <h1>Approve this device?</h1>
-            <p>Signed in as <strong>{Html(username)}</strong>. A device is waiting with this code:</p>
-            <p class="code">{Html(quickConnectCode)}</p>
-            <p>Approve only if this is the code your own device is showing.</p>
-            <form method="post" action="{basePath}/sso/oidc/qc/approve">
-              <input type="hidden" name="token" value="{Html(token)}"/>
-              <button type="submit">Approve</button>
-            </form>
+            {(quickConnectCode.Length == 0
+                ? $"""
+                  <p>Signed in as <strong>{Html(username)}</strong>. Type the code your device is showing:</p>
+                  <form method="post" action="{basePath}/sso/oidc/qc/approve">
+                    <input type="hidden" name="token" value="{Html(token)}"/>
+                    <input class="code" name="code" inputmode="numeric" autocomplete="off" required autofocus/>
+                    <button type="submit">Approve</button>
+                  </form>
+                  """
+                : $"""
+                  <p>Signed in as <strong>{Html(username)}</strong>. A device is waiting with this code:</p>
+                  <p class="code">{Html(quickConnectCode)}</p>
+                  <p>Approve only if this is the code your own device is showing.</p>
+                  <form method="post" action="{basePath}/sso/oidc/qc/approve">
+                    <input type="hidden" name="token" value="{Html(token)}"/>
+                    <button type="submit">Approve</button>
+                  </form>
+                  """)}
             <p><a href="{basePath}/web/index.html">Cancel</a></p>
             """);
 
