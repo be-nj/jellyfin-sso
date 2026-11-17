@@ -112,6 +112,7 @@ function load(view) {
         setChk(view, 'UseProviderLogos', _config.UseProviderLogos !== false);
         setChk(view, 'InjectLoginButtonIntoForm', !!_config.InjectLoginButtonIntoForm);
         setChk(view, 'AllowSelfServiceLinking', !!_config.AllowSelfServiceLinking);
+        setChk(view, 'TypeQuickConnectCode', !!_config.TypeQuickConnectCode);
         setChk(view, 'SyncProfilePictures', !!_config.SyncProfilePictures);
         setChk(view, 'AllowPrivateNetworkPictures', !!_config.AllowPrivateNetworkPictures);
         // A saved 0 means off and has to survive the round trip, so only a missing
@@ -224,6 +225,7 @@ function save(view) {
         UseProviderLogos: getChk(view, 'UseProviderLogos'),
         InjectLoginButtonIntoForm: getChk(view, 'InjectLoginButtonIntoForm'),
         AllowSelfServiceLinking: getChk(view, 'AllowSelfServiceLinking'),
+        TypeQuickConnectCode: getChk(view, 'TypeQuickConnectCode'),
         SyncProfilePictures: getChk(view, 'SyncProfilePictures'),
         AllowPrivateNetworkPictures: getChk(view, 'AllowPrivateNetworkPictures'),
         LoginRequestsPerMinute: rateLimit(view),

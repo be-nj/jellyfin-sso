@@ -233,6 +233,18 @@
             </div>
             <div class="checkboxContainer">
               <label>
+                <input id="TypeQuickConnectCode" type="checkbox" is="emby-checkbox" />
+                <span>Type the Quick Connect code in</span>
+              </label>
+              <div class="fieldDescription">
+                The approval page asks for the code the device shows instead of taking it
+                from <code>/sso/oidc/start/qc?code=…</code>. A link is something anybody can
+                send; a typed code can only come from the device in front of you. Open
+                <code>/sso/oidc/start/qc</code> without a code then.
+              </div>
+            </div>
+            <div class="checkboxContainer">
+              <label>
                 <input id="AllowSelfServiceLinking" type="checkbox" is="emby-checkbox" />
                 <span>Let users link their own account</span>
               </label>

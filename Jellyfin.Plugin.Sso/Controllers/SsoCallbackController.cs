@@ -207,12 +207,19 @@ public sealed class SsoCallbackController : SsoFlowController
     [HttpPost("oidc/qc/approve")]
     [AllowAnonymous]
     [ServiceFilter<RateLimitFilter>]
-    public async Task<IActionResult> ApproveQuickConnect([FromForm] string? token)
+    public async Task<IActionResult> ApproveQuickConnect([FromForm] string? token, [FromForm] string? code)
     {
         var pending = _approvals.Consume(token);
         if (pending is null)
         {
             return PlainText.BadRequest("This approval has expired. Start the login again.");
+        }
+
+        // The code from the link, or, when the page asked for it, the one typed in.
+        var quickConnectCode = pending.Code.Length > 0 ? pending.Code : code?.Trim() ?? string.Empty;
+        if (quickConnectCode.Length == 0)
+        {
+            return PlainText.BadRequest("No code was typed in. Start the login again.");
         }
 
         // Jellyfin mints the device's token inside AuthorizeRequest and checks nothing
@@ -224,7 +231,7 @@ public sealed class SsoCallbackController : SsoFlowController
             return PlainText.Forbidden("This account is disabled.");
         }
 
-        var authorized = await _quickConnect.AuthorizeRequest(pending.UserId, pending.Code)
+        var authorized = await _quickConnect.AuthorizeRequest(pending.UserId, quickConnectCode)
             .ConfigureAwait(false);
 
         if (!authorized)

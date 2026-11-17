@@ -64,14 +64,15 @@ public sealed class SsoStartController : SsoFlowController
     [AllowAnonymous]
     [ServiceFilter<RateLimitFilter>]
     public async Task<IActionResult> StartDefaultQuickConnect(
-        [FromQuery] string code, CancellationToken ct)
+        [FromQuery] string? code, CancellationToken ct)
     {
         var enabled = EnabledProviders();
         if (enabled.Count == 0)
             return NotFound("No enabled SSO provider configured.");
         if (enabled.Count > 1)
             return ProviderPicker(
-                enabled, queryString: $"?code={Uri.EscapeDataString(code)}", quickConnect: true);
+                enabled, queryString: code is null ? string.Empty : $"?code={Uri.EscapeDataString(code)}",
+                quickConnect: true);
 
         return await StartWithQuickConnect(enabled[0].Id, code, ct).ConfigureAwait(false);
     }
@@ -96,10 +97,17 @@ public sealed class SsoStartController : SsoFlowController
     [AllowAnonymous]
     [ServiceFilter<RateLimitFilter>]
     public async Task<IActionResult> StartWithQuickConnect(
-        string providerId, [FromQuery] string code, CancellationToken ct)
+        string providerId, [FromQuery] string? code, CancellationToken ct)
     {
         if (!_quickConnect.IsEnabled)
             return PlainText.BadRequest("Quick Connect is disabled on this server.");
+
+        // An empty code means the approval page asks for it; a code in the link is not
+        // taken then, whoever sent the link.
+        if (Plugin.Instance?.Configuration.TypeQuickConnectCode == true)
+            code = string.Empty;
+        else if (string.IsNullOrWhiteSpace(code))
+            return PlainText.BadRequest("The link has no Quick Connect code.");
 
         var provider = EnabledProvider(providerId);
         if (provider is null)

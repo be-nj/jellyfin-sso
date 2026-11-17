@@ -45,6 +45,11 @@ Connect, which this plugin can complete:
 Afterwards the app holds a normal Jellyfin session — once per device, not per evening,
 and no password is ever typed into a television.
 
+With **Type the Quick Connect code in** switched on, step 3 is
+`https://<your-jellyfin>/sso/oidc/start/qc` without a code, and the approval page asks for
+the code instead of showing one. A code in a link is ignored then: a link that somebody
+else sent can no longer carry their device's code into your approval.
+
 Where step 2 is, app by app, because it is not always where you would look:
 
 | App | Where Quick Connect is |
