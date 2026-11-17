@@ -1,4 +1,5 @@
 using Jellyfin.Plugin.Sso.Oidc;
+using Jellyfin.Plugin.Sso.Web;
 
 namespace Jellyfin.Plugin.Sso.Configuration;
 
@@ -72,6 +73,12 @@ public static class ConfigurationRules
             {
                 return $"Group mapping '{mapping.Group}': '{bad}' is not a library id.";
             }
+        }
+
+        if (!string.IsNullOrWhiteSpace(config.PublicAddress) && SsoAddress.Configured(config.PublicAddress) is null)
+        {
+            return $"'{config.PublicAddress}' is not a public address. Use the address people open "
+                + "Jellyfin at, like https://jellyfin.example.com or https://example.com/jellyfin.";
         }
 
         return null;

@@ -167,6 +167,18 @@
 
           <div class="sso-card sso-mt">
             <h3 class="sso-card-title">Sessions and the login page</h3>
+            <div class="inputContainer">
+              <label class="inputLabel" for="PublicAddress">Public address</label>
+              <input id="PublicAddress" type="url" is="emby-input"
+                     placeholder="https://jellyfin.example.com" />
+              <div class="fieldDescription">
+                The address people open Jellyfin at, with its sub-path if it has one. Set,
+                the redirect URI the provider is given is built from it alone. Empty, it is
+                built from each request's <code>Host</code> and <code>X-Forwarded-*</code>
+                headers, which are only as trustworthy as the proxy that sets them and the
+                redirect URIs the provider accepts.
+              </div>
+            </div>
             <div class="checkboxContainer">
               <label>
                 <input id="SignOutOfIdentityProvider" type="checkbox" is="emby-checkbox" />

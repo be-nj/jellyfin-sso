@@ -106,6 +106,7 @@ function load(view) {
     ]).then(function (r) {
         _config = r[0]; _libraries = r[1]; _seenGroups = r[2];
         renderProviders(view, _config.Providers || []);
+        setVal(view, 'PublicAddress', _config.PublicAddress || '');
         setChk(view, 'SignOutOfIdentityProvider', !!_config.SignOutOfIdentityProvider);
         setChk(view, 'AddLoginButtonToBranding', _config.AddLoginButtonToBranding !== false);
         setChk(view, 'UseProviderLogos', _config.UseProviderLogos !== false);
@@ -217,6 +218,7 @@ function save(view) {
         SeenGroups: (_config && _config.SeenGroups) || [],
         RequireMappedGroup: getChk(view, 'RequireMappedGroup'),
         PreserveAdminPermissions: getChk(view, 'PreserveAdminPermissions'),
+        PublicAddress: getVal(view, 'PublicAddress').trim(),
         SignOutOfIdentityProvider: getChk(view, 'SignOutOfIdentityProvider'),
         AddLoginButtonToBranding: getChk(view, 'AddLoginButtonToBranding'),
         UseProviderLogos: getChk(view, 'UseProviderLogos'),

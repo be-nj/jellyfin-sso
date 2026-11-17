@@ -30,6 +30,32 @@ public sealed class SsoAddressTests
     }
 
     [Fact]
+    public void A_public_address_ignores_what_the_request_claims()
+    {
+        var http = new DefaultHttpContext();
+        http.Request.Host = new HostString("attacker.example");
+        http.Request.Headers["X-Forwarded-Host"] = "attacker.example";
+        http.Request.Headers["X-Forwarded-Proto"] = "http";
+        http.Request.Headers["X-Forwarded-Prefix"] = "/elsewhere";
+
+        var at = SsoAddress.For(http.Request, "https://example.com/jellyfin/");
+
+        Assert.Equal("https://example.com/jellyfin/sso/oidc/callback/authentik", at.CallbackUri("authentik"));
+        Assert.Equal("/jellyfin", at.BasePath);
+        Assert.True(at.Secure);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("jellyfin.example.com")]
+    [InlineData("ftp://jellyfin.example.com")]
+    [InlineData("https://jellyfin.example.com/?next=x")]
+    [InlineData("https://user@jellyfin.example.com")]
+    [InlineData("https://jellyfin.example.com/it's")]
+    public void Anything_but_an_address_is_no_public_address(string address)
+        => Assert.Null(SsoAddress.Configured(address));
+
+    [Fact]
     public void Without_a_proxy_the_request_itself_says_where_the_server_is()
     {
         var at = From();

@@ -36,7 +36,19 @@ internal sealed class SsoAddress
     internal bool Secure => BaseUri.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
 
     internal static SsoAddress For(HttpRequest request)
+        => For(request, Plugin.Instance?.Configuration.PublicAddress);
+
+    /// <summary>
+    /// The configured public address when there is one; the headers are not read then,
+    /// so a request cannot move the redirect URI to a host of its choosing.
+    /// </summary>
+    internal static SsoAddress For(HttpRequest request, string? publicAddress)
     {
+        if (Configured(publicAddress) is { } configured)
+        {
+            return configured;
+        }
+
         var basePath = ForwardedPaths.Prefix(
             request.Headers["X-Forwarded-Prefix"].FirstOrDefault(),
             request.PathBase.Value);
@@ -53,6 +65,26 @@ internal sealed class SsoAddress
         // or a proxy that keeps the prefix) must keep that prefix in its redirect URI,
         // or the provider sends the browser to a path this server does not serve.
         return new SsoAddress(basePath, ForwardedPaths.BaseUri(scheme, host, basePath));
+    }
+
+    /// <summary>A public address as an address, or null when it is empty or not one.</summary>
+    internal static SsoAddress? Configured(string? address)
+    {
+        if (!Uri.TryCreate(address?.Trim(), UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp)
+            || uri.Query.Length > 0 || uri.Fragment.Length > 0 || uri.UserInfo.Length > 0)
+        {
+            return null;
+        }
+
+        var path = uri.AbsolutePath.TrimEnd('/');
+        var basePath = ForwardedPaths.Prefix(path, null);
+        if (basePath != path)
+        {
+            return null;
+        }
+
+        return new SsoAddress(basePath, ForwardedPaths.BaseUri(uri.Scheme, uri.Authority, basePath));
     }
 
     /// <summary>Where the provider is told to send the browser back to.</summary>

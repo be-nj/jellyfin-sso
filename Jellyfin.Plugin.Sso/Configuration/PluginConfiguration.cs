@@ -23,6 +23,13 @@ public class PluginConfiguration : BasePluginConfiguration
     public List<string> SeenGroups { get; set; } = [];
 
     /// <summary>
+    /// The address people open Jellyfin at, with its sub-path if it has one. When set, the
+    /// redirect URI, the cookies and the links are built from it alone; when empty, from
+    /// the request and its forwarded headers, which whoever sends the request controls.
+    /// </summary>
+    public string PublicAddress { get; set; } = string.Empty;
+
+    /// <summary>
     /// When true, an SSO login never clears an existing administrator flag. The escape
     /// hatch for the case where a group rename at the IdP would otherwise demote the
     /// admins; library access is still synced declaratively.
