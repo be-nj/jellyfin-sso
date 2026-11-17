@@ -32,8 +32,12 @@ public static partial class ForwardedPaths
     /// The pages now escape it for that context as well, so this is the belt and that is
     /// the braces. A server published under a path that needs one of those characters can
     /// percent-encode it, which the percent sign still allows.
+    ///
+    /// No empty segment anywhere. At the start "//" would make the rest a host; in the
+    /// middle it is only never a path a server is published under, and the rule used to
+    /// stop at the start while its test asserted the whole (#296).
     /// </summary>
-    [GeneratedRegex(@"^/(?!/)[A-Za-z0-9._~%/-]*$")]
+    [GeneratedRegex(@"^(?!.*//)/[A-Za-z0-9._~%/-]*$")]
     private static partial Regex SafePrefix { get; }
 
     /// <summary>A host, with an optional port — or an IPv6 address in brackets.</summary>
