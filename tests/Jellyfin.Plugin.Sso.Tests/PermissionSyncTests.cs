@@ -169,6 +169,20 @@ public sealed class PermissionSyncTests : IDisposable
         Assert.False(policy.EnableAllFolders);
     }
 
+    [Fact]
+    public async Task A_mapping_for_all_libraries_grants_every_library_without_admin()
+    {
+        ExistingUser(admin: false);
+        _harness.Configuration.GroupMappings.Add(new GroupMappingConfig { Group = "media", AllLibraries = true });
+
+        await _sync.SyncAsync(_userId, Identity("media"));
+
+        var policy = CapturedPolicy();
+        Assert.True(policy.EnableAllFolders);
+        Assert.Empty(policy.EnabledFolders);
+        Assert.False(policy.IsAdministrator);
+    }
+
     /// <summary>
     /// A library is named by its Jellyfin id and those ids are parsed on every login. One
     /// that is not a GUID — edited into the configuration file by hand, or left by an

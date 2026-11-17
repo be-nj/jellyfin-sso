@@ -217,6 +217,10 @@ One card per group: *Group name*, *Libraries*, **Admin (all libraries)**, *Live 
 access*, *Live TV management*, *Downloads*, *Delete media*, *Manage collections*,
 *Manage subtitles*, *Manage lyrics*, *Max parental rating* (empty = no limit).
 
+*All libraries, including ones added later* grants every library without making the group
+administrators, and without naming the libraries: a library created afterwards is included
+too. A mapping written outside the page (`"AllLibraries": true`) needs no library ids.
+
 These four became plugin-managed in 1.12.14: set by hand in Jellyfin for an SSO user,
 they now follow the groups from the next login. The exclusion list under *Safety* is the
 way to keep a particular account out of that.

@@ -83,7 +83,7 @@ public sealed class PermissionSync
             .OfType<Guid>()
             .ToArray();
 
-        var enableAll = isAdmin; // admins see everything
+        var enableAll = isAdmin || matched.Any(m => m.AllLibraries);
 
         _logger.LogInformation(
             "SSO sync for user {Id}: admin={Admin}, libraries={Count}, groups={Groups}",
