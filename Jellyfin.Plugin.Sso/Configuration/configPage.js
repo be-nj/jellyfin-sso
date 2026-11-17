@@ -483,6 +483,7 @@ function buildRow(view, m, i) {
     }).join('');
 
     var adminChecked = m.IsAdministrator ? ' checked' : '';
+    var allChecked = m.AllLibraries ? ' checked' : '';
     var rating = (m.MaxParentalRating === null || m.MaxParentalRating === undefined) ? '' : m.MaxParentalRating;
 
     function permission(cls, labelText, on) {
@@ -496,7 +497,8 @@ function buildRow(view, m, i) {
             '<span class="sso-mapping-title sso-card-name">' +
                 escHtml(m.Group || ('Group ' + (i + 1))) + '</span>' +
             '<span class="sso-card-sub">' +
-                (m.IsAdministrator ? 'administrator' : ((m.LibraryIds || []).length + ' librar'
+                (m.IsAdministrator ? 'administrator' : m.AllLibraries ? 'all libraries'
+                    : ((m.LibraryIds || []).length + ' librar'
                     + (((m.LibraryIds || []).length === 1) ? 'y' : 'ies'))) + '</span>' +
         '</summary>' +
         '<div class="sso-card-body">' +
@@ -512,7 +514,9 @@ function buildRow(view, m, i) {
         '</div>' +
         '<div class="folderAccess sso-libs-section">' +
             '<h3 class="checkboxListLabel">Libraries</h3>' +
-            '<div class="checkboxList sso-libs-grid">' + libsHtml + '</div>' +
+            '<div class="checkboxContainer"><label><input type="checkbox" is="emby-checkbox" class="sso-all-libs-check"' +
+                allChecked + ' /><span>All libraries, including ones added later</span></label></div>' +
+            '<div class="checkboxList sso-libs-grid sso-lib-list">' + libsHtml + '</div>' +
         '</div>' +
         '<div class="sso-perms-section">' +
             '<h3 class="checkboxListLabel">Permissions</h3>' +
@@ -543,6 +547,12 @@ function buildRow(view, m, i) {
     }
     ac.addEventListener('change', syncAdmin);
     syncAdmin();
+
+    var all = card.querySelector('.sso-all-libs-check');
+    var libList = card.querySelector('.sso-lib-list');
+    function syncAll() { libList.style.display = all.checked ? 'none' : ''; }
+    all.addEventListener('change', syncAll);
+    syncAll();
 
     card.querySelector('.sso-remove-btn').addEventListener('click', function () {
         card.remove();
@@ -583,6 +593,7 @@ function collectMappings(view) {
         return {
             Group: g,
             LibraryIds: libIds,
+            AllLibraries: checked('.sso-all-libs-check'),
             IsAdministrator: ac ? ac.checked : false,
             EnableLiveTvAccess: checked('.sso-livetv-cb'),
             EnableLiveTvManagement: checked('.sso-livetv-mgmt-cb'),

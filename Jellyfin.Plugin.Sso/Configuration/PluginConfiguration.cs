@@ -271,6 +271,12 @@ public class GroupMappingConfig
     /// </summary>
     public List<string> LibraryIds { get; set; } = [];
 
+    /// <summary>
+    /// Every library, including ones added later, without naming them. For a mapping
+    /// written outside the page, which cannot know the libraries' ids.
+    /// </summary>
+    public bool AllLibraries { get; set; }
+
     public bool IsAdministrator { get; set; }
 
     public bool EnableLiveTvAccess { get; set; }
