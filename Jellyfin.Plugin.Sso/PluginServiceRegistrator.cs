@@ -1,4 +1,5 @@
 using Jellyfin.Plugin.Sso.Auth;
+using Jellyfin.Plugin.Sso.Configuration;
 using Jellyfin.Plugin.Sso.Oidc;
 using Jellyfin.Plugin.Sso.Provisioning;
 using Jellyfin.Plugin.Sso.Web;
@@ -47,6 +48,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // The login buttons are written into Jellyfin's branding. Without this they would
         // only appear after an administrator saves the configuration, which a plugin
         // update does not do.
+        serviceCollection.AddHostedService<SettingsFileStartup>();
         serviceCollection.AddHostedService<LoginBrandingStartup>();
 
         // Optional: puts the login button inside Jellyfin's login form by adding a

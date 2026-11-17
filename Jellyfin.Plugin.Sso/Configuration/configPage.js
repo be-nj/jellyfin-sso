@@ -102,6 +102,7 @@ function load(view) {
         apiGet(api('config')),
         apiGet(api('libraries')),
         apiGet(api('seen-groups')),
+        apiGet(api('settings-file')),
     ]).then(function (r) {
         _config = r[0]; _libraries = r[1]; _seenGroups = r[2];
         renderProviders(view, _config.Providers || []);
@@ -123,7 +124,37 @@ function load(view) {
         renderMappings(view, _config.GroupMappings || []);
         renderLinks(view);
         renderRefused(view);
-        return populateUsers(view);
+        return populateUsers(view).then(function () { showSettingsFile(view, r[3]); });
+    });
+}
+
+// The controls of a setting, where they are not simply the element with its name.
+var MANAGED_CONTROLS = {
+    Providers: ['Providers', 'AddProvider'],
+    GroupMappings: ['GroupMappings', 'AddMapping'],
+    SyncExcludedUserIds: ['SyncExcluded'],
+};
+
+// What the server's settings file decides is shown, and its controls are disabled: the
+// server would put the file's values back on save anyway. Checking a provider still works.
+function showSettingsFile(view, file) {
+    var notice = view.querySelector('#SettingsFileNotice');
+    if (!file || !file.Path) { notice.hidden = true; return; }
+    notice.hidden = false;
+    notice.classList.toggle('is-error', !!file.Error);
+    notice.innerHTML = file.Error
+        ? '<strong>The settings file <code>' + escHtml(file.Path) + '</code> was not applied:</strong> ' +
+            escHtml(file.Error) + '. The configuration below is the one saved before.'
+        : 'Set by <code>' + escHtml(file.Path) + '</code> and not editable here: ' +
+            escHtml((file.Managed || []).join(', ')) + '.';
+    (file.Managed || []).forEach(function (name) {
+        (MANAGED_CONTROLS[name] || [name]).forEach(function (id) {
+            var element = view.querySelector('#' + id);
+            if (!element) { return; }
+            [element].concat(Array.prototype.slice.call(element.querySelectorAll('input, select, textarea, button')))
+                .filter(function (control) { return !control.classList.contains('sso-provider-check'); })
+                .forEach(function (control) { control.disabled = true; });
+        });
     });
 }
 

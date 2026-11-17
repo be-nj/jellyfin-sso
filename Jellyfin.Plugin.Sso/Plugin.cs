@@ -23,12 +23,16 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         Instance = this;
     }
 
+    /// <summary>The settings file applied at startup, or null when there is none.</summary>
+    public SettingsFile? SettingsFile { get; internal set; }
+
     /// <summary>
     /// Links never arrive with a configuration. The plugin's own admin endpoint already
     /// keeps the live ones; this covers Jellyfin's generic
     /// <c>POST /Plugins/{id}/Configuration</c>, which would otherwise replace them
     /// wholesale. A link removed that way skipped the revocation that every other way of
-    /// removing one performs, and left the sessions it had opened running.
+    /// removing one performs, and left the sessions it had opened running. The settings
+    /// file's values win over a saved configuration the same way.
     /// </summary>
     public override void UpdateConfiguration(BasePluginConfiguration configuration)
     {
@@ -37,6 +41,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             lock (ConfigurationLock)
             {
                 incoming.Links = Configuration.Links;
+                SettingsFile?.ApplyTo(incoming);
                 base.UpdateConfiguration(incoming);
             }
 

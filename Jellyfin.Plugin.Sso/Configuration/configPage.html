@@ -44,6 +44,8 @@
       padding: 1.1em 1.3em .25em;
       margin-bottom: 1.25em;
     }
+    .sso-settings-file { padding-bottom: 1.1em; border-left: 3px solid #00a4dc; }
+    .sso-settings-file.is-error { border-left-color: #dc3545; }
     .sso-card-title {
       margin: 0 0 1em; font-size: 1.05em; font-weight: 600;
       padding-bottom: .5em; border-bottom: 1px solid rgba(255, 255, 255, .1);
@@ -141,6 +143,7 @@
           <h2 class="sectionTitle">SSO Authentication</h2>
         </div>
         <hr class="sso-title-rule" />
+        <div id="SettingsFileNotice" class="sso-card sso-settings-file" hidden></div>
 
         <!-- Tab bar -->
         <div class="sso-tabs" role="tablist">

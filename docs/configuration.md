@@ -304,3 +304,30 @@ Same tab as the group mappings:
 
 Its own tab: the links between an identity and a Jellyfin account, the sign-ins recently
 refused for want of one, and the form to add a link. See [Linking accounts](linking.md).
+
+## Settings from a file
+
+For a server set up by configuration management (Ansible, NixOS, a compose file), the
+settings can come from a JSON file instead of the page. Point `JELLYFIN_SSO_SETTINGS_FILE`
+at it on the Jellyfin container:
+
+```json
+{
+  "Providers": [
+    { "Id": "authentik", "Name": "Authentik", "Enabled": true,
+      "Authority": "https://auth.example.org/application/o/jellyfin/", "ClientId": "jellyfin",
+      "ClientType": "Confidential", "ConfidentialSecretRef": "env:JELLYFIN_SSO_SECRET",
+      "Scopes": ["openid", "profile", "email", "groups"] }
+  ],
+  "GroupMappings": [{ "Group": "jellyfin-admins", "IsAdministrator": true }],
+  "RequireMappedGroup": true
+}
+```
+
+The names are those of `GET /sso/admin/config`. The file is read when Jellyfin starts; every
+setting it names wins over the page, where it is shown and cannot be changed, and every
+setting it leaves out stays editable there. Each provider needs a fixed `Id`, because links
+refer to it. A file with any mistake in it — invalid JSON, a name that is not a setting, a
+value the page would refuse — is not applied at all: the page says why, and the server keeps
+the configuration it had. Links and the remembered group names are the plugin's own and
+cannot be set this way.
