@@ -47,6 +47,50 @@ public sealed class ProfilePictureTests : IAsyncLifetime
         Assert.Equal("image", image.Content.Headers.ContentType?.MediaType?.Split('/')[0]);
     }
 
+    /// <summary>
+    /// The picture is the provider's to decide, so one that is gone from Jellyfin comes
+    /// back at the next login although the provider's has not changed. The unit tests hold
+    /// that against a substitute; this is the real server showing the plugin an account
+    /// without a picture, and the plugin writing the same bytes a second time.
+    ///
+    /// Removed here through Jellyfin's own API. The removal the documentation warns of,
+    /// another device's activity update saving a copy of the account read before the
+    /// picture was written, cannot be timed from outside, and ends in the same state.
+    /// </summary>
+    [Fact]
+    public async Task A_picture_removed_in_Jellyfin_comes_back_at_the_next_login()
+    {
+        await EnableAsync();
+        _env.Idp.NextPictureUrl = _env.Idp.AvatarUrl;
+        var person = new FakeUser("sub-pic-again", "picagainuser", ["media"]);
+
+        var first = await _env.StartWebLoginAsync(person);
+        Assert.True(first.Succeeded, first.Body);
+        var user = await _env.FindUserAsync("picagainuser");
+        var id = user!["Id"]!.GetValue<string>();
+        Assert.False(string.IsNullOrWhiteSpace(user["PrimaryImageTag"]?.GetValue<string>()));
+
+        using var admin = JellyfinEnvironment.TrustingClient();
+        admin.DefaultRequestHeaders.Authorization = JellyfinEnvironment.TokenHeader(_env.AdminToken);
+        (await admin.DeleteAsync($"{_env.BaseUrl}/UserImage?userId={id}")).EnsureSuccessStatusCode();
+        user = await _env.FindUserAsync("picagainuser");
+        Assert.Null(user!["PrimaryImageTag"]?.GetValue<string>());
+
+        var served = _env.Idp.AvatarsServed;
+        var second = await _env.StartWebLoginAsync(person);
+        Assert.True(second.Succeeded, second.Body);
+
+        user = await _env.FindUserAsync("picagainuser");
+        Assert.False(
+            string.IsNullOrWhiteSpace(user!["PrimaryImageTag"]?.GetValue<string>()),
+            "The picture did not come back at the second login.");
+        using var image = await admin.GetAsync($"{_env.BaseUrl}/Users/{id}/Images/Primary");
+        image.EnsureSuccessStatusCode();
+        // Fetched again, because what the plugin remembers is the picture's hash and the
+        // hash is only known once the bytes are here.
+        Assert.Equal(served + 1, _env.Idp.AvatarsServed);
+    }
+
     [Fact]
     public async Task Nothing_is_fetched_while_the_setting_is_off()
     {

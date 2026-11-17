@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 
@@ -38,47 +39,85 @@ internal static class HostNetwork
     private const int Tentative = 0x40;
     private const int DadFailed = 0x08;
 
-    private static readonly TimeSpan Quiet = TimeSpan.FromMilliseconds(500);
-    private static readonly TimeSpan Limit = TimeSpan.FromSeconds(20);
+    internal static readonly TimeSpan Quiet = TimeSpan.FromMilliseconds(500);
+    internal static readonly TimeSpan Limit = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan Poll = TimeSpan.FromMilliseconds(50);
+
+    // Addresses that stayed tentative through a whole wait, on this host. An address on
+    // an interface without carrier never leaves duplicate address detection, and waiting
+    // for it again would cost every later call the full limit and tell nobody.
+    private static readonly ConcurrentDictionary<string, byte> GivenUpOn = new();
 
     /// <summary>
     /// Returns once the host's interfaces are settled, or after twenty seconds — a host
     /// that never settles should not fail a test that may never notice, and the browser
-    /// errors this guards against are named when they happen.
+    /// errors this guards against are named when they happen, next to <see cref="State"/>.
     /// </summary>
-    public static async Task SettleAsync()
+    public static Task SettleAsync()
     {
         if (!OperatingSystem.IsLinux() || !Directory.Exists(Interfaces))
         {
-            return;
+            return Task.CompletedTask;
         }
 
         var clock = Stopwatch.StartNew();
-        string? last = null;
-        var unchangedSince = TimeSpan.Zero;
-
-        while (clock.Elapsed < Limit)
-        {
-            var (snapshot, pending) = Read();
-            if (!string.Equals(snapshot, last, StringComparison.Ordinal))
-            {
-                last = snapshot;
-                unchangedSince = clock.Elapsed;
-            }
-            else if (!pending && clock.Elapsed - unchangedSince >= Quiet)
-            {
-                return;
-            }
-
-            await Task.Delay(50);
-        }
+        return SettleAsync(Read, () => clock.Elapsed, Task.Delay, GivenUpOn);
     }
 
     /// <summary>
-    /// The interfaces with their link state and IPv6 addresses, and whether any address is
-    /// still waiting for duplicate address detection.
+    /// What the waits so far ran into, for a failure message: a browser error on a host
+    /// that never settled reads differently from one on a host that did.
     /// </summary>
-    internal static (string Snapshot, bool Pending) Read()
+    public static string State
+        => GivenUpOn.IsEmpty
+            ? "settled after every container start and stop"
+            : $"gave up on addresses that stayed tentative for {Limit.TotalSeconds:0} s: {string.Join(" | ", GivenUpOn.Keys.Order(StringComparer.Ordinal))}";
+
+    /// <summary>
+    /// The wait itself, with the host and the clock handed in. True when it settled, false
+    /// when the limit ran out — and then the addresses still tentative go into
+    /// <paramref name="givenUpOn"/>, which later calls do not wait for.
+    /// </summary>
+    internal static async Task<bool> SettleAsync(
+        Func<(string Snapshot, IReadOnlyList<string> Pending)> read,
+        Func<TimeSpan> elapsed,
+        Func<TimeSpan, Task> wait,
+        ConcurrentDictionary<string, byte> givenUpOn)
+    {
+        string? last = null;
+        var unchangedSince = TimeSpan.Zero;
+        IReadOnlyList<string> waitingFor = [];
+
+        while (elapsed() < Limit)
+        {
+            var (snapshot, pending) = read();
+            waitingFor = [.. pending.Where(line => !givenUpOn.ContainsKey(line))];
+            if (!string.Equals(snapshot, last, StringComparison.Ordinal))
+            {
+                last = snapshot;
+                unchangedSince = elapsed();
+            }
+            else if (waitingFor.Count == 0 && elapsed() - unchangedSince >= Quiet)
+            {
+                return true;
+            }
+
+            await wait(Poll);
+        }
+
+        foreach (var line in waitingFor)
+        {
+            givenUpOn[line] = 0;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The interfaces with their link state and IPv6 addresses, and the addresses still
+    /// waiting for duplicate address detection.
+    /// </summary>
+    internal static (string Snapshot, IReadOnlyList<string> Pending) Read()
     {
         var parts = new List<string>();
         foreach (var path in Directory.GetDirectories(Interfaces).Order(StringComparer.Ordinal))
@@ -86,12 +125,15 @@ internal static class HostNetwork
             parts.Add($"{Path.GetFileName(path)}={ReadOrEmpty(Path.Combine(path, "operstate"))}");
         }
 
-        var pending = false;
+        var pending = new List<string>();
         var addresses = File.Exists(Ipv6Addresses) ? ReadLines(Ipv6Addresses) : [];
         foreach (var line in addresses.Order(StringComparer.Ordinal))
         {
             parts.Add(line);
-            pending |= IsPending(line);
+            if (IsPending(line))
+            {
+                pending.Add(line);
+            }
         }
 
         return (string.Join('\n', parts), pending);

@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Docker.DotNet;
 using DotNet.Testcontainers;
 using Microsoft.Extensions.Logging;
@@ -28,14 +30,19 @@ internal static class ImagePull
     /// <summary>
     /// Runs <paramref name="start"/>, which builds the container with the logger it is
     /// handed and starts it, until the image is there or <see cref="Attempts"/> starts
-    /// have failed for want of it. Any other failure is not retried.
+    /// have failed for want of one. Any other failure is not retried.
     /// </summary>
     public static Task RetryAsync(string image, Func<ILogger, Task> start)
-        => RetryAsync(image, start, attempt => TimeSpan.FromSeconds(15 * attempt));
+        => RetryAsync(image, start, attempt => TimeSpan.FromSeconds(15 * attempt), ConsoleLogger.Instance);
 
-    internal static async Task RetryAsync(string image, Func<ILogger, Task> start, Func<int, TimeSpan> delay)
+    /// <summary>
+    /// The same with the pause after each failed attempt and the logger Testcontainers
+    /// would have used handed in.
+    /// </summary>
+    internal static async Task RetryAsync(
+        string image, Func<ILogger, Task> start, Func<int, TimeSpan> delay, ILogger testcontainers)
     {
-        var log = new RegistryErrors(ConsoleLogger.Instance);
+        var log = new RegistryErrors(testcontainers);
         for (var attempt = 1; ; attempt++)
         {
             try
@@ -47,7 +54,7 @@ internal static class ImagePull
             {
                 if (attempt == Attempts)
                 {
-                    throw new InvalidOperationException(Explain(image, log.Messages), e);
+                    throw new InvalidOperationException(Explain(image, e, log.Messages), e);
                 }
 
                 await Task.Delay(delay(attempt));
@@ -55,13 +62,34 @@ internal static class ImagePull
         }
     }
 
-    internal static string Explain(string image, IReadOnlyCollection<string> registry)
-        => registry.Count == 0
-            ? $"Pulling {image} did not produce the image in {Attempts} attempts, and Docker reported no error while pulling."
-            : $"Pulling {image} failed {Attempts} times. Docker said: {string.Join("; ", registry.Select(WithoutLayerId).Distinct())}";
+    /// <summary>
+    /// Names the image Docker missed in its own words, not the one being started. They
+    /// differ: Testcontainers starts its resource reaper inside the first container's
+    /// start, so the image that did not arrive there can be the reaper's.
+    /// </summary>
+    private static string Explain(string image, DockerImageNotFoundException e, IReadOnlyCollection<string> registry)
+        => $"Starting {image} failed {Attempts} times for want of an image. Docker: {Missing(e)}. "
+            + (registry.Count == 0
+                ? "It reported no error while pulling."
+                : $"While pulling it said: {string.Join("; ", registry.Select(WithoutLayerId).Distinct())}");
 
-    // Testcontainers writes "ID=<layer>: <error>", and a pull that fails on the manifest
-    // or the connection has no layer to name.
+    // The daemon answers {"message":"No such image: …"}; anything else is passed on as it is.
+    private static string Missing(DockerImageNotFoundException e)
+    {
+        var body = (e.ResponseBody ?? string.Empty).Trim();
+        try
+        {
+            return JsonNode.Parse(body)?["message"]?.GetValue<string>() ?? body;
+        }
+        catch (Exception parse) when (parse is JsonException or InvalidOperationException)
+        {
+            return body;
+        }
+    }
+
+    // Testcontainers writes "ID=<layer>: <error>", and the error that ends a pull names no
+    // layer: the truncated download behind #291's reproduction arrived as "ID=(null): short
+    // read: …".
     private static string WithoutLayerId(string message)
         => message.StartsWith("ID=(null): ", StringComparison.Ordinal) ? message["ID=(null): ".Length..] : message;
 

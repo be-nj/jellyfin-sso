@@ -167,7 +167,7 @@ public sealed class PrefixedDeploymentTests : IAsyncLifetime
             server["ManualAddress"]!.GetValue<string>(),
             StringComparison.Ordinal);
 
-        Assert.DoesNotContain("login.html", page.Url);
+        BrowserSupport.AssertNotOnLoginPage(page);
     }
 
     /// <summary>
