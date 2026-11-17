@@ -104,7 +104,7 @@ public abstract class RealIdentityProviderTests : IAsyncLifetime
         Assert.Equal([Guid.Parse(_env.MoviesLibraryId)], folders);
 
         // The web client adopted the session, so the whole chain worked end to end.
-        Assert.DoesNotContain("login.html", page.Url);
+        BrowserSupport.AssertNotOnLoginPage(page);
     }
 
     [Fact]
@@ -398,7 +398,7 @@ public sealed class AutheliaTests : RealIdentityProviderTests
 
         var page = await SignInAsync(_idp.MemberUser);
 
-        Assert.DoesNotContain("login.html", page.Url);
+        BrowserSupport.AssertNotOnLoginPage(page);
         var user = await _env.FindUserAsync(_idp.MemberUser.Username);
         Assert.NotNull(user);
         var policy = await _env.UserPolicyAsync(_idp.MemberUser.Username);

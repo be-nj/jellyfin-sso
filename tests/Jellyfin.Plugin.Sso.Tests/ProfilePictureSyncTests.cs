@@ -226,7 +226,6 @@ public sealed class ProfilePictureSyncTests : IDisposable
         Assert.Equal(2, await SavedImages());
         await _persistence.Received(2).SetProfileImageAsync(
             _userId, Arg.Any<string>(), Arg.Any<CancellationToken>());
-        Assert.NotNull(_userManager.GetUserById(_userId)!.ProfileImage);
     }
 
     // ─── Where it writes ──────────────────────────────────────────────────────

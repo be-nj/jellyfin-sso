@@ -64,7 +64,7 @@ public sealed class BrowserLoginTests : IAsyncLifetime
 
         // The web client adopted the session rather than bouncing back to the login page.
         await WaitForSignedInAsync(page, "home-screen");
-        Assert.DoesNotContain("login.html", page.Url);
+        BrowserSupport.AssertNotOnLoginPage(page);
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public sealed class BrowserLoginTests : IAsyncLifetime
         }
 
         await WaitForSignedInAsync(page, "login-page-button");
-        Assert.DoesNotContain("login.html", page.Url);
+        BrowserSupport.AssertNotOnLoginPage(page);
     }
 
     [Fact]
@@ -137,7 +137,7 @@ public sealed class BrowserLoginTests : IAsyncLifetime
         await page.ReloadAsync();
         await WaitForSignedInAsync(page, "reload");
 
-        Assert.DoesNotContain("login.html", page.Url);
+        BrowserSupport.AssertNotOnLoginPage(page);
     }
 
     /// <summary>

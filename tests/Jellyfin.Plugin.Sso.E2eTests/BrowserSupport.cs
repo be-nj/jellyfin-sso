@@ -201,6 +201,22 @@ internal static class BrowserSupport
     public const int WebClientTimeout = 90_000;
 
     /// <summary>
+    /// Is this address the web client's login page? Jellyfin 12 routes to
+    /// <c>#/login?serverid=…</c> and older clients to <c>#/login.html</c>. Eight tests
+    /// asserted that the address did not contain "login.html", which no address of a 12
+    /// server does, so the assertion could not fail (#293).
+    /// </summary>
+    public static bool IsLoginPage(string url)
+    {
+        var fragment = url.IndexOf('#', StringComparison.Ordinal);
+        return fragment >= 0 && url[fragment..].StartsWith("#/login", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The browser ended up somewhere other than the login page.</summary>
+    public static void AssertNotOnLoginPage(IPage page)
+        => Assert.False(IsLoginPage(page.Url), $"The browser is on the login page: {page.Url}");
+
+    /// <summary>
     /// Waits until the web client itself reports a usable session: its ApiClient has an
     /// access token and knows which user it belongs to. That is what the localStorage
     /// handoff is for, and asserting it is stronger than reading the credentials back —
@@ -237,6 +253,7 @@ internal static class BrowserSupport
                 + $"server says: {await DescribeAsync(page, StoredTokenProbe)}\n"
                 + $"ApiClient:   {await DescribeAsync(page, ApiClientProbe)}\n"
                 + $"refused:     {(refused.Count == 0 ? "nothing" : string.Join(" | ", refused))}\n"
+                + $"network:     {HostNetwork.State}\n"
                 // Errors only, unless a caller chose what to pass: jellyfin-web logs the
                 // stored credentials, access token included, at debug level.
                 + $"console:     {string.Join(" | ", consoleMessages ?? PageConsole.ErrorsOf(page))}");

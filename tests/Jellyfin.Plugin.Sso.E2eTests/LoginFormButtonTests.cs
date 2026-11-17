@@ -118,7 +118,7 @@ public sealed class LoginFormButtonTests : IAsyncLifetime
         // navigate like any link — and the login has to end in a session.
         await BrowserSupport.WaitForSignedInAsync(page, "form-button-click");
 
-        Assert.DoesNotContain("login.html", page.Url);
+        BrowserSupport.AssertNotOnLoginPage(page);
     }
 
     [Fact]

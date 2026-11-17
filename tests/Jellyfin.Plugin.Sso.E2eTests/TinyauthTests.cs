@@ -49,7 +49,7 @@ public sealed class TinyauthTests : RealIdentityProviderTests
         var page = await SignInAsync(_idp.MemberUser);
 
         // Signed in, and holding nothing.
-        Assert.DoesNotContain("login.html", page.Url);
+        BrowserSupport.AssertNotOnLoginPage(page);
         var policy = await _env.UserPolicyAsync(_idp.MemberUser.Username);
         Assert.False(policy["EnableAllFolders"]!.GetValue<bool>());
         Assert.Empty(policy["EnabledFolders"]!.AsArray());
