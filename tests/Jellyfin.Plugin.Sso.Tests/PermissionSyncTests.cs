@@ -169,6 +169,54 @@ public sealed class PermissionSyncTests : IDisposable
         Assert.False(policy.EnableAllFolders);
     }
 
+    [Fact]
+    public async Task A_mapping_for_all_libraries_grants_every_library_without_admin()
+    {
+        ExistingUser(admin: false);
+        _harness.Configuration.GroupMappings.Add(new GroupMappingConfig { Group = "media", AllLibraries = true });
+
+        await _sync.SyncAsync(_userId, Identity("media"));
+
+        var policy = CapturedPolicy();
+        Assert.True(policy.EnableAllFolders);
+        Assert.Empty(policy.EnabledFolders);
+        Assert.False(policy.IsAdministrator);
+    }
+
+    /// <summary>
+    /// The mapping counts for the people in its group and nobody else. Read from every
+    /// configured mapping instead of the matched ones, a single such mapping would hand
+    /// every SSO user every library, and the test above would still pass.
+    /// </summary>
+    [Fact]
+    public async Task A_mapping_for_all_libraries_grants_nothing_to_somebody_outside_its_group()
+    {
+        ExistingUser(admin: false);
+        _harness.Configuration.GroupMappings.Add(new GroupMappingConfig { Group = "everything", AllLibraries = true });
+        Map("media", admin: false, MoviesId);
+
+        await _sync.SyncAsync(_userId, Identity("media"));
+
+        var policy = CapturedPolicy();
+        Assert.False(policy.EnableAllFolders);
+        Assert.Equal([MoviesId], policy.EnabledFolders);
+    }
+
+    [Fact]
+    public async Task All_libraries_from_one_group_replaces_the_list_another_group_names()
+    {
+        ExistingUser(admin: false);
+        _harness.Configuration.GroupMappings.Add(new GroupMappingConfig { Group = "everything", AllLibraries = true });
+        Map("media", admin: false, MoviesId);
+
+        await _sync.SyncAsync(_userId, Identity("media", "everything"));
+
+        var policy = CapturedPolicy();
+        Assert.True(policy.EnableAllFolders);
+        Assert.Empty(policy.EnabledFolders);
+        Assert.False(policy.IsAdministrator);
+    }
+
     /// <summary>
     /// A library is named by its Jellyfin id and those ids are parsed on every login. One
     /// that is not a GUID — edited into the configuration file by hand, or left by an

@@ -71,6 +71,30 @@ public sealed class ConfigPageTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_admin_page_saves_all_libraries_for_a_group_and_shows_it_again()
+    {
+        var page = await OpenConfigPageAsync();
+
+        await page.ClickAsync("#AddMapping");
+        var card = page.Locator(".sso-mapping").Last;
+        await card.Locator(".sso-group-input").FillAsync("sees-everything");
+        await card.Locator(".sso-all-libs-check").CheckAsync(new LocatorCheckOptions { Force = true });
+        // The list of libraries is beside the point once all of them are granted.
+        await Assertions.Expect(card.Locator(".sso-lib-list")).ToBeHiddenAsync();
+
+        await page.ClickAsync("#Save");
+
+        var mapping = await WaitForMappingAsync("sees-everything");
+        Assert.True(mapping["AllLibraries"]!.GetValue<bool>());
+        Assert.False(mapping["IsAdministrator"]!.GetValue<bool>());
+
+        var again = await OpenConfigPageAsync();
+        var saved = again.Locator(".sso-mapping").Filter(new LocatorFilterOptions { HasText = "sees-everything" });
+        await Assertions.Expect(saved.Locator(".sso-all-libs-check")).ToBeCheckedAsync();
+        await Assertions.Expect(saved.Locator(".sso-card-sub")).ToHaveTextAsync("all libraries");
+    }
+
+    [Fact]
     public async Task The_admin_page_saves_the_safety_settings()
     {
         var page = await OpenConfigPageAsync();
