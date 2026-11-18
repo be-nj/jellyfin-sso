@@ -31,6 +31,9 @@ internal static class PlainText
     internal static IActionResult Unavailable(string message)
         => Text(StatusCodes.Status503ServiceUnavailable, message);
 
+    internal static IActionResult ServerError(string message)
+        => Text(StatusCodes.Status500InternalServerError, message);
+
     private static IActionResult Text(int status, string message)
         => new ContentResult
         {

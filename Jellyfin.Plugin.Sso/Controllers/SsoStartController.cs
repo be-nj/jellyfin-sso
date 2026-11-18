@@ -47,6 +47,7 @@ public sealed class SsoStartController : SsoFlowController
     /// </summary>
     [HttpGet("oidc/start")]
     [AllowAnonymous]
+    [PublicAddress]
     [ServiceFilter<RateLimitFilter>]
     public async Task<IActionResult> StartDefault(CancellationToken ct)
     {
@@ -62,6 +63,7 @@ public sealed class SsoStartController : SsoFlowController
     /// <summary>Same but for Quick Connect — stable entry point for native apps.</summary>
     [HttpGet("oidc/start/qc")]
     [AllowAnonymous]
+    [PublicAddress]
     [ServiceFilter<RateLimitFilter>]
     public async Task<IActionResult> StartDefaultQuickConnect(
         [FromQuery] string code, CancellationToken ct)
@@ -78,6 +80,7 @@ public sealed class SsoStartController : SsoFlowController
 
     [HttpGet("oidc/start/{providerId}")]
     [AllowAnonymous]
+    [PublicAddress]
     [ServiceFilter<RateLimitFilter>]
     public async Task<IActionResult> Start(string providerId, CancellationToken ct)
     {
@@ -94,6 +97,7 @@ public sealed class SsoStartController : SsoFlowController
 
     [HttpGet("oidc/start/{providerId}/qc")]
     [AllowAnonymous]
+    [PublicAddress]
     [ServiceFilter<RateLimitFilter>]
     public async Task<IActionResult> StartWithQuickConnect(
         string providerId, [FromQuery] string code, CancellationToken ct)

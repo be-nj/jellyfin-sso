@@ -70,6 +70,29 @@ public sealed class ConfigPageTests : IAsyncLifetime
         Assert.Equal(12, mapping["MaxParentalRating"]!.GetValue<int>());
     }
 
+    /// <summary>
+    /// The redirect URI beside a provider is the one to register there. With a public
+    /// address saved the plugin sends that address and no other, so the page has to show
+    /// it too — not the address the dashboard happens to be open at, which is the LAN one
+    /// for an administrator at home.
+    /// </summary>
+    [Fact]
+    public async Task The_provider_card_shows_the_redirect_uri_of_the_saved_public_address()
+    {
+        var page = await OpenConfigPageAsync();
+        await page.ClickAsync(".sso-tab[data-tab=\"provider\"]");
+
+        await page.FillAsync("#PublicAddress", "https://Jellyfin.Example.com/jf/");
+        await page.ClickAsync("#Save");
+        await WaitForConfigAsync(config =>
+            config["PublicAddress"]!.GetValue<string>() == "https://jellyfin.example.com/jf");
+
+        // The field takes the stored form, and the card is drawn from it.
+        await Assertions.Expect(page.Locator("#PublicAddress")).ToHaveValueAsync("https://jellyfin.example.com/jf");
+        await Assertions.Expect(page.Locator(".sso-provider .sso-copy-list code").First).ToHaveTextAsync(
+            $"https://jellyfin.example.com/jf/sso/oidc/callback/{JellyfinEnvironment.ProviderId}");
+    }
+
     [Fact]
     public async Task The_admin_page_saves_all_libraries_for_a_group_and_shows_it_again()
     {

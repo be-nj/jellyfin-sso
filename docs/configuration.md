@@ -270,6 +270,33 @@ With `all=https://your-jellyfin` set, the button carries that address and works 
 apps too. Use the address people actually open; it is the same value Jellyfin hands to
 clients for everything else.
 
+### Public address
+
+*Public address* (on the provider tab) is the address people open Jellyfin at, with its
+sub-path if it has one: `https://jellyfin.example.com`, or `https://example.com/jellyfin`.
+
+**Empty**, the redirect URI the provider is given is built from each request's `Host` and
+`X-Forwarded-Host`, `-Proto` and `-Prefix` headers, which the plugin reads from whoever
+sent the request. That is safe while the provider accepts only the exact redirect URI you
+registered. Where it accepts a pattern — a wildcard host, a regular expression — a forged
+header has the login's code sent to another host, and whoever receives it can finish the
+login as the person who signed in.
+
+**Set**, the redirect URI, the cookies and the links in the plugin's pages are built from
+this address and nothing else, and the provider card shows the redirect URI built from it.
+Two things follow, and both are worth knowing before you set it:
+
+- **SSO runs at the public address.** A login, a logout or the linking page opened
+  anywhere else — the LAN address, a second host name — is taken to the public address
+  first and finishes there, so the browser ends up signed in at the public address. Where
+  that address cannot be reached, SSO does not work; signing in with a password does.
+- **The value has to be this server.** A wrong address sends every SSO login somewhere
+  else. Password login does not depend on it, so that is the way back in to correct it.
+
+Set it when the server has one address everybody can use, and always when the provider's
+redirect URI is a pattern. Leave it empty when people reach the server under several
+addresses and none of them works for all.
+
 ## Safety
 
 Same tab as the group mappings:

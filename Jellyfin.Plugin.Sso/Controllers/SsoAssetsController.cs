@@ -42,7 +42,7 @@ public sealed class SsoAssetsController : SsoControllerBase
             return Content("/* SSO: the in-form login button is off. */", "application/javascript");
         }
 
-        return Content(SsoPages.LoginButtonScript(At.BasePath, providers), "application/javascript");
+        return Content(SsoPages.LoginButtonScript(At.RequestBasePath, providers), "application/javascript");
     }
 
     /// <summary>
