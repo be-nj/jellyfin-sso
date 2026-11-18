@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Jellyfin.Plugin.Sso.Oidc;
 using Jellyfin.Plugin.Sso.Web;
 
@@ -7,11 +8,63 @@ namespace Jellyfin.Plugin.Sso.Configuration;
 /// What a configuration must satisfy before it is saved. Kept apart from the endpoint that
 /// applies them, so the rules can be tested without a controller.
 /// </summary>
-public static class ConfigurationRules
+public static partial class ConfigurationRules
 {
+    [GeneratedRegex(@"^[A-Za-z0-9._~-]{1,64}$")]
+    private static partial Regex ProviderId();
+
     /// <summary>The first thing wrong with the configuration, or null when there is none.</summary>
     public static string? Problem(PluginConfiguration config)
     {
+        // First, because everything below walks these lists. A null entry arrives only by
+        // hand-written JSON, and used to answer 500 from wherever it was first touched.
+        if (config.Providers.Any(p => p is null))
+        {
+            return "The list of providers has an empty entry.";
+        }
+
+        if (config.GroupMappings.Any(m => m is null))
+        {
+            return "The list of group mappings has an empty entry.";
+        }
+
+        // The configuration is an XML file, and Jellyfin throws the whole file away when
+        // it cannot be read back: a control character in one provider's name cost every
+        // provider, mapping and account link at the next restart. See StorableText.
+        if (StorableText.FirstUncarried(config) is { } where)
+        {
+            return $"{where} contains a control character, which the configuration file cannot hold.";
+        }
+
+        // A provider is found by its id — in the login address, in the redirect URI the
+        // provider has on file, in every account link. The page makes one up for a new
+        // provider and never shows a field for it, so a bad one arrives by hand: an empty
+        // id or one with a slash cannot complete a login, and of two providers with one
+        // id the second is never reached.
+        foreach (var provider in config.Providers)
+        {
+            if (!ProviderId().IsMatch(provider.Id ?? string.Empty))
+            {
+                return $"Provider '{provider.Name}': the id '{provider.Id}' cannot be used. An id is 1 to 64 "
+                    + "letters, digits, dots, dashes, underscores or tildes, because it is part of "
+                    + "the address the provider sends people back to.";
+            }
+
+            if (!Enum.IsDefined(provider.ClientType))
+            {
+                return $"Provider '{provider.Id}': the client type is neither Public nor Confidential.";
+            }
+        }
+
+        var twice = config.Providers
+            .GroupBy(p => p.Id, StringComparer.Ordinal)
+            .FirstOrDefault(g => g.Count() > 1);
+        if (twice is not null)
+        {
+            return $"Two providers have the id '{twice.Key}'. Links and login addresses name a "
+                + "provider by its id, so each needs its own.";
+        }
+
         // A confidential client's secret is named here, not stored here. The page has no
         // field for it, so this arrives by hand-edited JSON — and a pasted literal secret
         // would be written to the plugin's configuration file, which the documentation
@@ -68,9 +121,11 @@ public static class ConfigurationRules
         // hand-edited JSON, which is exactly why it is checked here rather than trusted.
         foreach (var mapping in config.GroupMappings)
         {
-            var bad = mapping.LibraryIds.FirstOrDefault(id => !Guid.TryParse(id, out _));
-            if (bad is not null)
+            // Any, not FirstOrDefault compared with null: an entry that is null is itself
+            // not a library id, and used to pass as "nothing found".
+            if (mapping.LibraryIds.Any(id => !Guid.TryParse(id, out _)))
             {
+                var bad = mapping.LibraryIds.First(id => !Guid.TryParse(id, out _));
                 return $"Group mapping '{mapping.Group}': '{bad}' is not a library id.";
             }
         }

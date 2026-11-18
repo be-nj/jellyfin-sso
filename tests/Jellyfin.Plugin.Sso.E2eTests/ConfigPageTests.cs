@@ -132,6 +132,23 @@ public sealed class ConfigPageTests : IAsyncLifetime
         await Assertions.Expect(again.Locator("#TypeQuickConnectCode")).ToBeCheckedAsync();
     }
 
+    /// <summary>
+    /// A refused save is explained by the server, in a sentence written for whoever is
+    /// at this page. The page used to drop it and say "Save failed: HTTP 400".
+    /// </summary>
+    [Fact]
+    public async Task A_refused_save_is_shown_with_the_reason_the_server_gave()
+    {
+        var page = await OpenConfigPageAsync();
+        await page.ClickAsync(".sso-tab[data-tab=\"provider\"]");
+
+        await page.FillAsync("#PublicAddress", "jellyfin.example.com");
+        await page.ClickAsync("#Save");
+
+        await Assertions.Expect(page.GetByText("is not a public address")).ToBeVisibleAsync();
+        Assert.Equal(string.Empty, (await _env.PluginConfigAsync())["PublicAddress"]!.GetValue<string>());
+    }
+
     [Fact]
     public async Task The_admin_page_saves_the_safety_settings()
     {

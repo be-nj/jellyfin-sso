@@ -169,6 +169,24 @@ public sealed class PermissionSyncTests : IDisposable
         Assert.False(policy.EnableAllFolders);
     }
 
+    /// <summary>
+    /// The names a provider sends are remembered for the admin page's suggestions, in the
+    /// configuration file. One the file cannot hold is left out of that list — it would
+    /// cost the whole configuration at the next restart (#306) — and the login goes on:
+    /// the other groups still count.
+    /// </summary>
+    [Fact]
+    public async Task A_group_name_the_file_cannot_hold_is_not_remembered_and_the_login_goes_on()
+    {
+        ExistingUser(admin: false);
+        Map("media", admin: false, MoviesId);
+
+        await _sync.SyncAsync(_userId, Identity("media", "evil\u0001group", "kids"));
+
+        Assert.Equal(["media", "kids"], _harness.Configuration.SeenGroups);
+        Assert.Equal([MoviesId], CapturedPolicy().EnabledFolders);
+    }
+
     [Fact]
     public async Task A_mapping_for_all_libraries_grants_every_library_without_admin()
     {

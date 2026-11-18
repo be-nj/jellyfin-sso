@@ -289,11 +289,7 @@ public sealed class PermissionSync
     {
         lock (Plugin.ConfigurationLock)
         {
-            var newGroups = identity.Groups
-                .Except(config.SeenGroups, StringComparer.Ordinal)
-                .Distinct(StringComparer.Ordinal)
-                .Take(Math.Max(0, PluginConfiguration.MaxSeenGroups - config.SeenGroups.Count))
-                .ToList();
+            var newGroups = config.GroupsToRemember(identity.Groups);
 
             if (newGroups.Count == 0)
             {

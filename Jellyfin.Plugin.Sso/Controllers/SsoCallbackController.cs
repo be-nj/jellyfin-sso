@@ -127,6 +127,19 @@ public sealed class SsoCallbackController : SsoFlowController
 
             var identity = signedIn.Identity;
 
+            // The subject becomes the key of an account link, in the configuration file.
+            // One with a control character in it cannot be stored there, and is not a
+            // subject any provider issues by accident.
+            if (!StorableText.CanCarry(identity.Sub))
+            {
+                _logger.LogWarning(
+                    "SSO: provider {Provider} sent a subject with a control character in it; "
+                    + "the login was refused because the link could not be stored.",
+                    Loggable.KnownProviderId(providerId));
+                return PlainText.BadRequest(
+                    "The provider's answer could not be used: the identity it names cannot be stored.");
+            }
+
             // Everything this login hands out is stamped with the version it started at,
             // so a revocation anywhere between here and the browser spending it still
             // reaches it. The checks below only stop work that would be thrown away.

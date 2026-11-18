@@ -11,6 +11,24 @@ public class PluginConfiguration : BasePluginConfiguration
     public const int MaxSeenGroups = 500;
 
     /// <summary>
+    /// The group names from a login that are not remembered yet and can be: capped at
+    /// <see cref="MaxSeenGroups"/>, and only names the configuration file can hold. A name
+    /// with a control character in it would cost the whole configuration at the next
+    /// restart; see <see cref="StorableText"/>. Nothing about the login depends on this
+    /// list — matching works on what the provider sent.
+    ///
+    /// One place, because there were two that each built this list on their own, and the
+    /// rule was added to one of them.
+    /// </summary>
+    internal List<string> GroupsToRemember(IEnumerable<string> sent)
+        => sent
+            .Where(StorableText.CanCarry)
+            .Except(SeenGroups, StringComparer.Ordinal)
+            .Distinct(StringComparer.Ordinal)
+            .Take(Math.Max(0, MaxSeenGroups - SeenGroups.Count))
+            .ToList();
+
+    /// <summary>
     /// The default for <see cref="LoginRequestsPerMinute"/>. A login spends two of those
     /// requests — the start and the provider's callback — or three with Quick Connect, so
     /// sixty is twenty logins a minute from one address.
