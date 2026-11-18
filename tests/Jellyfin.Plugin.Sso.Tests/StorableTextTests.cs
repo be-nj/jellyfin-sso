@@ -149,30 +149,41 @@ public sealed class StorableTextTests
         Assert.False(StorableText.Scrub(config));
     }
 
-    public static TheoryData<string, Action<PluginConfiguration>> Places => new()
-    {
-        { "PublicAddress", c => c.PublicAddress = "https://x\u0001" },
-        { "SeenGroups[1]", c => c.SeenGroups.AddRange(["fine", "a\u0001b"]) },
-        { "Providers[0].Name", c => c.Providers.Add(new ProviderConfig { Id = "a", Name = "a\u0001b" }) },
-        { "Providers[0].Authority", c => c.Providers.Add(new ProviderConfig { Id = "a", Authority = "a\u0001b" }) },
-        { "Providers[0].Scopes[1]", c => c.Providers.Add(new ProviderConfig { Id = "a", Scopes = ["openid", "a\u0001b"] }) },
-        { "Providers[1].ConfidentialSecretRef", c => c.Providers.AddRange([new ProviderConfig { Id = "a" }, new ProviderConfig { Id = "b", ConfidentialSecretRef = "env:A\u0001" }]) },
-        { "GroupMappings[0].Group", c => c.GroupMappings.Add(new GroupMappingConfig { Group = "a\u0001b" }) },
-        { "GroupMappings[0].LibraryIds[0]", c => c.GroupMappings.Add(new GroupMappingConfig { Group = "g", LibraryIds = ["a\u0001b"] }) },
-        { "Links[0].Sub", c => c.Links.Add(new LinkConfig { ProviderId = "a", Sub = "a\u0001b" }) },
-    };
-
     /// <summary>
-    /// Every text, however deep, found without a list of them being kept here: a setting
-    /// added later is covered because it is a property, not because somebody remembered.
+    /// Every text, however deep, found without a list of them being kept in the plugin: a
+    /// setting added later is covered because it is a property, not because somebody
+    /// remembered. The place is named, and the configuration built from the name, so that
+    /// each row is a test of its own in a listing as well as in a run.
     /// </summary>
     [Theory]
-    [MemberData(nameof(Places))]
-    public void A_character_the_file_cannot_hold_is_found_wherever_it_is(
-        string place, Action<PluginConfiguration> put)
+    [InlineData("PublicAddress")]
+    [InlineData("SeenGroups[1]")]
+    [InlineData("Providers[0].Name")]
+    [InlineData("Providers[0].Authority")]
+    [InlineData("Providers[0].Scopes[1]")]
+    [InlineData("Providers[1].ConfidentialSecretRef")]
+    [InlineData("GroupMappings[0].Group")]
+    [InlineData("GroupMappings[0].LibraryIds[0]")]
+    [InlineData("Links[0].Sub")]
+    public void A_character_the_file_cannot_hold_is_found_wherever_it_is(string place)
     {
+        const string Bad = "a\u0001b";
         var config = new PluginConfiguration();
-        put(config);
+        switch (place)
+        {
+            case "PublicAddress": config.PublicAddress = Bad; break;
+            case "SeenGroups[1]": config.SeenGroups.AddRange(["fine", Bad]); break;
+            case "Providers[0].Name": config.Providers.Add(new ProviderConfig { Id = "a", Name = Bad }); break;
+            case "Providers[0].Authority": config.Providers.Add(new ProviderConfig { Id = "a", Authority = Bad }); break;
+            case "Providers[0].Scopes[1]": config.Providers.Add(new ProviderConfig { Id = "a", Scopes = ["openid", Bad] }); break;
+            case "Providers[1].ConfidentialSecretRef":
+                config.Providers.AddRange([new ProviderConfig { Id = "a" }, new ProviderConfig { Id = "b", ConfidentialSecretRef = Bad }]);
+                break;
+            case "GroupMappings[0].Group": config.GroupMappings.Add(new GroupMappingConfig { Group = Bad }); break;
+            case "GroupMappings[0].LibraryIds[0]": config.GroupMappings.Add(new GroupMappingConfig { Group = "g", LibraryIds = [Bad] }); break;
+            case "Links[0].Sub": config.Links.Add(new LinkConfig { ProviderId = "a", Sub = Bad }); break;
+            default: throw new ArgumentOutOfRangeException(nameof(place));
+        }
 
         Assert.Equal(place, StorableText.FirstUncarried(config));
 
