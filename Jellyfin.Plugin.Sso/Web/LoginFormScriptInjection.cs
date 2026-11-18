@@ -136,7 +136,9 @@ public sealed class LoginFormScriptInjection : IStartupFilter
             return null;
         }
 
-        var prefix = SsoAddress.For(context.Request).BasePath;
+        // The request's own prefix, not the public address's: the tag is fetched from
+        // the page this request serves, wherever that was opened.
+        var prefix = SsoAddress.For(context.Request).RequestBasePath;
 
         var tag = $"<script defer src=\"{prefix}{ScriptPath}\"></script>";
         return html[..close] + tag + html[close..];

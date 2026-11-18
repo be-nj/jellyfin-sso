@@ -54,6 +54,7 @@ public sealed class SsoLogoutController : SsoControllerBase
     [HttpGet("oidc/logout")]
     [HttpGet("oidc/logout/{providerId}")]
     [AllowAnonymous]
+    [PublicAddress]
     // Behind the limiter like the other anonymous endpoints, which this one was not. A
     // logout fetches the provider's discovery document when the cache has none, and a
     // failed fetch is not cached, so an anonymous caller in a loop against a provider

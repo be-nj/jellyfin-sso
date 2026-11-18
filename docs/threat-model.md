@@ -36,6 +36,7 @@ its signature is checked, and the group names that arrive with it.
 | Expired token | Lifetime checked, 60 s skew | `An_expired_token_is_rejected` |
 | Replayed callback (`state`) | `state` is single-use and carries its own provider and redirect URI | `A_replayed_callback_state_is_refused` |
 | Stolen authorization code | PKCE S256; the verifier never leaves the server | `PendingStateStoreTests` |
+| A login's code delivered to another host | Optional: *Public address* fixes the redirect URI the provider is given. Without it that URI is built from the request's `Host` and forwarded headers, and a provider that accepts a redirect URI on any host — a wildcard, a pattern — sends the code to whichever host a forged header named. State, nonce and PKCE do not stop that: they all belong to the flow the attacker started. A provider that accepts only the exact redirect URI closes it as well, which is why the setting is optional. A stored value that is no address stops the login instead of handing the decision back to the headers | `With_a_public_address_a_forged_host_reaches_neither_the_provider_nor_a_redirect`, `A_forged_host_does_not_reach_the_redirect`, `A_stored_value_that_is_no_address_stops_the_login_and_says_why` |
 | Stranger registers an existing username at the provider | Accounts are keyed by `(provider, sub)`; a colliding name is refused until an administrator links it | `An_unlinked_identity_cannot_take_over_an_existing_account` |
 | Reusing the one-time login secret | Single-use, 90 s, bound to the user ID and username; rejected after account revocation | `An_ephemeral_secret_works_once`, `An_ephemeral_secret_only_works_for_its_own_user`, `Reusing_a_deleted_accounts_username_does_not_reuse_its_secret` |
 | Anonymous call to the admin API | Every data endpoint requires an administrator | `The_admin_api_is_closed_to_anonymous_callers` |
@@ -111,7 +112,10 @@ its signature is checked, and the group names that arrive with it.
   known-proxy handling, so what they are allowed to contain is the whole of the defence:
   a prefix has to look like a path, a host like a host, and the pages escape both again
   for the context they land in. A proxy that strips client-supplied forwarded headers —
-  most do not by default — closes this properly.
+  most do not by default — closes this properly. With *Public address* set, the redirect
+  URI, the cookies and the pages' links do not come from these headers at all; what is
+  left to them is the prefix of what a served page fetches, and whether the browser is
+  sent to the public address first.
 - **Quick Connect needs the person to approve.** Opening `/sso/oidc/start/qc?code=…` and
   signing in no longer authorizes the code on its own — the login ends on a page that
   names the account and shows the code, and approval is a separate click

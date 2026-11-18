@@ -170,10 +170,12 @@
                      placeholder="https://jellyfin.example.com" />
               <div class="fieldDescription">
                 The address people open Jellyfin at, with its sub-path if it has one. Set,
-                the redirect URI the provider is given is built from it alone. Empty, it is
-                built from each request's <code>Host</code> and <code>X-Forwarded-*</code>
-                headers, which are only as trustworthy as the proxy that sets them and the
-                redirect URIs the provider accepts.
+                the redirect URI the provider is given is built from it alone, and a login
+                opened at any other address is taken here first — so SSO then works only
+                where this address can be reached. Empty, the redirect URI is built from
+                each request's <code>Host</code> and <code>X-Forwarded-*</code> headers,
+                which is safe as long as the provider accepts only the exact redirect URI
+                registered there.
               </div>
             </div>
             <div class="checkboxContainer">

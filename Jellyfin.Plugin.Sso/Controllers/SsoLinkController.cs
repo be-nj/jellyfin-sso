@@ -44,6 +44,7 @@ public sealed class SsoLinkController : SsoFlowController
     /// </summary>
     [HttpGet("link")]
     [AllowAnonymous]
+    [PublicAddress]
     public IActionResult SelfServiceLinkPage()
     {
         if (!Allowed())

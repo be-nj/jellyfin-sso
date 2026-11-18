@@ -26,6 +26,16 @@ function serverAddress() {
     return window.location.origin;
 }
 
+/* The address shown beside a provider, for the redirect URI to register there. Once a
+ * public address is saved the plugin builds that URI from it and from nothing else, so
+ * that is the one to show; the address this page happens to be open at is only right
+ * when the two are the same, and an administrator on the LAN was told to register a
+ * redirect URI the plugin would never send. */
+function shownAddress() {
+    var configured = ((_config && _config.PublicAddress) || '').trim().replace(/\/+$/, '');
+    return configured || serverAddress();
+}
+
 function api(path) {
     if (typeof ApiClient !== 'undefined' && ApiClient.getUrl) {
         return ApiClient.getUrl('sso/admin/' + path);
@@ -199,6 +209,12 @@ function save(view) {
         SyncExcludedUserIds: collectExcluded(view),
     };
     apiPost(api('config'), cfg).then(function () {
+        // Read back, because the server stores the public address in the form it sends
+        // to a provider, and the provider cards below show that form.
+        return apiGet(api('config'));
+    }).then(function (saved) {
+        cfg.PublicAddress = saved.PublicAddress || '';
+        setVal(view, 'PublicAddress', cfg.PublicAddress);
         _config = cfg;
         renderProviders(view, providers);
         return populateUsers(view);
@@ -224,7 +240,7 @@ function buildProviderCard(p, i) {
     card.open = true;
     card.dataset.providerId = p.Id || newId();
 
-    var server = serverAddress();
+    var server = shownAddress();
     var loginUrl = '/sso/oidc/start/' + card.dataset.providerId;
     var redirectUri = server + '/sso/oidc/callback/' + card.dataset.providerId;
     var logoutUri = server + '/sso/oidc/backchannel-logout/' + card.dataset.providerId;

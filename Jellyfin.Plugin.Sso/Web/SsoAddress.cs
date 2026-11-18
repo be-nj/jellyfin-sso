@@ -17,7 +17,41 @@ internal sealed class SsoAddress
     {
         BasePath = basePath;
         BaseUri = baseUri;
+        RequestBasePath = basePath;
     }
+
+    private SsoAddress(SsoAddress configured, SsoAddress seen)
+    {
+        BasePath = configured.BasePath;
+        BaseUri = configured.BaseUri;
+        RequestBasePath = seen.BasePath;
+        Elsewhere = !SameAddress(configured.BaseUri, seen.BaseUri);
+    }
+
+    /// <summary>
+    /// The sub-path of the request itself, for what is fetched from the page the request
+    /// serves: the login button's script and its links. With a public address configured
+    /// this can differ from <see cref="BasePath"/> — the server opened at its LAN address,
+    /// at the root, while the public one is under /jellyfin — and a script tag carrying
+    /// the public prefix would then point at nothing.
+    /// </summary>
+    internal string RequestBasePath { get; }
+
+    /// <summary>
+    /// Whether a public address is configured and this request arrived somewhere else.
+    /// A login cannot be finished from there: the provider sends the browser back to the
+    /// public address, and a cookie set here does not travel with it. So a flow that
+    /// starts elsewhere is sent to the public address before it starts; see
+    /// <see cref="PublicAddressAttribute"/>.
+    /// </summary>
+    internal bool Elsewhere { get; }
+
+    /// <summary>
+    /// Whether the configuration holds a public address that is not one. It is not
+    /// ignored: somebody set it so that the headers would not be trusted, and falling
+    /// back to them without a word undoes that. A flow refuses to start instead.
+    /// </summary>
+    internal bool PublicAddressInvalid { get; private init; }
 
     /// <summary>
     /// The sub-path this server is published under, "" when it is at the root. Every link
@@ -39,16 +73,28 @@ internal sealed class SsoAddress
         => For(request, Plugin.Instance?.Configuration.PublicAddress);
 
     /// <summary>
-    /// The configured public address when there is one; the headers are not read then,
-    /// so a request cannot move the redirect URI to a host of its choosing.
+    /// The configured public address when there is one. The redirect URI, the cookies and
+    /// the links in the pages then come from it alone, so a request cannot move the
+    /// redirect URI to a host of its choosing. The request's own headers are still read,
+    /// for two things that cannot leave this server: the prefix of what the page it
+    /// serves fetches, and whether the browser has to be sent to the public address first.
     /// </summary>
     internal static SsoAddress For(HttpRequest request, string? publicAddress)
     {
-        if (Configured(publicAddress) is { } configured)
+        var seen = Seen(request);
+        if (string.IsNullOrWhiteSpace(publicAddress))
         {
-            return configured;
+            return seen;
         }
 
+        return Configured(publicAddress) is { } configured
+            ? new SsoAddress(configured, seen)
+            : new SsoAddress(seen.BasePath, seen.BaseUri) { PublicAddressInvalid = true };
+    }
+
+    /// <summary>Where the server is according to the request and its forwarded headers.</summary>
+    private static SsoAddress Seen(HttpRequest request)
+    {
         var basePath = ForwardedPaths.Prefix(
             request.Headers["X-Forwarded-Prefix"].FirstOrDefault(),
             request.PathBase.Value);
@@ -84,8 +130,25 @@ internal sealed class SsoAddress
             return null;
         }
 
-        return new SsoAddress(basePath, ForwardedPaths.BaseUri(uri.Scheme, uri.Authority, basePath));
+        // The host in the form a provider has it registered in: punycode for a name with
+        // letters outside ASCII, which Authority would hand back as typed. IdnHost drops
+        // the brackets of an IPv6 literal, so that one keeps Host.
+        var host = uri.HostNameType == UriHostNameType.IPv6 ? uri.Host : uri.IdnHost;
+        var authority = uri.IsDefaultPort ? host : $"{host}:{uri.Port}";
+        return new SsoAddress(basePath, ForwardedPaths.BaseUri(uri.Scheme, authority, basePath));
     }
+
+    /// <summary>
+    /// Whether two base addresses are the same place: scheme, host and port without
+    /// regard to case and with the default port spelled or not, the path as written.
+    /// </summary>
+    private static bool SameAddress(string one, string other)
+        => Uri.TryCreate(one, UriKind.Absolute, out var a)
+            && Uri.TryCreate(other, UriKind.Absolute, out var b)
+            && string.Equals(a.Scheme, b.Scheme, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(a.IdnHost, b.IdnHost, StringComparison.OrdinalIgnoreCase)
+            && a.Port == b.Port
+            && string.Equals(a.AbsolutePath.TrimEnd('/'), b.AbsolutePath.TrimEnd('/'), StringComparison.Ordinal);
 
     /// <summary>Where the provider is told to send the browser back to.</summary>
     internal string CallbackUri(string providerId) => $"{BaseUri}/sso/oidc/callback/{providerId}";

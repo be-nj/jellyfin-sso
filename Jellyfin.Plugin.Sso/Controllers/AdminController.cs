@@ -62,6 +62,11 @@ public sealed class AdminController : ControllerBase
             return BadRequest(problem + " Nothing was saved.");
         }
 
+        // Stored the way it is used: trimmed, without a trailing slash, and with the host
+        // in the form the provider is sent. The page shows this value as the redirect URI
+        // to register, and the two must not differ by a spelling.
+        config.PublicAddress = SsoAddress.Configured(config.PublicAddress)?.BaseUri ?? string.Empty;
+
         lock (Plugin.ConfigurationLock)
         {
             // Links are not the page's to send. They have their own endpoints, they change

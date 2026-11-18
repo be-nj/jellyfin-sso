@@ -24,7 +24,8 @@ public class PluginConfiguration : BasePluginConfiguration
 
     /// <summary>
     /// The address people open Jellyfin at, with its sub-path if it has one. When set, the
-    /// redirect URI, the cookies and the links are built from it alone; when empty, from
+    /// redirect URI, the cookies and the links are built from it alone, and a flow opened
+    /// at another address is sent here before it starts; when empty, they are built from
     /// the request and its forwarded headers, which whoever sends the request controls.
     /// </summary>
     public string PublicAddress { get; set; } = string.Empty;
