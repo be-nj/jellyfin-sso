@@ -218,6 +218,14 @@ version to `manifest.json` on `main`, which is what servers poll. The `targetAbi
 into the manifest is derived from the `Jellyfin.Controller` reference in the csproj, so a
 Jellyfin bump automatically applies to the next release.
 
+The same pull request brings the README's own row in the comparison table up to date:
+the latest version with its month, and how many of the commits an LLM helped write
+(`scripts/update-readme-release.sh`). Both were kept by hand, and the second was checked on
+every pull request with a tolerance — so the pull request that happened to cross the
+tolerance went red for a number it had not touched. They are computed now, at the one
+moment the README has to be right; in between, the audit reports the drift and does not
+fail on it.
+
 Every push checks the manifest against reality: each version has to point at a release
 asset of this repository, and each checksum has to be the checksum of the file at that
 address (`scripts/check-manifest.sh`). The manifest is the one file a server installs

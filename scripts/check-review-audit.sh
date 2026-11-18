@@ -78,28 +78,24 @@ for name in "${names[@]}"; do
 done
 
 echo "== the share of commits the README credits to an LLM"
-# The README publishes how much of this repository an LLM typed. Nothing recomputed it,
-# so it sat three commits behind for weeks. This is a guard against that kind of rot, not
-# a demand for an exact figure: the number is a rough share and reads as one, a branch
-# has to state what it will be once its commits land, and a squash changes how many that
-# is. So the tolerance is wide enough that nobody has to touch the README to land a
-# change, and narrow enough that months of drift still fail.
-TOLERANCE=10
+# The README publishes how much of this repository an LLM typed. It is written by the
+# release (scripts/update-readme-release.sh), so between two releases it is behind by
+# however many commits have landed, and that is what it is meant to be: the figure of the
+# latest version.
+#
+# This used to fail the run when the drift passed ten. The pull request that happened to
+# cross the line went red for a number it had not touched (#308), the check was not one main
+# requires, and the figure still had to be corrected by hand. So the drift is reported
+# and nothing more; what keeps the figure honest is that nobody types it.
 said=$(grep -oE '\*\*[0-9]+ of [0-9]+\*\* commits' "$REPO_ROOT/README.md" | head -1 | grep -oE '[0-9]+ of [0-9]+')
-said_ai=${said%% of *}
-said_total=${said##* of }
 actual_total=$(git -C "$REPO_ROOT" rev-list --count HEAD)
 actual_ai=$(git -C "$REPO_ROOT" log HEAD -i --grep='Co-Authored-By: Claude' --format=%H | wc -l)
-printf '  README says %s of %s; history has %s of %s\n' \
-    "$said_ai" "$said_total" "$actual_ai" "$actual_total"
-for pair in "AI commits:$said_ai:$actual_ai" "commits in total:$said_total:$actual_total"; do
-    IFS=: read -r what stated measured <<<"$pair"
-    drift=$(( stated > measured ? stated - measured : measured - stated ))
-    if (( drift > TOLERANCE )); then
-        echo "  OFF BY $drift  $what (README $stated, history $measured)"
-        failures=$((failures + 1))
-    fi
-done
+printf '  README says %s; history has %s of %s (the release brings it up to date)\n' \
+    "${said:-nothing}" "$actual_ai" "$actual_total"
+if [[ -z $said ]]; then
+    echo "  MISSING  the README no longer states the share, so the release cannot update it"
+    failures=$((failures + 1))
+fi
 
 echo
 if (( failures > 0 )); then
@@ -107,4 +103,4 @@ if (( failures > 0 )); then
     exit 1
 fi
 
-echo "every commit, issue and identifier named resolves, and the AI share is current"
+echo "every commit, issue and identifier named resolves"

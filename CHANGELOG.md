@@ -12,6 +12,27 @@ in the few lines somebody reads before clicking.
 Issue and pull request numbers are given bare rather than as links: the catalog renders
 Markdown, so a link per finding would cost more characters than the lines themselves.
 
+## 1.12.23
+
+- **Fix: a restart could empty the plugin's settings.** A control character in a group
+  name sent by the provider, or pasted into a text field, made the configuration file
+  unreadable, and Jellyfin replaces a plugin configuration it cannot read with an empty
+  one: providers, mappings and account links were gone after the next restart. Such
+  characters no longer reach the file (#306, #307).
+- **New: _Public address_.** Set, the redirect URI the provider is given is built from it
+  and not from request headers, which matters where a provider accepts redirect URIs by
+  pattern. A login opened at another address is taken to the public one first (#302, #303).
+- **New: _All libraries_** on a group mapping grants every library, including ones added
+  later, without making the group administrators (#298, #299).
+- **New: _Type the Quick Connect code in_.** The approval page asks for the code the
+  device shows and ignores one in a link; a mistyped code can be typed again (#304, #305).
+- **Fixes.** A Quick Connect code that expired or was approved already is answered in
+  words instead of with a 404 or a 500 (#300, #301). A refused save shows the server's
+  reason on the page, and a provider id that cannot work is refused when saving (#306).
+
+Nothing to do on upgrade; the three new settings are off until you set them, and are by
+Nick Hainke (#295). Update soon if your provider's group names are not yours to decide.
+
 ## 1.12.22
 
 - **Linking without the server log.** The _Account Links_ tab lists the sign-ins that were
