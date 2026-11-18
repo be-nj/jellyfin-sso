@@ -99,6 +99,56 @@ public sealed class SsoLoginTests : IAsyncLifetime
         Assert.Contains(Library(_env.KidsLibraryId), folders);
     }
 
+    /// <summary>
+    /// A mapping for all libraries names none, so what it grants is Jellyfin's own
+    /// "all folders" switch: the person sees both libraries without either id being in the
+    /// mapping, is no administrator for it, and loses it again with the group. Somebody in
+    /// another group is not touched by it.
+    /// </summary>
+    [Fact]
+    public async Task A_group_mapped_to_all_libraries_sees_every_library_and_only_that_group_does()
+    {
+        await _env.PatchConfigAsync(config =>
+        {
+            var kids = JellyfinEnvironment.Mapping(config, "kids");
+            kids["AllLibraries"] = true;
+            kids["LibraryIds"] = new JsonArray();
+        });
+
+        var login = await _env.StartWebLoginAsync(new FakeUser("sub-all", "alluser", ["kids"]));
+        Assert.True(login.Succeeded, login.Body);
+
+        var policy = await _env.UserPolicyAsync("alluser");
+        Assert.True(policy["EnableAllFolders"]!.GetValue<bool>());
+        Assert.False(policy["IsAdministrator"]!.GetValue<bool>());
+        Assert.Equal(["Kids", "Movies"], await ViewsAsync("alluser", login.Secret!));
+
+        var other = await _env.StartWebLoginAsync(new FakeUser("sub-some", "someuser", ["media"]));
+        Assert.True(other.Succeeded, other.Body);
+        Assert.False((await _env.UserPolicyAsync("someuser"))["EnableAllFolders"]!.GetValue<bool>());
+        Assert.Equal(["Movies"], await ViewsAsync("someuser", other.Secret!));
+
+        var later = await _env.StartWebLoginAsync(new FakeUser("sub-all", "alluser", ["media"]));
+        Assert.True(later.Succeeded, later.Body);
+        Assert.False((await _env.UserPolicyAsync("alluser"))["EnableAllFolders"]!.GetValue<bool>());
+        Assert.Equal(["Movies"], await ViewsAsync("alluser", later.Secret!));
+    }
+
+    /// <summary>The libraries Jellyfin shows this person, asked with their own session.</summary>
+    private async Task<List<string>> ViewsAsync(string username, string secret)
+    {
+        var auth = await _env.AuthenticateAsync(username, secret);
+        auth.EnsureSuccessStatusCode();
+        var session = JsonNode.Parse(await auth.Content.ReadAsStringAsync())!;
+
+        using var client = JellyfinEnvironment.TrustingClient();
+        client.DefaultRequestHeaders.Authorization =
+            JellyfinEnvironment.TokenHeader(session["AccessToken"]!.GetValue<string>());
+        var views = JsonNode.Parse(await client.GetStringAsync(
+            $"{_env.BaseUrl}/UserViews?userId={session["User"]!["Id"]!.GetValue<string>()}"))!;
+        return views["Items"]!.AsArray().Select(v => v!["Name"]!.GetValue<string>()).Order().ToList();
+    }
+
     [Fact]
     public async Task An_unlinked_identity_cannot_take_over_an_existing_account()
     {

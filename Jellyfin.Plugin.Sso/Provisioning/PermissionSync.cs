@@ -1,3 +1,4 @@
+using System.Globalization;
 using Jellyfin.Data;
 using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Database.Implementations.Enums;
@@ -85,9 +86,12 @@ public sealed class PermissionSync
 
         var enableAll = isAdmin || matched.Any(m => m.AllLibraries);
 
+        // "all", not the count: a group mapped to every library names none, and
+        // libraries=0 next to somebody who can see everything reads as the opposite.
         _logger.LogInformation(
             "SSO sync for user {Id}: admin={Admin}, libraries={Count}, groups={Groups}",
-            userId, isAdmin, libraryIds.Length, Loggable.OneLine(identity.Groups));
+            userId, isAdmin, enableAll ? "all" : libraryIds.Length.ToString(CultureInfo.InvariantCulture),
+            Loggable.OneLine(identity.Groups));
 
         // Only the fields this plugin claims are touched. A policy built from scratch here
         // would quietly reset everything an administrator set elsewhere — blocked tags,
