@@ -233,23 +233,36 @@ internal static class SsoPages
     /// of the browser can make it.
     /// </summary>
     internal static string ApproveQuickConnect(
-        string basePath, string username, string quickConnectCode, string token)
+        string basePath, string username, string quickConnectCode, string token, string? refused = null)
         => Shell(
             "Approve this device",
             """
               .card{max-width:28em;text-align:center}
               .code{font-size:2em;letter-spacing:.2em;margin:.5em 0;font-family:ui-monospace,monospace}
               button{font:inherit;padding:.6em 1.4em;margin-top:1em;cursor:pointer}
+              .refused{color:#ff8a80}
             """,
             $"""
             <h1>Approve this device?</h1>
-            <p>Signed in as <strong>{Html(username)}</strong>. A device is waiting with this code:</p>
-            <p class="code">{Html(quickConnectCode)}</p>
-            <p>Approve only if this is the code your own device is showing.</p>
-            <form method="post" action="{basePath}/sso/oidc/qc/approve">
-              <input type="hidden" name="token" value="{Html(token)}"/>
-              <button type="submit">Approve</button>
-            </form>
+            {(refused is null ? string.Empty : $"""<p class="refused" role="alert">{Html(refused)}</p>""")}
+            {(quickConnectCode.Length == 0
+                ? $"""
+                  <p>Signed in as <strong>{Html(username)}</strong>. Type the code your device is showing:</p>
+                  <form method="post" action="{basePath}/sso/oidc/qc/approve">
+                    <input type="hidden" name="token" value="{Html(token)}"/>
+                    <input class="code" name="code" inputmode="numeric" autocomplete="off" required autofocus/>
+                    <button type="submit">Approve</button>
+                  </form>
+                  """
+                : $"""
+                  <p>Signed in as <strong>{Html(username)}</strong>. A device is waiting with this code:</p>
+                  <p class="code">{Html(quickConnectCode)}</p>
+                  <p>Approve only if this is the code your own device is showing.</p>
+                  <form method="post" action="{basePath}/sso/oidc/qc/approve">
+                    <input type="hidden" name="token" value="{Html(token)}"/>
+                    <button type="submit">Approve</button>
+                  </form>
+                  """)}
             <p><a href="{basePath}/web/index.html">Cancel</a></p>
             """);
 

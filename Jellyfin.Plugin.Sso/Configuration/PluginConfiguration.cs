@@ -85,6 +85,14 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool AllowSelfServiceLinking { get; set; } = true;
 
     /// <summary>
+    /// Whether the Quick Connect approval asks for the code the device shows instead of
+    /// taking it from the link. A link can carry the code of somebody else's device, and
+    /// one click then approves it; typing makes the person read the code off a device
+    /// first. Somebody who is told a code and types it is not stopped by this.
+    /// </summary>
+    public bool TypeQuickConnectCode { get; set; }
+
+    /// <summary>
     /// Whether a profile picture may be fetched from an address that is not public and not
     /// the provider's own host — loopback, a private range, a container name.
     ///

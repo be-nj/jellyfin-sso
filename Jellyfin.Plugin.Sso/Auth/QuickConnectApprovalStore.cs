@@ -30,8 +30,16 @@ public sealed class QuickConnectApprovalStore
         _ttl = LoginLifetime.Covered(ttl);
     }
 
+    /// <summary>
+    /// How many codes one login may get wrong when the code is typed in. A token is good
+    /// for one answer; after a wrong code the page is handed a fresh one, this many times
+    /// at most, so a mistyped digit does not cost the sign-in at the provider and a login
+    /// still cannot be used to try codes until one fits.
+    /// </summary>
+    public const int MaxWrongCodes = 3;
+
     public sealed record Pending(Guid UserId, string Username, string Code, DateTimeOffset Expiry,
-        LoginStamp Stamp);
+        LoginStamp Stamp, int WrongCodes = 0);
 
     private readonly ConcurrentDictionary<string, Pending> _store = new();
 
@@ -46,6 +54,22 @@ public sealed class QuickConnectApprovalStore
 
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         _store[token] = new Pending(userId, username, code, DateTimeOffset.UtcNow.Add(_ttl), stamp);
+        return token;
+    }
+
+    /// <summary>
+    /// A token for one more try after a wrong code, or null when this login has had its
+    /// tries. The approval expires when it would have: a wrong code buys no time.
+    /// </summary>
+    public string? IssueAgain(Pending pending)
+    {
+        if (pending.WrongCodes + 1 >= MaxWrongCodes || pending.Expiry <= DateTimeOffset.UtcNow)
+        {
+            return null;
+        }
+
+        var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        _store[token] = pending with { WrongCodes = pending.WrongCodes + 1 };
         return token;
     }
 

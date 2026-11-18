@@ -219,4 +219,32 @@ public sealed class SsoPagesTests
         Assert.DoesNotContain("input[type=\"password\"]", script, StringComparison.Ordinal);
         Assert.DoesNotContain("document.querySelector('form')", script, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Without_a_code_from_the_link_the_approval_asks_for_it()
+    {
+        var page = SsoPages.ApproveQuickConnect(string.Empty, "ben", string.Empty, "token");
+
+        Assert.Contains("name=\"code\"", page);
+        Assert.Contains("Type the code your device is showing", page);
+        Assert.DoesNotContain("A device is waiting with this code", page);
+        // The token still travels with the form; without it the typed code approves nothing.
+        Assert.Contains("name=\"token\" value=\"token\"", page);
+    }
+
+    [Fact]
+    public void A_refused_code_is_said_on_the_page_and_escaped()
+    {
+        var page = SsoPages.ApproveQuickConnect(
+            string.Empty, "ben", string.Empty, "token", "No device <b>is</b> waiting with that code.");
+
+        Assert.Contains("role=\"alert\"", page);
+        Assert.Contains("No device &lt;b&gt;is&lt;/b&gt; waiting with that code.", page);
+        Assert.Contains("name=\"code\"", page);
+    }
+
+    [Fact]
+    public void A_page_that_refused_nothing_carries_no_alert()
+        => Assert.DoesNotContain(
+            "role=\"alert\"", SsoPages.ApproveQuickConnect(string.Empty, "ben", string.Empty, "token"));
 }
