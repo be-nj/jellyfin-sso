@@ -46,5 +46,40 @@ jobs:
       - name: Build the plugin
         run: dotnet build Jellyfin.Plugin.Sso -c Release
 
+      # Not uploaded straight away. paths-ignore in the config has no effect on a compiled
+      # language, because C# is extracted from the build, and the regex source generator
+      # writes thousands of lines under obj/ that nobody here can change: every new
+      # regular expression brought alerts in them (#311). They are dropped from the
+      # results first, and only the repository's own code is uploaded.
       - name: Analyze
         uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
+        with:
+          upload: never
+          output: sarif
+
+      - name: Drop results in generated code
+        run: |
+          python3 - <<'PY'
+          import glob, json
+          for path in glob.glob('sarif/*.sarif'):
+              with open(path) as f:
+                  sarif = json.load(f)
+              for run in sarif['runs']:
+                  kept = []
+                  for result in run.get('results', []):
+                      where = [l['physicalLocation']['artifactLocation']['uri']
+                               for l in result.get('locations', [])
+                               if 'physicalLocation' in l]
+                      if where and all(('/obj/' in '/' + u or '/bin/' in '/' + u) for u in where):
+                          continue
+                      kept.append(result)
+                  print(f"{path}: kept {len(kept)} of {len(run.get('results', []))}")
+                  run['results'] = kept
+              with open(path, 'w') as f:
+                  json.dump(sarif, f)
+          PY
+
+      - name: Upload the results
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
+        with:
+          sarif_file: sarif
