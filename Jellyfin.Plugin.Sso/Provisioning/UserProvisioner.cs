@@ -162,13 +162,7 @@ public sealed class UserProvisioner
                     JellyfinUserId = newUser.Id,
                 });
 
-                var newGroups = identity.Groups
-                    .Except(config.SeenGroups, StringComparer.Ordinal)
-                    .Distinct(StringComparer.Ordinal)
-                    .Take(Math.Max(0, PluginConfiguration.MaxSeenGroups - config.SeenGroups.Count))
-                    .ToList();
-
-                config.SeenGroups.AddRange(newGroups);
+                config.SeenGroups.AddRange(config.GroupsToRemember(identity.Groups));
                 Plugin.Instance.SaveConfiguration();
             }
 

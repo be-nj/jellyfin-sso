@@ -46,6 +46,19 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         base.UpdateConfiguration(configuration);
     }
 
+    /// <summary>
+    /// The last line before the file. Every way a text gets into the configuration checks
+    /// it where it arrives; this is for the way nobody thought of, because the price of
+    /// one character the file cannot hold is the whole configuration at the next restart
+    /// (see <see cref="StorableText"/>). Such a character is replaced, in the object and so in
+    /// the file, and the file can always be read back.
+    /// </summary>
+    public override void SaveConfiguration(PluginConfiguration config)
+    {
+        StorableText.Scrub(config);
+        base.SaveConfiguration(config);
+    }
+
     public override string Name => "SSO Authentication";
     public override string Description => "OIDC/OAuth2 single sign-on with group-based library access.";
     public override Guid Id => Guid.Parse("f5538c3a-1bce-4b8c-b8a5-bc1a0fffdf27");

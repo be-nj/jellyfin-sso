@@ -527,6 +527,10 @@ public sealed class JellyfinEnvironment : IAsyncLifetime
 
     public async Task<string> ServerLogsAsync() => (await _jellyfin.GetLogsAsync()).Stdout;
 
+    /// <summary>The plugin's configuration as Jellyfin wrote it to disk, byte for byte.</summary>
+    public Task<byte[]> ConfigurationFileAsync()
+        => _jellyfin.ReadFileAsync("/config/plugins/configurations/Jellyfin.Plugin.Sso.xml");
+
     /// <summary>
     /// Waits until the server's log carries <paramref name="fragment"/>, and returns the
     /// log from <paramref name="skip"/> bytes on.

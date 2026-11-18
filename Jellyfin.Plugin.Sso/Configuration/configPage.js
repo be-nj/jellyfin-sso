@@ -768,7 +768,25 @@ function apiPost(url, body) {
 function apiDelete(url) {
     return fetch(url, { method: 'DELETE', headers: authHeaders() }).then(checkOk);
 }
-function checkOk(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r; }
+// A refusal comes with a sentence written for the person at this page — which provider,
+// which value, what to write instead. It used to be dropped here, and the page said
+// "Save failed: HTTP 400" about a save the server had explained.
+function checkOk(r) {
+    if (r.ok) { return r; }
+    return r.text().then(function (body) {
+        var said = (body || '').trim();
+        try {
+            // ASP.NET's own validation answers in JSON, with the reasons under "errors".
+            var problem = JSON.parse(said);
+            var reasons = [];
+            Object.keys(problem.errors || {}).forEach(function (field) {
+                (problem.errors[field] || []).forEach(function (reason) { reasons.push(field + ': ' + reason); });
+            });
+            said = reasons.join(' ') || problem.title || said;
+        } catch (e) { /* Plain text, which is what the plugin's own refusals are. */ }
+        throw new Error(said && said.length <= 600 ? said : 'HTTP ' + r.status);
+    }, function () { throw new Error('HTTP ' + r.status); });
+}
 
 // ─── DOM helpers ──────────────────────────────────────────────────────────────
 
