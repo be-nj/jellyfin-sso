@@ -9,6 +9,14 @@
     "imageUrl": "https://jf.be-nj.net/docs/img/icon.png",
     "versions": [
       {
+        "version": "1.12.23.0",
+        "changelog": "- **Fix: a restart could empty the plugin's settings.** A control character in a group\n  name sent by the provider, or pasted into a text field, made the configuration file\n  unreadable, and Jellyfin replaces a plugin configuration it cannot read with an empty\n  one: providers, mappings and account links were gone after the next restart. Such\n  characters no longer reach the file (#306, #307).\n- **New: _Public address_.** Set, the redirect URI the provider is given is built from it\n  and not from request headers, which matters where a provider accepts redirect URIs by\n  pattern. A login opened at another address is taken to the public one first (#302, #303).\n- **New: _All libraries_** on a group mapping grants every library, including ones added\n  later, without making the group administrators (#298, #299).\n- **New: _Type the Quick Connect code in_.** The approval page asks for the code the\n  device shows and ignores one in a link; a mistyped code can be typed again (#304, #305).\n- **Fixes.** A Quick Connect code that expired or was approved already is answered in\n  words instead of with a 404 or a 500 (#300, #301). A refused save shows the server's\n  reason on the page, and a provider id that cannot work is refused when saving (#306).\n\nNothing to do on upgrade; the three new settings are off until you set them, and are by\nNick Hainke (#295). Update soon if your provider's group names are not yours to decide.",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/be-nj/jellyfin-sso/releases/download/v1.12.23/jellyfin-sso_1.12.23.0.zip",
+        "checksum": "6459341c846fb4b8f061073508e0e048",
+        "timestamp": "2026-11-18T09:57:59Z"
+      },
+      {
         "version": "1.12.22.0",
         "changelog": "- **Linking without the server log.** The _Account Links_ tab lists the sign-ins that were\n  refused for want of an account, and a button fills the link form. The refusal itself\n  tells somebody with a Jellyfin password where to link their own sign-in (#267, #270).\n- **New: _Check saved settings_** on the provider card shows what the server finds at the\n  provider — endpoints, keys, the client secret's reference — or the refusal in full,\n  instead of one sentence in the browser and the reason in the log (#268).\n- **New: _Set permissions from this provider's groups_**, per provider. Off, a login\n  leaves an account's libraries and permissions as you set them — for a provider that\n  sends no groups. With _Create an account at first login_ off as well, that is the\n  setup for **Google**, which now has [a guide](https://github.com/be-nj/jellyfin-sso/blob/main/docs/google.md)\n  written from a login walked by hand (#269, #271).\n- **Fixes.** A client secret is sent as a form parameter where the provider's discovery\n  document asks for that and not for HTTP Basic, and a public client no longer sends a\n  Basic header with an empty password (#277, #278).\n\nNothing to do on upgrade. The last fix changes the token request of every public client\nto the form the specification describes; if a login that worked stops at the provider\nafter this update, that is where to look.",
         "targetAbi": "12.0.0.0",
@@ -39,14 +47,6 @@
         "sourceUrl": "https://github.com/be-nj/jellyfin-sso/releases/download/v1.12.19/jellyfin-sso_1.12.19.0.zip",
         "checksum": "576e0714be7ac10471f3235ebb1d60d8",
         "timestamp": "2026-11-05T20:12:02Z"
-      },
-      {
-        "version": "1.12.18.0",
-        "changelog": "- **Update from 1.12.17.** Two of that release's security fixes did not hold. The pending\n  login cookie was read under the unprefixed name as well, which handed back the\n  administrator escalation 1.12.17 claimed to close, and the logo fetch passed a flag that\n  waived the address rules it had just been given — on the one path an anonymous caller can\n  read (#153–#168).\n- **Fixes.** Pressing Save could resurrect a deleted link, or erase one made while the page\n  was open; the back-channel logout spent its token before the sessions were gone; a key\n  rotation stopped every login for half an hour with a 500; a flood of logins could evict a\n  chosen person's session.\n- **Release pipeline.** A pull request could decide whether it was tested; two workflows\n  spliced text somebody else chose into a shell; the release ZIP was built from `main` while\n  its attestation named the tag; nothing checked that the manifest's URLs point at this\n  repository or that its checksums match.",
-        "targetAbi": "12.0.0.0",
-        "sourceUrl": "https://github.com/be-nj/jellyfin-sso/releases/download/v1.12.18/jellyfin-sso_1.12.18.0.zip",
-        "checksum": "9bff75b3c3c85af5a83b7783379e6109",
-        "timestamp": "2026-11-05T04:13:37Z"
       }
     ]
   }
