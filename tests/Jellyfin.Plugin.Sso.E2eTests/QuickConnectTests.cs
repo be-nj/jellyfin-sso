@@ -116,6 +116,58 @@ public sealed class QuickConnectTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.BadRequest, second.StatusCode);
     }
 
+    /// <summary>
+    /// A code no device is waiting with: one that expired while the person was signing
+    /// in, or was mistyped into the link. Jellyfin answers that with an exception the
+    /// plugin did not catch, so the browser got Jellyfin's own 404 "Error processing
+    /// request." after a sign-in that had worked (#300).
+    /// </summary>
+    [Fact]
+    public async Task A_code_no_device_is_waiting_with_is_refused_in_words()
+    {
+        var login = await _env.StartWebLoginAsync(
+            new FakeUser("sub-tv", "tv-user", ["media"]), quickConnectCode: "000000");
+        var token = Regex.Match(login.Body!, @"name=""token"" value=""(?<t>[A-F0-9]+)""").Groups["t"].Value;
+        Assert.NotEmpty(token);
+
+        using var client = JellyfinEnvironment.TrustingClient();
+        var approval = await client.PostAsync(
+            $"{_env.BaseUrl}/sso/oidc/qc/approve",
+            new FormUrlEncodedContent([new KeyValuePair<string, string>("token", token)]));
+
+        Assert.Equal(HttpStatusCode.BadRequest, approval.StatusCode);
+        Assert.Contains("Quick Connect authorization failed", await approval.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    /// The same code approved from two browsers, which is two people in a household
+    /// opening the one link. Jellyfin refuses the second with a different exception, and
+    /// that one reached the browser as a 500.
+    /// </summary>
+    [Fact]
+    public async Task A_code_that_was_approved_already_is_refused_in_words()
+    {
+        var (code, secret) = await InitiateAsync();
+        var first = await _env.StartWebLoginAsync(
+            new FakeUser("sub-tv", "tv-user", ["media"]), quickConnectCode: code);
+        var second = await _env.StartWebLoginAsync(
+            new FakeUser("sub-tv2", "tv-user-two", ["media"]), quickConnectCode: code);
+
+        using var client = JellyfinEnvironment.TrustingClient();
+        async Task<HttpResponseMessage> ApproveAsync(string body)
+            => await client.PostAsync(
+                $"{_env.BaseUrl}/sso/oidc/qc/approve",
+                new FormUrlEncodedContent([new KeyValuePair<string, string>(
+                    "token", Regex.Match(body, @"name=""token"" value=""(?<t>[A-F0-9]+)""").Groups["t"].Value)]));
+
+        Assert.Equal(HttpStatusCode.OK, (await ApproveAsync(first.Body!)).StatusCode);
+        Assert.True(await IsAuthorizedAsync(secret));
+
+        var again = await ApproveAsync(second.Body!);
+        Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
+        Assert.Contains("Quick Connect authorization failed", await again.Content.ReadAsStringAsync());
+    }
+
     [Fact]
     public async Task An_invented_approval_token_is_refused()
     {

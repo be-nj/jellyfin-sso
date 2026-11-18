@@ -7,6 +7,7 @@ using Jellyfin.Plugin.Sso.Provisioning;
 using Jellyfin.Plugin.Sso.Web;
 using Jellyfin.Data;
 using Jellyfin.Database.Implementations.Enums;
+using MediaBrowser.Common.Extensions;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.QuickConnect;
 using Microsoft.AspNetCore.Authorization;
@@ -224,12 +225,29 @@ public sealed class SsoCallbackController : SsoFlowController
             return PlainText.Forbidden("This account is disabled.");
         }
 
-        var authorized = await _quickConnect.AuthorizeRequest(pending.UserId, pending.Code)
-            .ConfigureAwait(false);
+        bool authorized;
+        try
+        {
+            authorized = await _quickConnect.AuthorizeRequest(pending.UserId, pending.Code)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is ResourceNotFoundException or InvalidOperationException)
+        {
+            // Jellyfin's two ways of saying no. ResourceNotFoundException: no device is
+            // waiting with this code, because it expired during the sign-in or was never
+            // right. InvalidOperationException: the code was approved already, from
+            // another browser. Uncaught they reached the person as Jellyfin's own 404
+            // "Error processing request." and as a 500, after a sign-in that had worked.
+            _logger.LogInformation(
+                "SSO: Jellyfin refused a Quick Connect approval for user {Id}: {Reason}",
+                pending.UserId, Loggable.OneLine(ex.Message));
+            authorized = false;
+        }
 
         if (!authorized)
             return PlainText.BadRequest(
-                "Quick Connect authorization failed. The code may have expired.");
+                "Quick Connect authorization failed. The code may have expired, or it was "
+                + "approved already. Start again with the code your device is showing now.");
 
         // A revocation between Consume and the token Jellyfin just minted: its sweep may
         // have run before that token existed. Anything revoked after this check sweeps a
