@@ -237,9 +237,11 @@
               </label>
               <div class="fieldDescription">
                 The approval page asks for the code the device shows instead of taking it
-                from <code>/sso/oidc/start/qc?code=…</code>. A link is something anybody can
-                send; a typed code can only come from the device in front of you. Open
-                <code>/sso/oidc/start/qc</code> without a code then.
+                from <code>/sso/oidc/start/qc?code=…</code>, and a code in a link is ignored.
+                A link can carry the code of somebody else's device, and one click on
+                Approve then lets that device in. Typing makes the person read the code off
+                a device first. It does not help against somebody who is told a code and
+                types it. Open <code>/sso/oidc/start/qc</code> without a code then.
               </div>
             </div>
             <div class="checkboxContainer">

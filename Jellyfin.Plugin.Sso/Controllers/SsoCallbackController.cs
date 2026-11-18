@@ -11,6 +11,7 @@ using MediaBrowser.Common.Extensions;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.QuickConnect;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
@@ -216,11 +217,14 @@ public sealed class SsoCallbackController : SsoFlowController
             return PlainText.BadRequest("This approval has expired. Start the login again.");
         }
 
-        // The code from the link, or, when the page asked for it, the one typed in.
-        var quickConnectCode = pending.Code.Length > 0 ? pending.Code : code?.Trim() ?? string.Empty;
-        if (quickConnectCode.Length == 0)
+        // The code from the link, or, when the page asked for it, the one typed in. Typed
+        // is decided by how the login started, not by what this request carries: a code
+        // from a link cannot be replaced by a form field.
+        var typed = pending.Code.Length == 0;
+        var quickConnectCode = typed ? TypedCode(code) : pending.Code;
+        if (quickConnectCode is null)
         {
-            return PlainText.BadRequest("No code was typed in. Start the login again.");
+            return WrongCode(pending, "That is not a Quick Connect code. It is the six digits your device is showing.");
         }
 
         // Jellyfin mints the device's token inside AuthorizeRequest and checks nothing
@@ -252,9 +256,13 @@ public sealed class SsoCallbackController : SsoFlowController
         }
 
         if (!authorized)
-            return PlainText.BadRequest(
-                "Quick Connect authorization failed. The code may have expired, or it was "
-                + "approved already. Start again with the code your device is showing now.");
+        {
+            return typed
+                ? WrongCode(pending, "No device is waiting with that code. Check it against your device and type it again.")
+                : PlainText.BadRequest(
+                    "Quick Connect authorization failed. The code may have expired, or it was "
+                    + "approved already. Start again with the code your device is showing now.");
+        }
 
         // A revocation between Consume and the token Jellyfin just minted: its sweep may
         // have run before that token existed. Anything revoked after this check sweeps a
@@ -269,6 +277,35 @@ public sealed class SsoCallbackController : SsoFlowController
     }
 
     private const string RevokedMessage = "This login was revoked. Start the login again.";
+
+    /// <summary>
+    /// A typed code as Jellyfin issues them: six digits. Blanks and dashes are dropped,
+    /// because a device may show the code in two groups and people type what they see.
+    /// Null for anything else, which never reaches Jellyfin.
+    /// </summary>
+    internal static string? TypedCode(string? typed)
+    {
+        var digits = new string((typed ?? string.Empty).Where(c => !char.IsWhiteSpace(c) && c != '-').ToArray());
+        return digits.Length == 6 && digits.All(char.IsAsciiDigit) ? digits : null;
+    }
+
+    /// <summary>
+    /// The approval page once more after a typed code that did not fit, with a token for
+    /// the next try — or the end of this login when it has had its tries. The token that
+    /// carried the wrong code is spent either way.
+    /// </summary>
+    private IActionResult WrongCode(QuickConnectApprovalStore.Pending pending, string why)
+    {
+        if (_approvals.IssueAgain(pending) is not { } token)
+        {
+            return PlainText.BadRequest(
+                "That was the last try for this login. Start the login again, with the code "
+                + "your device is showing now.");
+        }
+
+        Response.StatusCode = StatusCodes.Status400BadRequest;
+        return ApprovalPage(pending.Username, pending.Code, token, why);
+    }
 
     /// <summary>
     /// Whether the login expired, or its identity or the account it is about to reach was
@@ -390,8 +427,11 @@ public sealed class SsoCallbackController : SsoFlowController
     private IActionResult AskToApproveQuickConnect(
         Guid userId, string username, string quickConnectCode, LoginStamp stamp)
     {
-        var token = _approvals.Issue(userId, username, quickConnectCode, stamp);
+        return ApprovalPage(username, quickConnectCode, _approvals.Issue(userId, username, quickConnectCode, stamp));
+    }
 
+    private IActionResult ApprovalPage(string username, string quickConnectCode, string token, string? refused = null)
+    {
         // The approval token is in this page's body and is the whole authority for letting
         // the waiting device in, so the page must not be stored anywhere.
         Response.Headers.CacheControl = "no-store";
@@ -405,7 +445,7 @@ public sealed class SsoCallbackController : SsoFlowController
         Response.Headers["Content-Security-Policy"] = "frame-ancestors 'none'";
 
         return Content(
-            SsoPages.ApproveQuickConnect(At.BasePath, username, quickConnectCode, token),
+            SsoPages.ApproveQuickConnect(At.BasePath, username, quickConnectCode, token, refused),
             "text/html");
     }
 

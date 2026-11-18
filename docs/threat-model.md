@@ -123,6 +123,14 @@ its signature is checked, and the group names that arrive with it.
   such a link therefore sees whose code they are about to let in — and that page refuses
   to be framed, because a click can be stolen from a frame and the click is the whole
   approval.
+  What is left is the click itself: somebody with a session at the provider who clicks
+  Approve without comparing lets the sender's device into their account. *Type the Quick
+  Connect code in* closes that — a code in a link is then ignored and the page asks for
+  the one on the device, three tries for one sign-in
+  (`With_the_code_typed_in_a_code_from_the_link_is_neither_shown_nor_approved`,
+  `The_third_wrong_code_ends_the_approval`). It is off by default, and it does not help
+  against somebody who is sent a code with the link and types it in: that is the same
+  trick Jellyfin's own Quick Connect page is open to.
 - **The limit counts addresses, not people.** Everyone behind one router is one caller,
   and a caller with an IPv6 prefix to walk is many. Sixty requests a minute is roomy
   enough that the first case does not bite and tight enough that the second gains little;

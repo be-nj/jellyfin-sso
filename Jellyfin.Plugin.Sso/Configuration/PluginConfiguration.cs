@@ -86,8 +86,9 @@ public class PluginConfiguration : BasePluginConfiguration
 
     /// <summary>
     /// Whether the Quick Connect approval asks for the code the device shows instead of
-    /// taking it from the link. A link is something anybody can send; the code typed in can
-    /// only come from a device in front of the person approving it.
+    /// taking it from the link. A link can carry the code of somebody else's device, and
+    /// one click then approves it; typing makes the person read the code off a device
+    /// first. Somebody who is told a code and types it is not stopped by this.
     /// </summary>
     public bool TypeQuickConnectCode { get; set; }
 

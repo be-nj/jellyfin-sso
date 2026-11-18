@@ -47,8 +47,10 @@ and no password is ever typed into a television.
 
 With **Type the Quick Connect code in** switched on, step 3 is
 `https://<your-jellyfin>/sso/oidc/start/qc` without a code, and the approval page asks for
-the code instead of showing one. A code in a link is ignored then: a link that somebody
-else sent can no longer carry their device's code into your approval.
+the code instead of showing one. A code in a link is ignored then, so a link somebody else
+sent cannot carry their device's code into your approval with a single click. A mistyped
+code can be typed again, three times at most for one sign-in. What the setting does not
+do: stop somebody who is sent a code together with the link and types it in.
 
 Where step 2 is, app by app, because it is not always where you would look:
 

@@ -118,6 +118,21 @@ public sealed class ConfigPageTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_admin_page_saves_that_the_quick_connect_code_is_typed_in()
+    {
+        var page = await OpenConfigPageAsync();
+        await page.ClickAsync(".sso-tab[data-tab=\"provider\"]");
+
+        await page.CheckAsync("#TypeQuickConnectCode", new PageCheckOptions { Force = true });
+        await page.ClickAsync("#Save");
+
+        await WaitForConfigAsync(config => config["TypeQuickConnectCode"]!.GetValue<bool>());
+
+        var again = await OpenConfigPageAsync();
+        await Assertions.Expect(again.Locator("#TypeQuickConnectCode")).ToBeCheckedAsync();
+    }
+
+    [Fact]
     public async Task The_admin_page_saves_the_safety_settings()
     {
         var page = await OpenConfigPageAsync();

@@ -233,16 +233,18 @@ internal static class SsoPages
     /// of the browser can make it.
     /// </summary>
     internal static string ApproveQuickConnect(
-        string basePath, string username, string quickConnectCode, string token)
+        string basePath, string username, string quickConnectCode, string token, string? refused = null)
         => Shell(
             "Approve this device",
             """
               .card{max-width:28em;text-align:center}
               .code{font-size:2em;letter-spacing:.2em;margin:.5em 0;font-family:ui-monospace,monospace}
               button{font:inherit;padding:.6em 1.4em;margin-top:1em;cursor:pointer}
+              .refused{color:#ff8a80}
             """,
             $"""
             <h1>Approve this device?</h1>
+            {(refused is null ? string.Empty : $"""<p class="refused" role="alert">{Html(refused)}</p>""")}
             {(quickConnectCode.Length == 0
                 ? $"""
                   <p>Signed in as <strong>{Html(username)}</strong>. Type the code your device is showing:</p>
