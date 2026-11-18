@@ -170,7 +170,13 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git checkout -b "$branch"
-          git add manifest.json m.json
+
+          # The README names the latest version and the share of commits an LLM helped
+          # write. Both are computed here and travel with the manifest, so they are right
+          # whenever a version is published and nobody has to keep them by hand.
+          scripts/update-readme-release.sh "$VERSION"
+
+          git add manifest.json m.json README.md
           git commit -m "Publish $version in the plugin manifest"
           git push --force origin "$branch"
 
