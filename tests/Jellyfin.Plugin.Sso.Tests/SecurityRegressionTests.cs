@@ -303,6 +303,74 @@ public sealed class SecurityRegressionTests
         Assert.Equal(4, requests.Count);
     }
 
+    /// <summary>
+    /// The back-channel logout endpoint is anonymous, and a token naming a key nobody
+    /// published made it drop the cached document before fetching a new one. A fetch
+    /// that then failed — a provider throttling the server, which is what a stream of
+    /// such tokens invites — left every login and logout without a document (#316).
+    /// </summary>
+    [Fact]
+    public async Task A_failed_refresh_keeps_the_document_logins_use()
+    {
+        var failing = false;
+        var requests = 0;
+        using var factory = new OidcClientFactory(NullLogger<OidcClientFactory>.Instance);
+        using var client = new HttpClient(new Handler(request =>
+        {
+            Interlocked.Increment(ref requests);
+            if (failing)
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.TooManyRequests));
+            var json = request.RequestUri!.AbsolutePath.EndsWith("openid-configuration", StringComparison.Ordinal)
+                ? PlainDocument
+                : """{"keys":[]}""";
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) });
+        }));
+        typeof(OidcClientFactory).GetField("_http", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(factory, client);
+        var provider = new ProviderConfig { Id = "plain", Authority = "https://idp.example" };
+
+        var before = await factory.GetDiscoveryDocumentAsync(provider);
+        failing = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => factory.RefreshAsync(provider));
+        var fetched = requests;
+
+        Assert.Same(before, await factory.GetDiscoveryDocumentAsync(provider));
+        Assert.Equal(fetched, requests);
+    }
+
+    /// <summary>
+    /// Tokens posted at the same time share one fetch rather than each costing the
+    /// provider two requests (#316).
+    /// </summary>
+    [Fact]
+    public async Task Refreshes_asked_for_at_the_same_time_share_one_fetch()
+    {
+        var gate = new TaskCompletionSource();
+        var discoveries = 0;
+        using var factory = new OidcClientFactory(NullLogger<OidcClientFactory>.Instance);
+        using var client = new HttpClient(new Handler(async request =>
+        {
+            var discovery = request.RequestUri!.AbsolutePath.EndsWith("openid-configuration", StringComparison.Ordinal);
+            if (discovery)
+            {
+                Interlocked.Increment(ref discoveries);
+                await gate.Task;
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(discovery ? PlainDocument : """{"keys":[]}"""),
+            };
+        }));
+        typeof(OidcClientFactory).GetField("_http", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(factory, client);
+        var provider = new ProviderConfig { Id = "plain", Authority = "https://idp.example" };
+
+        var refreshes = Enumerable.Range(0, 5).Select(_ => factory.RefreshAsync(provider)).ToList();
+        gate.SetResult();
+        var documents = await Task.WhenAll(refreshes);
+
+        Assert.Equal(1, discoveries);
+        Assert.All(documents, d => Assert.Same(documents[0], d));
+    }
+
     [Fact]
     public void A_whole_configuration_saved_through_jellyfin_keeps_the_live_links()
     {

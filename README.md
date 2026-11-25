@@ -69,7 +69,7 @@ only Markdown skips the heavy ones.
 
 | | |
 |---|---|
-| **828 unit tests** | Token validation, permissions, lockout guards, revocation races, account writes, markup, the served pages |
+| **830 unit tests** | Token validation, permissions, lockout guards, revocation races, account writes, markup, the served pages |
 | **226 end-to-end tests** | Throwaway Jellyfin container, an OIDC provider built for the suite, real browser — 33 of them check the harness's own reading of a browser console, of the host's network, of a failed image pull and of the browser's address, and need none of that |
 | **Every Jellyfin 12.x** | The same build against the oldest server the catalog offers it to and the two newest, on every pull request — and against every 12.x there is in the weekly run |
 | **16 real-provider logins** | Authentik, Keycloak and Authelia, through their own forms — including the misconfigurations their guides warn about |
@@ -195,7 +195,7 @@ same way for each of the four, this one included.
 
 | | Since | Latest | ★ | Licence | Written by AI | Tests |
 |---|---|---|---:|---|---|---|
-| **This one** | 2026-09 | v1.12.23 · 2026-11 | 5 | MIT → GPLv3 | **191 of 229** commits | 828 + 246 |
+| **This one** | 2026-09 | v1.12.23 · 2026-11 | 5 | MIT → GPLv3 | **191 of 229** commits | 830 + 246 |
 | K0lin | 2026-06 | v5.1.1 · 2026-09 | 187 | GPL-3.0 | none from an AI | about 78 |
 | Ezeqielle | 2026-05 | v1.0.10 · 2026-09 | 40 | GPL-3.0 | 33 of 82 | 16 |
 | 9p4 | 2022-01 | v4.0.0.4 · archived | 1,448 | GPL-3.0 | none from an AI | none |

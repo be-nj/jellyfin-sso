@@ -109,6 +109,12 @@ public sealed class UserProvisionerTests : IDisposable
         Assert.False(policy.EnableAllFolders);
         Assert.Empty(policy.EnabledFolders);
 
+        // Jellyfin's own defaults have these on; a provider that does not set
+        // permissions from groups would otherwise leave them on for a stranger (#317).
+        Assert.False(policy.EnableLiveTvAccess);
+        Assert.False(policy.EnableLiveTvManagement);
+        Assert.False(policy.EnableAllChannels);
+
         var link = Assert.Single(_harness.Configuration.Links);
         Assert.Equal("provider-1", link.ProviderId);
         Assert.Equal("sub-123", link.Sub);

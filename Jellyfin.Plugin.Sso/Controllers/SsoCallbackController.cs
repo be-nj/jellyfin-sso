@@ -381,8 +381,7 @@ public sealed class SsoCallbackController : SsoFlowController
                 "A token from {Name} was signed by an unknown key; refetching its keys.",
                 provider.Name);
 
-            Oidc.Forget(provider);
-            var fresh = await Oidc.GetDiscoveryDocumentAsync(provider, ct).ConfigureAwait(false);
+            var fresh = await Oidc.RefreshAsync(provider, ct).ConfigureAwait(false);
 
             var identity = await _claims.ExtractAsync(
                 provider, fresh,

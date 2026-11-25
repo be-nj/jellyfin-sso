@@ -144,6 +144,14 @@ public sealed class UserProvisioner
                 EnableAllFolders = false,
                 EnabledFolders = [],
                 IsAdministrator = false,
+
+                // Jellyfin's defaults turn these on for every new user. Where a provider
+                // does not set permissions from groups nothing changes them afterwards,
+                // and a stranger it admits could manage the household's recordings and
+                // see every channel (#317). Groups grant Live TV where they are used.
+                EnableLiveTvAccess = false,
+                EnableLiveTvManagement = false,
+                EnableAllChannels = false,
             }).ConfigureAwait(false);
 
             lock (Plugin.ConfigurationLock)
