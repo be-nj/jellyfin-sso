@@ -116,9 +116,35 @@ internal sealed class SsoAddress
     /// <summary>A public address as an address, or null when it is empty or not one.</summary>
     internal static SsoAddress? Configured(string? address)
     {
-        if (!Uri.TryCreate(address?.Trim(), UriKind.Absolute, out var uri)
+        // Never throws: whatever is typed or stored, the answer is an address or null (#327).
+        // System.Uri reads some hosts it then cannot convert, so the conversion is guarded too.
+        try
+        {
+            return ConfiguredOrThrow(address);
+        }
+        catch (UriFormatException)
+        {
+            return null;
+        }
+    }
+
+    private static SsoAddress? ConfiguredOrThrow(string? address)
+    {
+        // Characters that draw nothing or are not text (a right-to-left override, a byte-order
+        // mark, a zero-width space) are dropped by Uri from a host, so the address would read
+        // back as another one than it was typed.
+        if (address is null
+            || address.Any(c => char.GetUnicodeCategory(c) is System.Globalization.UnicodeCategory.Format
+                or System.Globalization.UnicodeCategory.Control && !char.IsWhiteSpace(c)))
+        {
+            return null;
+        }
+
+        if (!Uri.TryCreate(address.Trim(), UriKind.Absolute, out var uri)
             || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp)
-            || uri.Query.Length > 0 || uri.Fragment.Length > 0 || uri.UserInfo.Length > 0)
+            || uri.Query.Length > 0 || uri.Fragment.Length > 0 || uri.UserInfo.Length > 0
+            || uri.Port is < 1 or > 65535
+            || Uri.CheckHostName(uri.Host) is not (UriHostNameType.Dns or UriHostNameType.IPv4 or UriHostNameType.IPv6))
         {
             return null;
         }
@@ -135,6 +161,11 @@ internal sealed class SsoAddress
         // the brackets of an IPv6 literal, so that one keeps Host.
         var host = uri.HostNameType == UriHostNameType.IPv6 ? uri.Host : uri.IdnHost;
         var authority = uri.IsDefaultPort ? host : $"{host}:{uri.Port}";
+        if (!ForwardedPaths.IsHostAndPort(authority))
+        {
+            return null;
+        }
+
         return new SsoAddress(basePath, ForwardedPaths.BaseUri(uri.Scheme, authority, basePath));
     }
 

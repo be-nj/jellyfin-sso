@@ -20,7 +20,10 @@ public static class GroupMatching
     /// </summary>
     public static List<GroupMappingConfig> Matching(PluginConfiguration config, OidcIdentity identity)
         => config.GroupMappings
-            .Where(m => identity.Groups.Contains(m.Group, StringComparer.Ordinal))
+            // A mapping without a group names nobody, and an empty group is not one the
+            // provider sent (#330).
+            .Where(m => !string.IsNullOrWhiteSpace(m.Group)
+                && identity.Groups.Contains(m.Group, StringComparer.Ordinal))
             .ToList();
 
     /// <summary>

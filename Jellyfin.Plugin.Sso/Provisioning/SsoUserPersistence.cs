@@ -25,7 +25,7 @@ public sealed class SsoUserPersistence(
     {
         if (string.IsNullOrWhiteSpace(username) || username.Length > 255
             || username is "." or ".."
-            || !Regex.IsMatch(username, @"^(?!\s)[\w \-'._@+]+(?<!\s)$", RegexOptions.CultureInvariant))
+            || !Regex.IsMatch(username, @"^(?!\s)[\w \-'._@+]+(?<!\s)\z", RegexOptions.CultureInvariant))
             throw new ArgumentException("Invalid Jellyfin username.", nameof(username));
 
         await using var db = await contexts.CreateDbContextAsync(ct).ConfigureAwait(false);

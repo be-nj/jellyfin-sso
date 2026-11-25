@@ -95,11 +95,13 @@ public static class OutboundAddresses
     {
         var bytes = address.GetAddressBytes();
 
-        // 64:ff9b::/96 (NAT64) and 64:ff9b:1::/48 (local-use NAT64) carry an IPv4 address
-        // in their low bits, and that address is the one that decides.
+        // 64:ff9b::/96 (NAT64) carries an IPv4 address in its low bits, and that address is
+        // the one that decides. 64:ff9b:1::/48 (local-use NAT64) does not carry it there (RFC
+        // 6052 puts it in bytes 6, 7, 9 and 10) and is reachable only through a translator an
+        // operator runs, which is to say from inside: refused whole (#328).
         if (bytes[0] == 0x00 && bytes[1] == 0x64 && bytes[2] == 0xff && bytes[3] == 0x9b)
         {
-            return IsPublic(new IPAddress(bytes[12..16]));
+            return bytes[4..12].All(b => b == 0) && IsPublic(new IPAddress(bytes[12..16]));
         }
 
         // ::ffff:0:0/96 is handled before this by the caller's MapToIPv4; ::<v4> is the
@@ -120,6 +122,16 @@ public static class OutboundAddresses
         // 2001:db8::/32 and 3fff::/20 are both documentation space, and both sit inside
         // 2000::/3, so the range check above does not catch them.
         if (bytes[0] == 0x20 && bytes[1] == 0x01 && bytes[2] == 0x0d && bytes[3] == 0xb8)
+        {
+            return false;
+        }
+
+        // Teredo (2001::/32) is a tunnel to a relay with the client's address stored
+        // inverted, and 2001:2::/48 is the benchmarking range, the counterpart of
+        // 198.18.0.0/15 (#328).
+        if (bytes[0] == 0x20 && bytes[1] == 0x01
+            && ((bytes[2] == 0 && bytes[3] == 0)
+                || (bytes[2] == 0 && bytes[3] == 2 && bytes[4] == 0 && bytes[5] == 0)))
         {
             return false;
         }

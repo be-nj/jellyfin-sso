@@ -306,6 +306,7 @@ public sealed class OidcClientFactory : IDisposable
             || !Uri.TryCreate("https://" + typed, UriKind.Absolute, out var uri)
             || uri.HostNameType == UriHostNameType.Unknown
             || uri.Host.Length == 0
+            || !IsPlainHost(uri)
             || (!string.Equals(uri.Authority, typed, StringComparison.OrdinalIgnoreCase)
                 // The scheme's own port written out, which Uri drops from Authority.
                 && !string.Equals($"{uri.Host}:{uri.Port}", typed, StringComparison.OrdinalIgnoreCase)))
@@ -314,6 +315,26 @@ public sealed class OidcClientFactory : IDisposable
         }
 
         return uri.Authority;
+    }
+
+    /// <summary>
+    /// A host System.Uri recognises as a name or an address, with a port from 1 to 65535, and
+    /// that is one in its ASCII form too: a no-break space or a fullwidth slash is kept by
+    /// Uri in the host as typed and is no part of any name a document can carry (#327).
+    /// </summary>
+    private static bool IsPlainHost(Uri uri)
+    {
+        try
+        {
+            return uri.Port is >= 1 and <= 65535
+                && Uri.CheckHostName(uri.Host) is UriHostNameType.Dns or UriHostNameType.IPv4 or UriHostNameType.IPv6
+                && uri.IdnHost.All(c => c is >= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9'
+                    or '.' or '-' or '_' or ':' or '[' or ']');
+        }
+        catch (UriFormatException)
+        {
+            return false;
+        }
     }
 
     /// <summary>

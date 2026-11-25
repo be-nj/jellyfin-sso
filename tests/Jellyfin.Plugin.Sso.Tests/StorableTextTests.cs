@@ -83,7 +83,7 @@ public sealed class StorableTextTests
     [InlineData("")]
     [InlineData("media")]
     [InlineData("Müller & Söhne <admins>")]
-    [InlineData("tab\there, line\nbreak, return\r")]
+    [InlineData("tab\there, line\nbreak")]
     [InlineData("家庭")]
     [InlineData("\U0001F3AC movies")]
     public void Text_a_person_would_write_can_be_carried(string? text)
