@@ -9,6 +9,14 @@
     "imageUrl": "https://jf.be-nj.net/docs/img/icon.png",
     "versions": [
       {
+        "version": "1.12.25.0",
+        "changelog": "- **Security: a code is only redeemed at the provider that issued it.** The callback now\n  checks RFC 9207's `iss`; a second, hostile provider on the same server could otherwise\n  receive another provider's code where that provider accepts callbacks by pattern (#325).\n- **Security: a group mapping without a group no longer matches.** ID-token groups that\n  were not strings became an empty group, which matched a half-filled mapping row (#330).\n- **Security: a provider is held to a deadline and a size.** A slow provider no longer\n  turns a login into a 500, answers over 1 MiB are refused, and over-long group names are\n  not stored (#321, #322, #323).\n- **Security: names that only look like another account's are caught.** Invisible\n  characters are removed before the existing-account check, also where the name falls back\n  to the subject (#324, #331).\n- **Fixes.** Host values are checked to be host names (#327), three IPv6 ranges are added\n  to the outbound address check (#328), and a carriage return is no longer stored (#329).\n\nOn upgrade: a group mapping without a group must be filled in or removed before the\nsettings can be saved again; the page says which one.",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/be-nj/jellyfin-sso/releases/download/v1.12.25/jellyfin-sso_1.12.25.0.zip",
+        "checksum": "a6b644d2428629c44e888c4c0ea5e966",
+        "timestamp": "2026-11-25T19:30:48Z"
+      },
+      {
         "version": "1.12.24.0",
         "changelog": "- **Security: new accounts start without Live TV and channels.** Jellyfin turns on Live\n  TV access, Live TV management and every channel for a new user. Where a provider does\n  not set permissions from groups, an account the plugin created kept them, so anyone the\n  provider admitted could cancel or schedule recordings (#317).\n- **Security: forged logout tokens no longer empty the key cache.** A back-channel logout\n  token naming an unknown key made the plugin drop the provider's cached keys before\n  fetching new ones; one failed fetch then stopped every login. The cached keys now stay\n  until new ones have arrived (#316).\n\nOn upgrade: accounts created before this version keep what they have. If you use channel\nplugins, give new SSO users channels in Jellyfin's user settings; groups that grant Live\nTV still do.",
         "targetAbi": "12.0.0.0",
@@ -39,14 +47,6 @@
         "sourceUrl": "https://github.com/be-nj/jellyfin-sso/releases/download/v1.12.21/jellyfin-sso_1.12.21.0.zip",
         "checksum": "ad775abacfe77e7f73e07e2da696d3fd",
         "timestamp": "2026-11-15T16:10:30Z"
-      },
-      {
-        "version": "1.12.20.0",
-        "changelog": "- **Security.** Token checks tightened after the first run of the OpenID Foundation\n  conformance suite: an ID token carrying no `iat` is refused, a key a provider published\n  for encryption is no longer accepted as a signing key, and a refusal no longer names an\n  outcome that did not happen (#216, #217, #220, #221).\n- **New: _Signing algorithms_** on the provider card pins what a provider may sign a token\n  with, on the login and the back-channel logout path alike (#219, #222).\n- **Tests.** The end-to-end suite waits for the web client and the server log instead of\n  guessing how long either takes, and the conformance harness attributes a refusal to\n  whoever made it (#224, #225, #226).\n\nNothing to do on upgrade — _Signing algorithms_ is empty by default, which is what every\nearlier release did.",
-        "targetAbi": "12.0.0.0",
-        "sourceUrl": "https://github.com/be-nj/jellyfin-sso/releases/download/v1.12.20/jellyfin-sso_1.12.20.0.zip",
-        "checksum": "d3ca6bb3dfa2a022fb8a17e87efabdc0",
-        "timestamp": "2026-11-07T20:05:33Z"
       }
     ]
   }
