@@ -12,6 +12,21 @@ in the few lines somebody reads before clicking.
 Issue and pull request numbers are given bare rather than as links: the catalog renders
 Markdown, so a link per finding would cost more characters than the lines themselves.
 
+## 1.12.24
+
+- **Security: new accounts start without Live TV and channels.** Jellyfin turns on Live
+  TV access, Live TV management and every channel for a new user. Where a provider does
+  not set permissions from groups, an account the plugin created kept them, so anyone the
+  provider admitted could cancel or schedule recordings (#317).
+- **Security: forged logout tokens no longer empty the key cache.** A back-channel logout
+  token naming an unknown key made the plugin drop the provider's cached keys before
+  fetching new ones; one failed fetch then stopped every login. The cached keys now stay
+  until new ones have arrived (#316).
+
+On upgrade: accounts created before this version keep what they have. If you use channel
+plugins, give new SSO users channels in Jellyfin's user settings; groups that grant Live
+TV still do.
+
 ## 1.12.23
 
 - **Fix: a restart could empty the plugin's settings.** A control character in a group
