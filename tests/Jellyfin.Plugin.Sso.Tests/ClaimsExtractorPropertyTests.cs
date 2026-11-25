@@ -261,8 +261,9 @@ public sealed class ClaimsExtractorPropertyTests : IDisposable
             Assert.True(sub.Strings.Contains(result.Sub), "subject was not sent as a string, " + where);
             Assert.True(!string.IsNullOrWhiteSpace(result.Username), "blank username, " + where);
 
-            // The subject itself, untrimmed, is the known gap held by the skipped test below.
-            var nameChoices = preferred.Strings.Concat(name.Strings).Select(s => s.Trim()).Concat([result.Sub]);
+            // The subject stands in when the token has no name, through the same rule (#331).
+            var nameChoices = preferred.Strings.Concat(name.Strings).Concat([result.Sub])
+                .Select(ClaimsExtractor.Name).Where(n => n is not null);
             Assert.True(nameChoices.Contains(result.Username), $"username '{Truncate(result.Username)}' was not sent, " + where);
 
             foreach (var group in result.Groups)
@@ -338,7 +339,7 @@ public sealed class ClaimsExtractorPropertyTests : IDisposable
     /// the token has no name at all the name falls back to the subject, and that fallback skips
     /// the trimming.
     /// </summary>
-    [Fact(Skip = "#TBD: with no name claims the username falls back to the untrimmed sub, e.g. sub \" admin\" gives the account name \" admin\"")]
+    [Fact]
     public void The_username_is_trimmed_even_when_it_falls_back_to_the_subject()
     {
         var result = Validate(Standard(",\"sub\":\" admin\""));
@@ -381,7 +382,7 @@ public sealed class ClaimsExtractorPropertyTests : IDisposable
         }
     }
 
-    // ---- Found by the properties above, and not yet fixed ---------------------------------
+    // ---- Found by the properties above, and fixed ---------------------------------
 
     /// <summary>
     /// Attack: a groups claim that is not a list of strings. The userinfo path reads only the
@@ -389,7 +390,7 @@ public sealed class ClaimsExtractorPropertyTests : IDisposable
     /// element become the empty group, a number or a boolean its text, an object or an array
     /// its JSON.
     /// </summary>
-    [Theory(Skip = "#TBD: ID token groups: null, [null], numbers, objects and nested arrays become groups (null becomes the empty group)")]
+    [Theory]
     [InlineData("\"groups\":null", "")]
     [InlineData("\"groups\":[null]", "")]
     [InlineData("\"groups\":7", "")]
@@ -411,7 +412,7 @@ public sealed class ClaimsExtractorPropertyTests : IDisposable
     /// is how a user with no groups looks at some providers. Whatever the mapping grants, the
     /// person with no groups gets.
     /// </summary>
-    [Fact(Skip = "#TBD: a token with groups: null yields the empty group, which matches a mapping with a blank Group (and the rules accept that mapping)")]
+    [Fact]
     public void A_token_without_groups_matches_no_mapping()
     {
         var result = Validate(Standard(",\"sub\":\"u\",\"groups\":null"));
@@ -425,19 +426,49 @@ public sealed class ClaimsExtractorPropertyTests : IDisposable
     }
 
     /// <summary>
-    /// Attack, or a provider that cannot decide: a subject, name or picture sent as a number.
-    /// The subject is a string by definition (OIDC Core 2), and the userinfo path takes only
-    /// strings for every one of these; here a number is its own text, so <c>0</c> and <c>"0"</c> are
-    /// one identity.
+    /// Documents a leniency that was weighed and kept: a subject sent as a number is accepted as
+    /// its text, so <c>0</c> and <c>"0"</c> are one identity. The provider signs the token, and a
+    /// number is not something a person can make it say; refusing would lock out a provider that
+    /// issues numeric ids.
     /// </summary>
-    [Theory(Skip = "#TBD: a numeric sub or preferred_username is accepted as its text, e.g. \"sub\":0 is the subject \"0\"")]
-    [InlineData("\"sub\":0")]
-    [InlineData("\"sub\":1.50")]
-    public void A_subject_that_is_not_a_string_is_refused(string claim)
+    [Theory]
+    [InlineData("\"sub\":0", "0")]
+    [InlineData("\"sub\":1.50", "1.5")]
+    public void A_subject_sent_as_a_number_is_taken_as_its_text(string claim, string expected)
     {
-        var exception = Record.Exception(() => Validate(Standard("," + claim)));
+        Assert.Equal(expected, Validate(Standard("," + claim)).Sub);
+    }
 
-        Assert.True(exception is SecurityTokenException, exception?.GetType().Name ?? "accepted");
+    /// <summary>
+    /// A subject is a name as far as the account is concerned when the token has no other (#331):
+    /// padding and characters that draw nothing are removed, and one with nothing visible is
+    /// refused.
+    /// </summary>
+    [Theory]
+    [InlineData("\" admin\"", "admin")]
+    [InlineData("\"admin\\u034F\"", "admin")]
+    public void The_username_that_stands_in_for_a_missing_name_is_cleaned_like_any_other(string sub, string expected)
+    {
+        Assert.Equal(expected, Validate(Standard(",\"sub\":" + sub)).Username);
+    }
+
+    [Fact]
+    public void A_subject_with_nothing_visible_cannot_name_an_account()
+    {
+        var exception = Record.Exception(() => Validate(Standard(",\"sub\":\"\\u034F\"")));
+
+        Assert.IsAssignableFrom<SecurityTokenException>(exception);
+    }
+
+    [Fact]
+    public void A_group_mapping_without_a_group_is_refused_in_words_and_never_matched()
+    {
+        var config = new PluginConfiguration();
+        config.GroupMappings.Add(new GroupMappingConfig { Group = "  ", IsAdministrator = true });
+
+        Assert.Contains("no group name", ConfigurationRules.Problem(config));
+        Assert.Empty(Jellyfin.Plugin.Sso.Provisioning.GroupMatching.Matching(
+            config, new OidcIdentity("u", "u", ["  ", string.Empty])));
     }
 
     // ---- Claims as the library hands them over, and as userinfo sends them ------------------

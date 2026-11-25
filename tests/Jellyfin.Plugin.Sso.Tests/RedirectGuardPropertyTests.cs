@@ -124,17 +124,8 @@ public sealed class RedirectGuardPropertyTests
 
         // The value as a header carries it, with something extra on the end half the time.
         var host = random.Next(2) == 0 ? builder.ToString() : builder + PropertyGen.Hostile(random, 2);
-        return HasKnownGap(host) ? "gap.example" : host;
+        return host;
     }
-
-    /// <summary>
-    /// The shapes of forwarded host that are accepted and are no authority: a trailing line
-    /// feed, a port above 65535, an empty label. Set aside so that the properties stay live
-    /// for the rest; each has a skipped test of its own below.
-    /// </summary>
-    private static bool HasKnownGap(string host)
-        => host.EndsWith('\n')
-            || !Uri.TryCreate("https://" + host + "/", UriKind.Absolute, out _);
 
     /// <summary>
     /// Attack: a forwarded host that carries more than a host: a line break after it, userinfo,
@@ -150,7 +141,7 @@ public sealed class RedirectGuardPropertyTests
         {
             var offered = random.Next(4) == 0 ? Candidate(random) : HostLike(random);
             var host = ForwardedPaths.Host(offered, "fallback:8096");
-            if (host == "fallback:8096" || HasKnownGap(host))
+            if (host == "fallback:8096")
             {
                 continue;
             }
@@ -205,11 +196,6 @@ public sealed class RedirectGuardPropertyTests
             {
                 configured = SsoAddress.Configured(typed);
             }
-            catch (UriFormatException)
-            {
-                // The known gap, held by its own skipped test below.
-                continue;
-            }
             catch (Exception ex)
             {
                 Assert.Fail($"Configured threw {ex.GetType().Name} for '{Show(typed)}'");
@@ -224,12 +210,7 @@ public sealed class RedirectGuardPropertyTests
             accepted++;
             var where = $"typed '{Show(typed)}', base '{configured.BaseUri}'";
             Assert.True(Uri.TryCreate(typed.Trim(), UriKind.Absolute, out var original), where);
-            if (!IsAuthority(configured.BaseUri)
-                || typed.Any(c => char.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.Format))
-            {
-                // The known gap, held by its own skipped test below.
-                continue;
-            }
+            Assert.True(IsAuthority(configured.BaseUri), where);
 
             Assert.True(Uri.TryCreate(configured.BaseUri, UriKind.Absolute, out var rebuilt), where);
             Assert.True(original!.Scheme == rebuilt!.Scheme, where);
@@ -370,14 +351,14 @@ public sealed class RedirectGuardPropertyTests
             ? "(null)"
             : string.Concat(value.Select(c => c is < ' ' or > '~' ? $"\\u{(int)c:X4}" : c.ToString()));
 
-    // ---- Found by the properties above, and not yet fixed ---------------------------------
+    // ---- Found by the properties above, and fixed ---------------------------------
 
     /// <summary>
     /// Attack: <c>X-Forwarded-Host: jellyfin.example.com</c> followed by a line feed. The
     /// pattern ends in <c>$</c>, which .NET lets match before a final line feed, so the value
     /// is accepted with the line feed in it and becomes part of the redirect URI.
     /// </summary>
-    [Fact(Skip = "#TBD: ForwardedPaths.Host accepts a value with a trailing line feed (SafeHost ends in $)")]
+    [Fact]
     public void A_host_with_a_trailing_line_feed_is_not_taken_from_the_header()
     {
         Assert.Equal("fallback:8096", ForwardedPaths.Host("jellyfin.example.com\n", "fallback:8096"));
@@ -388,7 +369,7 @@ public sealed class RedirectGuardPropertyTests
     /// a port, and 99999 is not one; a leading dot or an empty label passes the pattern too.
     /// The redirect URI handed to the provider is then not an address at all.
     /// </summary>
-    [Theory(Skip = "#TBD: ForwardedPaths.Host accepts what System.Uri cannot read: a port above 65535, an empty label")]
+    [Theory]
     [InlineData("jellyfin.example.com:99999")]
     [InlineData(".")]
     [InlineData("a..b")]
@@ -405,7 +386,7 @@ public sealed class RedirectGuardPropertyTests
     /// <c>https:///jf</c> or <c>https://xn-- -b35f</c>, and every redirect URI built from it
     /// is not an address.
     /// </summary>
-    [Theory(Skip = "#TBD: SsoAddress.Configured accepts a host that is no host name, e.g. https://\u202E/jf")]
+    [Theory]
     [InlineData("https://\u202E/jf")]
     [InlineData("https://\u200B")]
     [InlineData("https://\u00A0\uC448")]
@@ -421,7 +402,7 @@ public sealed class RedirectGuardPropertyTests
     /// caller: the settings endpoint answers 500 instead of "not a public address", and a value
     /// that got into the file some other way fails every request that builds the address.
     /// </summary>
-    [Theory(Skip = "#TBD: SsoAddress.Configured throws UriFormatException from IdnHost, e.g. https://h\uFE6B")]
+    [Theory]
     [InlineData("https://h\uFE6B")]
     [InlineData("https://\uFF20")]
     [InlineData("https://a\u00ADb\uFE6B")]

@@ -37,11 +37,14 @@ public static partial class ForwardedPaths
     /// middle it is only never a path a server is published under, and the rule used to
     /// stop at the start while its test asserted the whole (#296).
     /// </summary>
-    [GeneratedRegex(@"^(?!.*//)/[A-Za-z0-9._~%/-]*$")]
+    [GeneratedRegex(@"^(?!.*//)/[A-Za-z0-9._~%/-]*\z")]
     private static partial Regex SafePrefix { get; }
 
-    /// <summary>A host, with an optional port — or an IPv6 address in brackets.</summary>
-    [GeneratedRegex(@"^(?:[A-Za-z0-9._-]+|\[[0-9A-Fa-f:.]+\])(?::[0-9]{1,5})?$")]
+    /// <summary>
+    /// A host, with an optional port — or an IPv6 address in brackets. Anchored with \z and not
+    /// $, which in .NET also matches before a final line feed (#327).
+    /// </summary>
+    [GeneratedRegex(@"^(?:[A-Za-z0-9._-]+|\[[0-9A-Fa-f:.]+\])(?::[0-9]{1,5})?\z")]
     private static partial Regex SafeHost { get; }
 
     /// <summary>
@@ -64,7 +67,54 @@ public static partial class ForwardedPaths
     /// otherwise the one the request arrived on.
     /// </summary>
     public static string Host(string? forwardedHost, string requestHost)
-        => forwardedHost is not null && SafeHost.IsMatch(forwardedHost) ? forwardedHost : requestHost;
+        => forwardedHost is not null && SafeHost.IsMatch(forwardedHost) && IsHostAndPort(forwardedHost)
+            ? forwardedHost
+            : requestHost;
+
+    /// <summary>
+    /// Whether a host with an optional port is one System.Uri recognises as a name or an address,
+    /// and the port, when there is one, is a port: 1 to 65535. The pattern above only says what
+    /// characters it may hold; ".", "a..b" and "host:99999" pass it and are not addresses.
+    /// </summary>
+    internal static bool IsHostAndPort(string authority)
+    {
+        string host = authority;
+        string? port = null;
+        if (authority.StartsWith('['))
+        {
+            var close = authority.IndexOf(']', StringComparison.Ordinal);
+            if (close < 0)
+            {
+                return false;
+            }
+
+            host = authority[..(close + 1)];
+            var rest = authority[(close + 1)..];
+            if (rest.Length > 0)
+            {
+                if (rest[0] != ':')
+                {
+                    return false;
+                }
+
+                port = rest[1..];
+            }
+        }
+        else if (authority.LastIndexOf(':') is var colon and >= 0)
+        {
+            host = authority[..colon];
+            port = authority[(colon + 1)..];
+        }
+
+        if (port is not null
+            && (!int.TryParse(port, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var number)
+                || number is < 1 or > 65535))
+        {
+            return false;
+        }
+
+        return Uri.CheckHostName(host) is UriHostNameType.Dns or UriHostNameType.IPv4 or UriHostNameType.IPv6;
+    }
 
     /// <summary>
     /// The scheme to build addresses from. Only the two the web speaks; anything else is

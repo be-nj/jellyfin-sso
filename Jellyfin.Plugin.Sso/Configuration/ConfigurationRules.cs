@@ -10,7 +10,7 @@ namespace Jellyfin.Plugin.Sso.Configuration;
 /// </summary>
 public static partial class ConfigurationRules
 {
-    [GeneratedRegex(@"^[A-Za-z0-9._~-]{1,64}$")]
+    [GeneratedRegex(@"^[A-Za-z0-9._~-]{1,64}\z")]
     private static partial Regex ProviderId();
 
     /// <summary>The first thing wrong with the configuration, or null when there is none.</summary>
@@ -119,8 +119,18 @@ public static partial class ConfigurationRules
         // login. An id that is not a GUID therefore turned every SSO login on the server
         // into a 500 — from a value that only this endpoint can introduce, and only by
         // hand-edited JSON, which is exactly why it is checked here rather than trusted.
-        foreach (var mapping in config.GroupMappings)
+        for (var i = 0; i < config.GroupMappings.Count; i++)
         {
+            var mapping = config.GroupMappings[i];
+
+            // A mapping is matched by its group, so one without a group names nobody. It
+            // used to be saved, and a token carrying an empty group matched it (#330).
+            if (string.IsNullOrWhiteSpace(mapping.Group))
+            {
+                return $"Group mapping {i + 1} has no group name. Enter the group it applies to, "
+                    + "or remove the mapping.";
+            }
+
             // Any, not FirstOrDefault compared with null: an entry that is null is itself
             // not a library id, and used to pass as "nothing found".
             if (mapping.LibraryIds.Any(id => !Guid.TryParse(id, out _)))

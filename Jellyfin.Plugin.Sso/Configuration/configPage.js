@@ -186,6 +186,16 @@ function populateLinkForm(view) {
 // ─── Save ────────────────────────────────────────────────────────────────────
 
 function save(view) {
+    // A mapping without a group name used to be dropped here without a word, and the row
+    // the person had just added was gone after the save (#330). Say so instead.
+    var blank = Array.from(view.querySelectorAll('.sso-mapping .sso-group-input'))
+        .findIndex(function (gi) { return !gi.value.trim(); });
+    if (blank >= 0) {
+        Dashboard.alert('Group mapping ' + (blank + 1) + ' has no group name. Enter the group '
+            + 'it applies to, or remove the mapping. Nothing was saved.');
+        return Promise.resolve();
+    }
+
     var providers = collectProviders(view);
     var cfg = {
         Providers: providers,

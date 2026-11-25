@@ -151,17 +151,7 @@ public sealed class OutboundAddressesPropertyTests
         return InV6(value, "2000::/3") ? Verdict.Public : Verdict.NotPublic;
     }
 
-    /// <summary>
-    /// The judge, with the three gaps below set aside so that the properties stay live for
-    /// everything else. Each gap has a test of its own, skipped until it is fixed.
-    /// </summary>
-    private static Verdict JudgeHeld(byte[] bytes)
-    {
-        var value = V6Value(bytes);
-        return InV6(value, "2001::/32") || InV6(value, "2001:2::/48") || InV6(value, "64:ff9b:1::/48")
-            ? Verdict.Either
-            : Judge6(bytes);
-    }
+    private static Verdict JudgeHeld(byte[] bytes) => Judge6(bytes);
 
     // --- Generators -----------------------------------------------------------
 
@@ -445,7 +435,7 @@ public sealed class OutboundAddressesPropertyTests
         }
     }
 
-    // \u2500\u2500\u2500 Found by the properties above, and not yet fixed \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    // \u2500\u2500\u2500 Found by the properties above, and fixed \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
     /// <summary>
     /// Attack: a Teredo address (2001:0::/32). The prefix is a tunnel to a relay, and the
@@ -453,7 +443,7 @@ public sealed class OutboundAddressesPropertyTests
     /// would deliver to whichever address the URL spells out. The guard calls the whole
     /// prefix public because it sits inside 2000::/3.
     /// </summary>
-    [Fact(Skip = "#TBD: Teredo 2001::/32 is judged public, e.g. http://[2001::1]/")]
+    [Fact]
     public void A_Teredo_address_is_not_public()
     {
         var random = new Random(Seed + 6);
@@ -468,7 +458,7 @@ public sealed class OutboundAddressesPropertyTests
     /// Attack: the IPv6 benchmarking range (2001:2::/48). The IPv4 one, 198.18.0.0/15, is
     /// refused; its IPv6 counterpart goes through, as it lies inside 2000::/3.
     /// </summary>
-    [Fact(Skip = "#TBD: benchmarking 2001:2::/48 is judged public, e.g. http://[2001:2::1]/")]
+    [Fact]
     public void The_IPv6_benchmarking_range_is_not_public()
     {
         var random = new Random(Seed + 7);
@@ -485,7 +475,7 @@ public sealed class OutboundAddressesPropertyTests
     /// 10), so reading the last four judges an address the translator never sees: this one
     /// reaches 10.0.0.1 and the guard reads 8.8.8.8.
     /// </summary>
-    [Fact(Skip = "#TBD: 64:ff9b:1::/48 is judged by its last four bytes, e.g. http://[64:ff9b:1:a00:0:100:808:808]/ reaches 10.0.0.1")]
+    [Fact]
     public void A_local_use_NAT64_address_is_not_judged_by_the_wrong_four_bytes()
     {
         var address = IPAddress.Parse("64:ff9b:1:a00:0:100:808:808");

@@ -169,7 +169,13 @@ public sealed class ClaimsExtractor
                 + "attribute the provider maps to 'sub'.");
         var username = Name(PlainString(principal, "preferred_username"))
             ?? Name(PlainString(principal, "name"))
-            ?? sub;
+            // The subject goes through the same rule as any other name (#331): trimmed,
+            // without the characters that draw nothing. A subject that is nothing but those
+            // cannot name an account.
+            ?? Name(sub)
+            ?? throw new SecurityTokenException(
+                "The ID token names no username, and its 'sub' claim cannot stand in for one "
+                + "because it has no visible characters.");
 
         // A picture is one string where groups are many, but both arrive the same way —
         // as a claim, or as a string inside a nested one — so they are read by the same
@@ -386,7 +392,7 @@ public sealed class ClaimsExtractor
     internal static List<string> GroupsFromClaims(ClaimsPrincipal principal, string claim)
     {
         var exact = principal.Claims
-            .Where(c => c.Type == claim)
+            .Where(c => c.Type == claim && IsGroupString(c))
             .Select(c => c.Value)
             .ToList();
 
@@ -414,6 +420,14 @@ public sealed class ClaimsExtractor
 
         return [];
     }
+
+    /// <summary>
+    /// Only a JSON string that says something is a group (#330). The library hands every
+    /// element over as text: null as the empty string, a number as its digits, an object or
+    /// array as its JSON. The userinfo path has always read strings only; so does this one.
+    /// </summary>
+    private static bool IsGroupString(Claim claim)
+        => claim.ValueType == ClaimValueTypes.String && claim.Value.Length > 0;
 
     /// <summary>
     /// A nested claim arrives as the JSON text the provider put in the token. Anything that
@@ -524,10 +538,11 @@ public sealed class ClaimsExtractor
             return value.EnumerateArray()
                 .Where(e => e.ValueKind == JsonValueKind.String)
                 .Select(e => e.GetString()!)
+                .Where(text => text.Length > 0)
                 .ToList();
 
-        if (value.ValueKind == JsonValueKind.String)
-            return [value.GetString()!];
+        if (value.ValueKind == JsonValueKind.String && value.GetString() is { Length: > 0 } single)
+            return [single];
 
         return [];
     }

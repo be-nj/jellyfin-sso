@@ -121,6 +121,8 @@ public sealed class ConfigurationRoundTripPropertyTests
 
         foreach (var mapping in config.GroupMappings)
         {
+            // A mapping has a group: the rules refuse one without (#330).
+            mapping.Group = "g" + mapping.Group;
             mapping.LibraryIds = Enumerable.Range(0, random.Next(0, 3)).Select(_ => Guid.NewGuid().ToString()).ToList();
         }
 
@@ -138,9 +140,6 @@ public sealed class ConfigurationRoundTripPropertyTests
 
         if (expected is string a)
         {
-            // A carriage return comes back as a line feed: the known gap, held by its own
-            // skipped test at the end, and set aside here so the rest stays under test.
-            a = a.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
             return string.Equals(a, actual as string, StringComparison.Ordinal)
                 ? null
                 : $"{path}: {Show(a)} became {Show(actual as string)}";
@@ -278,7 +277,7 @@ public sealed class ConfigurationRoundTripPropertyTests
         {
             foreach (var text in new[] { unit, "x" + unit + "x", unit + "x" + unit, unit + unit, "  " + unit })
             {
-                if (!StorableText.CanCarry(text) || text.Contains('\r'))
+                if (!StorableText.CanCarry(text))
                 {
                     continue;
                 }
@@ -323,7 +322,8 @@ public sealed class ConfigurationRoundTripPropertyTests
         foreach (var rune in text.EnumerateRunes())
         {
             var v = rune.Value;
-            var allowed = v is 0x9 or 0xA or 0xD
+            // A carriage return is a character, but the file reads it back as a line feed (#329).
+            var allowed = v is 0x9 or 0xA
                 || v is >= 0x20 and <= 0xD7FF
                 || v is >= 0xE000 and <= 0xFFFD
                 || v is >= 0x10000 and <= 0x10FFFF;
@@ -335,7 +335,7 @@ public sealed class ConfigurationRoundTripPropertyTests
         return result.ToString();
     }
 
-    // ---- Found by the properties above, and not yet fixed ---------------------------------
+    // ---- Found by the properties above, and fixed ---------------------------------
 
     /// <summary>
     /// Attack, or just a value: a subject, group name or provider name with a carriage return in
@@ -343,7 +343,7 @@ public sealed class ConfigurationRoundTripPropertyTests
     /// requires, turns it into a line feed: the key of an account link is not the subject it was
     /// written from, so the next login with that subject finds no link.
     /// </summary>
-    [Theory(Skip = "#TBD: StorableText.CanCarry accepts a carriage return and the file reads it back as a line feed")]
+    [Theory]
     [InlineData("a\rb")]
     [InlineData("a\r\nb")]
     [InlineData("a\r")]

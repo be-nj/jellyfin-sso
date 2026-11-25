@@ -24,7 +24,12 @@ internal static class StorableText
     /// <summary>What stands in for a character the file cannot hold.</summary>
     internal const char Replacement = '�';
 
-    /// <summary>Whether every character of the text is one XML 1.0 allows in a document.</summary>
+    /// <summary>
+    /// Whether every character of the text is one XML 1.0 allows in a document and the file
+    /// gives back unchanged. A carriage return is allowed and is not given back: the writer
+    /// puts it into the file as it is and the reader, as XML requires, reads it as a line
+    /// feed, so a subject that held one was another subject after the next restart (#329).
+    /// </summary>
     internal static bool CanCarry(string? text)
     {
         if (string.IsNullOrEmpty(text))
@@ -38,7 +43,7 @@ internal static class StorableText
             {
                 i++;
             }
-            else if (char.IsSurrogate(text[i]) || !XmlConvert.IsXmlChar(text[i]))
+            else if (char.IsSurrogate(text[i]) || !XmlConvert.IsXmlChar(text[i]) || text[i] == '\r')
             {
                 return false;
             }
@@ -62,7 +67,7 @@ internal static class StorableText
             {
                 i++;
             }
-            else if (char.IsSurrogate(result[i]) || !XmlConvert.IsXmlChar(result[i]))
+            else if (char.IsSurrogate(result[i]) || !XmlConvert.IsXmlChar(result[i]) || result[i] == '\r')
             {
                 result[i] = Replacement;
             }

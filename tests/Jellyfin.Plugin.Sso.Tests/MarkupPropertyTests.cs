@@ -374,7 +374,7 @@ public sealed class MarkupPropertyTests
     /// ASCII spellings of both are refused; these pass because System.Uri keeps them in the host,
     /// and the entry then names a host no discovery document can carry.
     /// </summary>
-    [Theory(Skip = "#TBD: OidcClientFactory.EndpointHost accepts a host with a no-break space or a fullwidth slash, e.g. a\\u00A0b")]
+    [Theory]
     [InlineData("a\u00A0b.example")]
     [InlineData("a\uFF3Cb.example")]
     [InlineData("a\uFF0Fb.example")]
