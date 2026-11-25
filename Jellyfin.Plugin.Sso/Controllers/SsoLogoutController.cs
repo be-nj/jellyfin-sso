@@ -156,8 +156,10 @@ public sealed class SsoLogoutController : SsoControllerBase
                 + "its keys.",
                 Loggable.KnownProviderId(provider.Id));
 
-            _oidc.Forget(provider);
-            var fresh = await _oidc.GetDiscoveryDocumentAsync(provider, ct).ConfigureAwait(false);
+            // This endpoint is anonymous: anyone can post a token naming a key nobody
+            // published. The refresh keeps the cached document until a new one has
+            // arrived, so such posts cannot leave logins without one (#316).
+            var fresh = await _oidc.RefreshAsync(provider, ct).ConfigureAwait(false);
 
             return LogoutTokenValidator.Validate(
                 provider, fresh.Issuer, OidcClientFactory.SigningKeysFrom(fresh), logoutToken);

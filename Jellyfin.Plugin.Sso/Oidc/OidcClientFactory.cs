@@ -36,6 +36,7 @@ public sealed class OidcClientFactory : IDisposable
     private readonly HttpClient _http;
     private readonly ILogger<OidcClientFactory> _logger;
     private readonly ConcurrentDictionary<string, CacheEntry> _cache = new();
+    private readonly ConcurrentDictionary<string, Lazy<Task<DiscoveryDocumentResponse>>> _refreshes = new();
 
     public OidcClientFactory(ILogger<OidcClientFactory> logger)
     {
@@ -78,6 +79,48 @@ public sealed class OidcClientFactory : IDisposable
             return cached.Document;
         }
 
+        return await FetchAsync(provider, cacheKey, hosts, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Fetches the document again although the cached one has not expired, for a token
+    /// signed by a key the cached one does not carry — what a key rotation looks like from
+    /// here.
+    ///
+    /// The cached document stays until the new one has arrived and passed every check,
+    /// and callers that ask at the same time share one fetch. The back-channel logout
+    /// endpoint is anonymous and anyone can post a token naming a key nobody published:
+    /// dropping the cache first meant each such post emptied the document logins use, and
+    /// one failed or throttled fetch then failed every login and logout (#316).
+    /// </summary>
+    public async Task<DiscoveryDocumentResponse> RefreshAsync(
+        ProviderConfig provider, CancellationToken ct = default)
+    {
+        var cacheKey = $"{provider.Id}|{provider.Authority}";
+        var hosts = string.Join(' ', provider.EndpointHosts);
+
+        // Not cancelled by the first caller's token: the fetch is shared, and one caller
+        // giving up must not fail the others that are waiting on it.
+        // Lazy, so that a race inside GetOrAdd cannot start a second fetch; removed when
+        // it completes, however it completes, so the next unknown key fetches anew.
+        var entry = _refreshes.GetOrAdd(
+            cacheKey,
+            _ => new Lazy<Task<DiscoveryDocumentResponse>>(
+                () => FetchAsync(provider, cacheKey, hosts, CancellationToken.None)));
+        var fetch = entry.Value;
+        _ = fetch.ContinueWith(
+            _ => _refreshes.TryRemove(
+                new KeyValuePair<string, Lazy<Task<DiscoveryDocumentResponse>>>(cacheKey, entry)),
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
+        return await fetch.WaitAsync(ct).ConfigureAwait(false);
+    }
+
+    private async Task<DiscoveryDocumentResponse> FetchAsync(
+        ProviderConfig provider, string cacheKey, string hosts, CancellationToken ct)
+    {
         _logger.LogInformation("Fetching OIDC discovery for provider {Name} ({Authority})",
             provider.Name, provider.Authority);
 
