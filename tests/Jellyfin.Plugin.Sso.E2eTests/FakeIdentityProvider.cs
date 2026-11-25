@@ -218,6 +218,29 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
     /// </summary>
     public string? NextAuthorizeError { get; set; }
 
+    /// <summary>
+    /// Replacement behaviour per request path, for a provider that has turned hostile: a
+    /// redirect where a document should be, a body that never ends, an answer of the wrong
+    /// shape. Consulted before the ordinary endpoints, so a path listed here is answered by
+    /// the test and by nothing else. See <see cref="AttackerProviderTests"/>.
+    /// </summary>
+    public ConcurrentDictionary<string, Func<HttpContext, Task>> Hostile { get; } =
+        new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Every request this provider received, as "METHOD host/path", in arrival order. A
+    /// test that has to show something was never fetched — a redirect target, a host the
+    /// discovery document should not have reached — reads it here.
+    /// </summary>
+    public ConcurrentQueue<string> Requests { get; } = new();
+
+    /// <summary>
+    /// When true the authorize endpoint names itself in its answer with an <c>iss</c>
+    /// parameter (RFC 9207), and discovery says so — the provider-side half of the defence
+    /// against a mix-up between two providers.
+    /// </summary>
+    public bool AnnounceIssuerInAuthorizationResponse { get; set; }
+
     /// <summary>Signals whether the provider ever issued a token, useful in negative tests.</summary>
     public int TokensIssued { get; private set; }
 
@@ -249,6 +272,11 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
         UserInfoAnswersAboutSomebodyElse = false;
         NextAuthorizeError = null;
         BeforeAvatar = null;
+        // Both were missing here: a test that failed between setting one and its own
+        // finally left every later login signed by a stranger, or announcing an issuer.
+        SignWithAStrangersKey = false;
+        AnnounceIssuerInAuthorizationResponse = false;
+        Hostile.Clear();
     }
 
     public static async Task<FakeIdentityProvider> StartAsync(TestCertificate certificate)
@@ -261,9 +289,57 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
     private string ServiceBase
         => ServiceEndpointsElsewhere ? $"https://{SecondHost}" : ContainerAuthority;
 
+    /// <summary>
+    /// The discovery document this provider publishes, as a dictionary a test can change
+    /// and serve through <see cref="Hostile"/>.
+    /// </summary>
+    public Dictionary<string, object> DiscoveryDocument()
+    {
+        var document = OrdinaryDiscoveryDocument();
+        if (AnnounceIssuerInAuthorizationResponse)
+        {
+            document["authorization_response_iss_parameter_supported"] = true;
+        }
+
+        return document;
+    }
+
+    /// <summary>The key set this provider publishes, for a test that serves it elsewhere.</summary>
+    public PublishedKeys KeySet()
+    {
+        var jwk = JsonWebKeyConverter.ConvertFromRSASecurityKey(_signingKey);
+        jwk.Use = "sig";
+        jwk.Alg = SecurityAlgorithms.RsaSha256;
+        return new PublishedKeys([jwk]);
+    }
+
+    /// <summary>A JWKS document: one member, <c>keys</c>.</summary>
+    public sealed record PublishedKeys(JsonWebKey[] keys);
+
     private void MapEndpoints(WebApplication app)
     {
-        app.MapGet("/.well-known/openid-configuration", () => Results.Json(new Dictionary<string, object>
+        // Ahead of every endpoint: the log sees each request, the hostile table answers
+        // the ones a test has taken over.
+        app.Use(async (context, next) =>
+        {
+            Requests.Enqueue($"{context.Request.Method} {context.Request.Host}{context.Request.Path}");
+
+            if (Hostile.TryGetValue(context.Request.Path.Value ?? string.Empty, out var hostile))
+            {
+                await hostile(context);
+                return;
+            }
+
+            await next(context);
+        });
+
+        app.MapGet("/.well-known/openid-configuration", () => Results.Json(DiscoveryDocument()));
+
+        MapOrdinaryEndpoints(app);
+    }
+
+    private Dictionary<string, object> OrdinaryDiscoveryDocument()
+        => new()
         {
             ["issuer"] = ContainerAuthority,
             // The browser follows this one, so it must be host-resolvable.
@@ -284,8 +360,10 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
             ["scopes_supported"] = new[] { "openid", "profile", "email", "groups" },
             ["code_challenge_methods_supported"] = new[] { "S256" },
             ["grant_types_supported"] = new[] { "authorization_code" },
-        }));
+        };
 
+    private void MapOrdinaryEndpoints(WebApplication app)
+    {
         // A branded provider: the plugin should put this on the login button rather than
         // its own stock mark. Both brand images are published, as Authentik publishes
         // both, and they carry different content types so a test can say which was taken.
@@ -309,13 +387,7 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
             return Results.File(OnePixelPng(), "image/png");
         });
 
-        app.MapGet("/jwks", () =>
-        {
-            var jwk = JsonWebKeyConverter.ConvertFromRSASecurityKey(_signingKey);
-            jwk.Use = "sig";
-            jwk.Alg = SecurityAlgorithms.RsaSha256;
-            return Results.Json(new { keys = new[] { jwk } });
-        });
+        app.MapGet("/jwks", () => Results.Json(KeySet()));
 
         app.MapGet("/authorize", (
             [FromQuery(Name = "client_id")] string clientId,
@@ -357,8 +429,11 @@ public sealed class FakeIdentityProvider : IAsyncDisposable
             var code = Guid.NewGuid().ToString("N");
             _codes[code] = new PendingCode(
                 clientId, redirectUri, nonce, codeChallenge, NextUser, NextPictureUrl);
+            var issuer = AnnounceIssuerInAuthorizationResponse
+                ? $"&iss={Uri.EscapeDataString(ContainerAuthority)}"
+                : string.Empty;
             return Results.Redirect(
-                $"{redirectUri}{separator}code={Uri.EscapeDataString(code)}&state={Uri.EscapeDataString(state)}");
+                $"{redirectUri}{separator}code={Uri.EscapeDataString(code)}&state={Uri.EscapeDataString(state)}{issuer}");
         });
 
         app.MapPost("/token", async (HttpRequest request) =>

@@ -86,6 +86,9 @@ public sealed class SsoCallbackController : SsoFlowController
         [FromQuery] string? code,
         [FromQuery] string? state,
         [FromQuery] string? error,
+        // RFC 9207: the provider naming itself. Checked against the provider this login
+        // was started at before the code is sent anywhere; see AuthorizationResponseIssuer.
+        [FromQuery] string? iss,
         CancellationToken ct)
     {
         if (!string.IsNullOrEmpty(error))
@@ -115,7 +118,7 @@ public sealed class SsoCallbackController : SsoFlowController
 
         try
         {
-            var signedIn = await IdentityFromProviderAsync(provider, pending, code, ct)
+            var signedIn = await IdentityFromProviderAsync(provider, pending, code, iss, ct)
                 .ConfigureAwait(false);
 
             if (signedIn is null)
@@ -345,9 +348,15 @@ public sealed class SsoCallbackController : SsoFlowController
     /// provider sent no ID token to read it from.
     /// </summary>
     private async Task<SignedIn?> IdentityFromProviderAsync(
-        ProviderConfig provider, PendingStateStore.PendingState pending, string code, CancellationToken ct)
+        ProviderConfig provider, PendingStateStore.PendingState pending, string code, string? iss,
+        CancellationToken ct)
     {
         var disco = await Oidc.GetDiscoveryDocumentAsync(provider, ct).ConfigureAwait(false);
+
+        // Before the token request: the point is that a code from somewhere else, and the
+        // PKCE verifier with it, never reaches this provider's token endpoint (#325).
+        if (AuthorizationResponseIssuer.Refusal(iss, disco.Issuer, disco.Json) is { } refusal)
+            throw new SecurityTokenException(refusal);
 
         var tokens = await Oidc.ExchangeCodeAsync(
             provider, disco, code, pending.RedirectUri, pending.CodeVerifier, ct)

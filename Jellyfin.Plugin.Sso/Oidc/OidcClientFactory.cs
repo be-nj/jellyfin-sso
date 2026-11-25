@@ -33,6 +33,18 @@ public sealed class OidcClientFactory : IDisposable
     /// </summary>
     private sealed record CacheEntry(DiscoveryDocumentResponse Document, DateTimeOffset Expiry, string Hosts);
 
+    /// <summary>How long one call to the provider may take, body included.</summary>
+    internal static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(20);
+
+    /// <summary>
+    /// The most the plugin reads of any one answer from the provider: discovery, keys,
+    /// token, userinfo. A real one is a few kilobytes. The large ones are userinfo answers
+    /// carrying every group a person is in, and a mebibyte holds some twenty thousand
+    /// group names of fifty characters — further than any directory this plugin has met.
+    /// The ID token cannot even get near it: the token handler refuses one over 250 KB.
+    /// </summary>
+    internal const int MaxResponseBytes = 1024 * 1024;
+
     private readonly HttpClient _http;
     private readonly ILogger<OidcClientFactory> _logger;
     private readonly ConcurrentDictionary<string, CacheEntry> _cache = new();
@@ -50,9 +62,14 @@ public sealed class OidcClientFactory : IDisposable
         //
         // A provider that accepts the connection and then says nothing must not hold a
         // login page open for the default hundred seconds.
+        //
+        // And one that keeps talking must not fill the server's memory: without a cap the
+        // client buffers whatever arrives within the timeout, which over a local network
+        // is gigabytes (#322). See MaxResponseBytes for the number.
         _http = new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false })
         {
-            Timeout = TimeSpan.FromSeconds(20),
+            Timeout = RequestTimeout,
+            MaxResponseContentBufferSize = MaxResponseBytes,
         };
         _http.DefaultRequestHeaders.UserAgent.Add(
             new ProductInfoHeaderValue("Jellyfin.Plugin.Sso", "1.0"));
@@ -155,7 +172,8 @@ public sealed class OidcClientFactory : IDisposable
             Policy = policy,
         };
 
-        var doc = await _http.GetDiscoveryDocumentAsync(request, ct).ConfigureAwait(false);
+        var doc = await Answered(
+            () => _http.GetDiscoveryDocumentAsync(request, ct), "discovery", ct).ConfigureAwait(false);
 
         // Before the library's own error, because this one can be acted on. Duende stops
         // at the first endpoint it dislikes and names an address; the plugin's check
@@ -425,11 +443,43 @@ public sealed class OidcClientFactory : IDisposable
             req.ClientCredentialStyle = ClientCredentialStyle.PostBody;
         }
 
-        var response = await _http.RequestAuthorizationCodeTokenAsync(req, ct).ConfigureAwait(false);
+        var response = await Answered(
+            () => _http.RequestAuthorizationCodeTokenAsync(req, ct), "the token request", ct)
+            .ConfigureAwait(false);
         if (response.IsError)
             throw new InvalidOperationException($"Token exchange failed: {ProviderSaid(response.Error)}");
 
         return response;
+    }
+
+    /// <summary>
+    /// One call to the provider, with the two ways it can fail that the library lets
+    /// through turned into the failure every caller already answers in words.
+    ///
+    /// Duende turns most transport errors into an error response, but rethrows a
+    /// cancellation — and the client's own timeout is a cancellation. It escaped the
+    /// login page as a 500 after twenty seconds (#321). A cancellation of the request
+    /// itself is still let through: nobody is waiting for an answer to that one.
+    /// An oversized answer (#322) is refused by the client as an HttpRequestException,
+    /// which is handled here too in case the library ever stops catching it.
+    /// </summary>
+    internal static async Task<T> Answered<T>(Func<Task<T>> call, string what, CancellationToken ct)
+    {
+        try
+        {
+            return await call().ConfigureAwait(false);
+        }
+        catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            throw new InvalidOperationException(
+                $"The provider did not finish answering {what} within "
+                + $"{RequestTimeout.TotalSeconds:0} seconds.", ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new InvalidOperationException(
+                $"The provider's answer to {what} could not be read: {ProviderSaid(ex.Message)}", ex);
+        }
     }
 
     /// <summary>
@@ -474,7 +524,8 @@ public sealed class OidcClientFactory : IDisposable
             Token = accessToken,
         };
 
-        var response = await _http.GetUserInfoAsync(request, ct).ConfigureAwait(false);
+        var response = await Answered(
+            () => _http.GetUserInfoAsync(request, ct), "the userinfo request", ct).ConfigureAwait(false);
 
         if (response.IsError)
             throw new InvalidOperationException($"Userinfo request failed: {ProviderSaid(response.Error)}");
