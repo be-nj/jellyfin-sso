@@ -9,6 +9,14 @@
     "imageUrl": "https://jf.be-nj.net/docs/img/icon.png",
     "versions": [
       {
+        "version": "1.12.24.0",
+        "changelog": "- **Security: new accounts start without Live TV and channels.** Jellyfin turns on Live\n  TV access, Live TV management and every channel for a new user. Where a provider does\n  not set permissions from groups, an account the plugin created kept them, so anyone the\n  provider admitted could cancel or schedule recordings (#317).\n- **Security: forged logout tokens no longer empty the key cache.** A back-channel logout\n  token naming an unknown key made the plugin drop the provider's cached keys before\n  fetching new ones; one failed fetch then stopped every login. The cached keys now stay\n  until new ones have arrived (#316).\n\nOn upgrade: accounts created before this version keep what they have. If you use channel\nplugins, give new SSO users channels in Jellyfin's user settings; groups that grant Live\nTV still do.",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/be-nj/jellyfin-sso/releases/download/v1.12.24/jellyfin-sso_1.12.24.0.zip",
+        "checksum": "29a8baba043913bb6a93260484f33ef6",
+        "timestamp": "2026-11-25T17:38:28Z"
+      },
+      {
         "version": "1.12.23.0",
         "changelog": "- **Fix: a restart could empty the plugin's settings.** A control character in a group\n  name sent by the provider, or pasted into a text field, made the configuration file\n  unreadable, and Jellyfin replaces a plugin configuration it cannot read with an empty\n  one: providers, mappings and account links were gone after the next restart. Such\n  characters no longer reach the file (#306, #307).\n- **New: _Public address_.** Set, the redirect URI the provider is given is built from it\n  and not from request headers, which matters where a provider accepts redirect URIs by\n  pattern. A login opened at another address is taken to the public one first (#302, #303).\n- **New: _All libraries_** on a group mapping grants every library, including ones added\n  later, without making the group administrators (#298, #299).\n- **New: _Type the Quick Connect code in_.** The approval page asks for the code the\n  device shows and ignores one in a link; a mistyped code can be typed again (#304, #305).\n- **Fixes.** A Quick Connect code that expired or was approved already is answered in\n  words instead of with a 404 or a 500 (#300, #301). A refused save shows the server's\n  reason on the page, and a provider id that cannot work is refused when saving (#306).\n\nNothing to do on upgrade; the three new settings are off until you set them, and are by\nNick Hainke (#295). Update soon if your provider's group names are not yours to decide.",
         "targetAbi": "12.0.0.0",
@@ -39,14 +47,6 @@
         "sourceUrl": "https://github.com/be-nj/jellyfin-sso/releases/download/v1.12.20/jellyfin-sso_1.12.20.0.zip",
         "checksum": "d3ca6bb3dfa2a022fb8a17e87efabdc0",
         "timestamp": "2026-11-07T20:05:33Z"
-      },
-      {
-        "version": "1.12.19.0",
-        "changelog": "- **Fixes you notice.** Quick Connect works again with more than one provider; the\n  configuration page and a first login both work on a server published under a sub-path;\n  unlinking ends sessions even when the first attempt fails; a logout signed with a\n  just-rotated key is accepted; a slow profile-picture host no longer holds a login open; a\n  bad library id in a group mapping no longer turns every login into a 500; a username with\n  a leading space no longer creates a second account (#190, #193, #199–#205, #196, #207).\n- **Hardening.** `azp` is checked, signature algorithms pinned to the asymmetric ones, the\n  userinfo answer has to be about whoever logged in, the end-session endpoint cannot move\n  to another host, the back channel no longer follows redirects, a token claim cannot forge\n  a log line, an unreadable secret file is reported without its path, and the logout\n  endpoint is behind the request limiter (#184–#195, #196).\n- **Under load.** Two administrators signing in at the same moment can no longer both be\n  demoted — which locked everybody out — and two link callbacks finishing together can no\n  longer write two links for one account (#198, #204, #207).\n- **Also.** A guide for Tinyauth as a fourth provider, and `SsoController` split from a\n  thousand lines into six files (#181–#183).",
-        "targetAbi": "12.0.0.0",
-        "sourceUrl": "https://github.com/be-nj/jellyfin-sso/releases/download/v1.12.19/jellyfin-sso_1.12.19.0.zip",
-        "checksum": "576e0714be7ac10471f3235ebb1d60d8",
-        "timestamp": "2026-11-05T20:12:02Z"
       }
     ]
   }
