@@ -164,6 +164,63 @@ public sealed class IdTokenValidationTests : IDisposable
         Assert.Equal("ben", username);
     }
 
+    /// <summary>
+    /// A name carrying a character that draws nothing reads like the name without it, and
+    /// Jellyfin's own name rule lets some of them through as letters. The collision check
+    /// has to see the name a person sees, or "admin" plus an invisible joiner becomes a
+    /// second account reading "admin" (#324).
+    /// </summary>
+    [Theory]
+    [InlineData("admin͏")]
+    [InlineData("ad​min")]
+    [InlineData("﻿admin")]
+    [InlineData("admin­")]
+    [InlineData("admin️")]
+    [InlineData("admin\U000E0041")]
+    [InlineData(" admin⁠ ")]
+    public void A_preferred_username_loses_the_characters_that_draw_nothing(string sent)
+    {
+        var token = _idp.Mint(sub: "90b1e0f2", preferredUsername: sent);
+
+        var (_, username, _, _) = Validate(token);
+
+        Assert.Equal("admin", username);
+    }
+
+    [Fact]
+    public void A_preferred_username_is_composed_so_two_spellings_of_one_name_agree()
+    {
+        // "é" as one code point and as "e" with a combining acute accent.
+        var token = _idp.Mint(sub: "90b1e0f2", preferredUsername: "René");
+
+        var (_, username, _, _) = Validate(token);
+
+        Assert.Equal("René", username);
+    }
+
+    [Fact]
+    public void A_preferred_username_of_nothing_but_invisible_characters_is_no_name()
+    {
+        var token = _idp.Mint(sub: "90b1e0f2", preferredUsername: "͏​⁠");
+
+        var (_, username, _, _) = Validate(token);
+
+        Assert.Equal("90b1e0f2", username);
+    }
+
+    [Fact]
+    public void A_lone_surrogate_is_not_a_name_and_not_an_error()
+    {
+        Assert.Null(ClaimsExtractor.Name("admin\uD800"));
+    }
+
+    [Fact]
+    public void Letters_from_another_script_are_left_as_they_are()
+    {
+        // Cyrillic "е": a homoglyph, not an invisible character. Not this rule's job.
+        Assert.Equal("еadmin", ClaimsExtractor.Name("еadmin"));
+    }
+
     [Fact]
     public void Claims_under_a_different_name_are_not_read_as_groups()
     {

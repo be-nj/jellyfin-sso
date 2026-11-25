@@ -11,6 +11,15 @@ public class PluginConfiguration : BasePluginConfiguration
     public const int MaxSeenGroups = 500;
 
     /// <summary>
+    /// The longest group name the autocomplete remembers. A cap on the count alone did not
+    /// bound the list: one login with sixty-four names of 64 KB wrote four megabytes into
+    /// the configuration file (#323). Real group names — Keycloak paths, Entra object ids,
+    /// LDAP distinguished names — fit well inside this. A longer one is still matched
+    /// against the mappings, it is only not offered as a suggestion.
+    /// </summary>
+    public const int MaxRememberedGroupLength = 256;
+
+    /// <summary>
     /// The group names from a login that are not remembered yet and can be: capped at
     /// <see cref="MaxSeenGroups"/>, and only names the configuration file can hold. A name
     /// with a control character in it would cost the whole configuration at the next
@@ -23,6 +32,7 @@ public class PluginConfiguration : BasePluginConfiguration
     internal List<string> GroupsToRemember(IEnumerable<string> sent)
         => sent
             .Where(StorableText.CanCarry)
+            .Where(group => group.Length <= MaxRememberedGroupLength)
             .Except(SeenGroups, StringComparer.Ordinal)
             .Distinct(StringComparer.Ordinal)
             .Take(Math.Max(0, MaxSeenGroups - SeenGroups.Count))

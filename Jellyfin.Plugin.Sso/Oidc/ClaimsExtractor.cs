@@ -311,9 +311,77 @@ public sealed class ClaimsExtractor
     /// sending " admin" found no collision with the existing "admin" — Jellyfin's own
     /// lookup does not pad — and then asked Jellyfin to create a second account whose
     /// name reads the same in every list it appears in.
+    ///
+    /// The same goes for characters that are there and draw nothing. Jellyfin's own name
+    /// rule admits a combining grapheme joiner as a letter, so "admin" followed by one
+    /// passed the collision check and became a second account reading "admin" (#324).
+    /// Every Unicode default-ignorable code point is dropped and the rest composed (NFC),
+    /// so the name that is looked up is the name a person sees. Letters from another
+    /// script that merely resemble Latin ones are a different problem and are left alone.
     /// </summary>
-    private static string? Name(string? value)
-        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    internal static string? Name(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var visible = new System.Text.StringBuilder(value.Length);
+        foreach (var rune in Runes(value))
+        {
+            if (!IsDefaultIgnorable(rune.Value))
+                visible.Append(rune.Text);
+        }
+
+        string composed;
+        try
+        {
+            composed = visible.ToString().Normalize(System.Text.NormalizationForm.FormC);
+        }
+        catch (ArgumentException)
+        {
+            // A lone surrogate: not text, so not a name.
+            return null;
+        }
+
+        return string.IsNullOrWhiteSpace(composed) ? null : composed.Trim();
+    }
+
+    /// <summary>
+    /// The code points of a string, with a lone surrogate passed through as itself so that
+    /// nothing is silently changed into U+FFFD here.
+    /// </summary>
+    private static IEnumerable<(int Value, string Text)> Runes(string value)
+    {
+        for (var i = 0; i < value.Length; i++)
+        {
+            if (char.IsHighSurrogate(value[i]) && i + 1 < value.Length && char.IsLowSurrogate(value[i + 1]))
+            {
+                yield return (char.ConvertToUtf32(value[i], value[i + 1]), value.Substring(i, 2));
+                i++;
+            }
+            else
+            {
+                yield return (value[i], value[i].ToString());
+            }
+        }
+    }
+
+    /// <summary>
+    /// Unicode's Default_Ignorable_Code_Point property (DerivedCoreProperties.txt): the
+    /// code points a renderer shows nothing for unless it has a reason to.
+    /// </summary>
+    internal static bool IsDefaultIgnorable(int c)
+        => c is 0x00AD or 0x034F or 0x061C or 0x115F or 0x1160 or 0x17B4 or 0x17B5
+            or (>= 0x180B and <= 0x180F)
+            or (>= 0x200B and <= 0x200F)
+            or (>= 0x202A and <= 0x202E)
+            or (>= 0x2060 and <= 0x206F)
+            or 0x3164
+            or (>= 0xFE00 and <= 0xFE0F)
+            or 0xFEFF or 0xFFA0
+            or (>= 0xFFF0 and <= 0xFFF8)
+            or (>= 0x1BCA0 and <= 0x1BCA3)
+            or (>= 0x1D173 and <= 0x1D17A)
+            or (>= 0xE0000 and <= 0xE0FFF);
 
     internal static List<string> GroupsFromClaims(ClaimsPrincipal principal, string claim)
     {

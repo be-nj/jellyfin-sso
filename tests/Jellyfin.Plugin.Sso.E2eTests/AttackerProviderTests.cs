@@ -130,9 +130,10 @@ public sealed class AttackerProviderTests : IAsyncLifetime
     /// A provider that accepts the connection and then sends its discovery document one
     /// byte a second. The plugin's client has a twenty-second timeout; this checks that it
     /// covers the body and not just the headers, that the visitor gets a refusal in words
-    /// rather than a server fault, and that the next login fetches afresh.
+    /// rather than a server fault, and that the next login fetches afresh. The timeout used
+    /// to escape the login page as a 500 (#321).
     /// </summary>
-    [Fact(Skip = "Defect: a provider timeout escapes as a 500, not a refusal (SsoStartController.StartAtProviderAsync catches only InvalidOperationException)")]
+    [Fact]
     public async Task A_discovery_document_that_trickles_in_is_given_up_on_and_refused_in_words()
     {
         var idp = _env.Idp;
@@ -189,11 +190,11 @@ public sealed class AttackerProviderTests : IAsyncLifetime
     /// <summary>
     /// A userinfo answer of 32 MB: a valid document with one member of padding. A real
     /// one is a few hundred bytes. The plugin caps a provider's logo at 256 KB and counts
-    /// it as it arrives; the documents it reads from the same provider have no cap at all,
-    /// so the server buffers whatever arrives within the twenty-second timeout — over a
-    /// local network, gigabytes.
+    /// it as it arrives; the documents it reads from the same provider had no cap at all,
+    /// so the server buffered whatever arrived within the twenty-second timeout — over a
+    /// local network, gigabytes (#322). They are capped at a mebibyte now.
     /// </summary>
-    [Fact(Skip = "Defect: discovery, JWKS, token and userinfo answers are read whole with no size cap (OidcClientFactory._http)")]
+    [Fact]
     public async Task A_provider_answer_of_many_megabytes_is_refused()
     {
         const int Megabytes = 32;
@@ -235,11 +236,12 @@ public sealed class AttackerProviderTests : IAsyncLifetime
     /// <summary>
     /// The group names a login brings are remembered for the mapping page's suggestions,
     /// capped at 500 because "the names come from the provider, so the list needs an end".
-    /// The cap counts names and not their length, so one login whose userinfo carries
-    /// sixty-four names of 64 KB writes four megabytes into the plugin's configuration
-    /// file — rewritten on every later save, and sent whole to the configuration page.
+    /// The cap counted names and not their length, so one login whose userinfo carried
+    /// sixty-four names of 64 KB wrote four megabytes into the plugin's configuration
+    /// file — rewritten on every later save, and sent whole to the configuration page
+    /// (#323). A name over 256 characters is no longer remembered.
     /// </summary>
-    [Fact(Skip = "Defect: remembered group names are capped in number, not in length (PluginConfiguration.GroupsToRemember)")]
+    [Fact]
     public async Task Group_names_of_many_kilobytes_do_not_grow_the_configuration_file_by_megabytes()
     {
         var idp = _env.Idp;
@@ -335,13 +337,13 @@ public sealed class AttackerProviderTests : IAsyncLifetime
     /// a registration by pattern, <c>…/sso/oidc/callback/*</c>, which Keycloak offers and
     /// which covers each new provider card without another trip to its console. The code
     /// then comes back on the attacker's callback, with the attacker's state, and the
-    /// plugin redeems it at the attacker's token endpoint together with the PKCE verifier
-    /// — everything the attacker needs to redeem it at the honest provider in turn.
+    /// plugin redeemed it at the attacker's token endpoint together with the PKCE verifier
+    /// — everything the attacker needed to redeem it at the honest provider in turn (#325).
     ///
     /// RFC 9207 is the defence: the honest provider names itself in <c>iss</c> on the
     /// redirect, and a client compares that with the provider it sent the person to.
     /// </summary>
-    [Fact(Skip = "Gap: the callback ignores RFC 9207 'iss', so a mix-up hands the honest provider's code and verifier to the attacker (SsoCallbackController.Callback)")]
+    [Fact]
     public async Task A_code_the_honest_provider_issued_is_not_sent_to_another_providers_token_endpoint()
     {
         var attacker = await StrangerAsync();
@@ -485,11 +487,11 @@ public sealed class AttackerProviderTests : IAsyncLifetime
     /// reads the same: other case, or with a combining grapheme joiner — an invisible mark
     /// Jellyfin's own name rule admits as a letter. The plugin trims names for exactly this
     /// reason ("a second account whose name reads the same in every list it appears in");
-    /// it must not create one this way either.
+    /// it created one this way until invisible characters were dropped from names (#324).
     /// </summary>
     [Theory]
     [InlineData("other-case")]
-    [InlineData("invisible-mark", Skip = "Defect: an invisible combining mark in preferred_username makes a second account that reads as the admin's (ClaimsExtractor.Name only trims)")]
+    [InlineData("invisible-mark")]
     public async Task A_name_that_reads_like_the_administrators_does_not_become_a_second_account(string how)
     {
         var name = how switch

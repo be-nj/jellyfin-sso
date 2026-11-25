@@ -228,6 +228,33 @@ public sealed class StorableTextTests
         Assert.Equal(["one"], config.GroupsToRemember(["one", "two"]));
     }
 
+    /// <summary>
+    /// The count alone did not bound the list: sixty-four names of 64 KB from one login
+    /// wrote four megabytes into the configuration file (#323).
+    /// </summary>
+    [Fact]
+    public void A_group_name_longer_than_the_cap_is_not_remembered()
+    {
+        var config = new PluginConfiguration();
+        var longest = new string('g', PluginConfiguration.MaxRememberedGroupLength);
+        var tooLong = longest + "g";
+
+        Assert.Equal(["media", longest], config.GroupsToRemember(["media", longest, tooLong]));
+    }
+
+    [Fact]
+    public void But_it_still_matches_a_mapping_of_that_name()
+    {
+        var tooLong = new string('g', PluginConfiguration.MaxRememberedGroupLength + 1);
+        var config = new PluginConfiguration();
+        config.GroupMappings.Add(new GroupMappingConfig { Group = tooLong });
+
+        var matched = Jellyfin.Plugin.Sso.Provisioning.GroupMatching.Matching(
+            config, new Jellyfin.Plugin.Sso.Oidc.OidcIdentity("sub", "name", [tooLong]));
+
+        Assert.Single(matched);
+    }
+
     // ─── On the way to the file ───────────────────────────────────────────────
 
     /// <summary>
