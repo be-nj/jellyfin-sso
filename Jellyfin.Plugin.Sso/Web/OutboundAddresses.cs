@@ -129,9 +129,15 @@ public static class OutboundAddresses
         // Teredo (2001::/32) is a tunnel to a relay with the client's address stored
         // inverted, and 2001:2::/48 is the benchmarking range, the counterpart of
         // 198.18.0.0/15 (#328).
-        if (bytes[0] == 0x20 && bytes[1] == 0x01
-            && ((bytes[2] == 0 && bytes[3] == 0)
-                || (bytes[2] == 0 && bytes[3] == 2 && bytes[4] == 0 && bytes[5] == 0)))
+        var teredo = bytes[0] == 0x20 && bytes[1] == 0x01 && bytes[2] == 0 && bytes[3] == 0;
+        if (teredo)
+        {
+            return false;
+        }
+
+        var benchmarking = bytes[0] == 0x20 && bytes[1] == 0x01 && bytes[2] == 0 && bytes[3] == 2
+            && bytes[4] == 0 && bytes[5] == 0;
+        if (benchmarking)
         {
             return false;
         }

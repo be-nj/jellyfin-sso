@@ -331,11 +331,8 @@ public sealed class ClaimsExtractor
             return null;
 
         var visible = new System.Text.StringBuilder(value.Length);
-        foreach (var rune in Runes(value))
-        {
-            if (!IsDefaultIgnorable(rune.Value))
-                visible.Append(rune.Text);
-        }
+        foreach (var rune in Runes(value).Where(rune => !IsDefaultIgnorable(rune.Value)))
+            visible.Append(rune.Text);
 
         string composed;
         try
