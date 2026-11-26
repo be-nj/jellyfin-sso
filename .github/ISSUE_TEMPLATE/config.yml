@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security problem
+    url: https://github.com/be-nj/jellyfin-sso/security/advisories/new
+    about: Anything that lets a person reach an account, a library or an administrator flag that is not theirs. Private, answered within 7 days.
+  - name: Documentation
+    url: https://jf.be-nj.net/
+    about: Setup guides for Authentik, Keycloak, Authelia and Google, configuration reference and troubleshooting.

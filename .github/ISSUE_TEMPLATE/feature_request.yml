@@ -1,0 +1,37 @@
+name: Feature request
+description: Something the plugin does not do yet.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Every feature in an authentication plugin is code that has to stay correct for everyone who runs it, so new ones are weighed against how many people need them. A request that only one setup needs may get the `needs demand` label and wait until others ask for it too. That is not a rejection: a thumbs-up on the issue, or a comment describing your own setup, is how demand shows.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you are trying to do
+      description: The situation and the goal, not the solution yet.
+      placeholder: Our household shares one Jellyfin, and the children's accounts should only see the kids' library...
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: Why the plugin does not cover it today
+      description: What you tried, and where it stopped.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like to see
+      description: Optional. A setting, a behaviour, a change to the login page.
+
+  - type: input
+    id: provider
+    attributes:
+      label: Identity provider
+      placeholder: e.g. Authentik, Keycloak, Authelia

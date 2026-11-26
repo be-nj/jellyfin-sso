@@ -3,6 +3,10 @@
 Everything about building, testing and releasing the plugin lives here, so the README can
 stay about installing it and [docs/](docs/README.md) about running it.
 
+Taking part means following the [Code of Conduct](CODE_OF_CONDUCT.md). Bug reports and
+feature requests have issue forms that ask for what is needed to act on them; security
+problems go through a [private advisory](SECURITY.md) instead.
+
 ## Layout
 
 - Source: `Jellyfin.Plugin.Sso/`
