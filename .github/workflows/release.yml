@@ -15,24 +15,18 @@ permissions:
   contents: read
 
 jobs:
-  release:
-    # Pinned, not latest. package.sh promises that anybody can rebuild a release and
-    # compare the checksum, and it pins the commit date, the path map and the SDK — but
-    # not the zip and zlib that actually emit the bytes. A runner image moving to a
-    # different deflate would break reproducibility silently, and a failed reproduction
-    # cannot be told apart from tampering.
+  verify:
+    # Everything that runs code this repository did not write — the test projects'
+    # packages, Playwright, Testcontainers — runs here, with a token that can only read.
+    # It used to share one job with the write token, the OIDC token and the attestation,
+    # so a compromised test dependency could have changed the ZIP after the tests and
+    # had it signed (#343). The job below builds the ZIP itself and runs no tests.
     runs-on: ubuntu-24.04
     permissions:
-      # Creates the release and the manifest pull request.
-      contents: write
-      pull-requests: write
-      # Provenance: the attestation is signed for this repository and run.
-      id-token: write
-      attestations: write
-      # Dispatches the test workflow against the manifest branch; without it the
-      # dispatch answers "Resource not accessible by integration" and the release
-      # job fails after the release itself is already published.
-      actions: write
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      zip: ${{ steps.version.outputs.zip }}
     steps:
       # The tag's own commit, not main's tip. Checking out main meant the published ZIP
       # held whatever main had moved on to, while the provenance attestation below binds
@@ -45,6 +39,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Verify the tag points at main
         run: |
@@ -106,21 +101,62 @@ jobs:
           dotnet test tests/Jellyfin.Plugin.Sso.E2eTests -c Release
           --filter "Category!=RealIdp&Category!=Screenshots&Category!=Demo&Category!=Manual"
 
+
+  release:
+    # Pinned, not latest. package.sh promises that anybody can rebuild a release and
+    # compare the checksum, and it pins the commit date, the path map and the SDK — but
+    # not the zip and zlib that actually emit the bytes. A runner image moving to a
+    # different deflate would break reproducibility silently, and a failed reproduction
+    # cannot be told apart from tampering.
+    runs-on: ubuntu-24.04
+    needs: verify
+    permissions:
+      # Creates the release and the manifest pull request.
+      contents: write
+      pull-requests: write
+      # Provenance: the attestation is signed for this repository and run.
+      id-token: write
+      attestations: write
+      # Dispatches the test workflow against the manifest branch; without it the
+      # dispatch answers "Resource not accessible by integration" and the release
+      # job fails after the release itself is already published.
+      actions: write
+    steps:
+      # The tag's own commit, not main's tip. Checking out main meant the published ZIP
+      # held whatever main had moved on to, while the provenance attestation below binds
+      # its statement to the run's github.sha — the tag commit — so a verifier would have
+      # seen a valid attestation asserting a revision the bytes did not come from. The
+      # archive timestamps come from the checked-out commit too, so even a rebuild from
+      # the tag could not reproduce the checksum.
+      - name: Check out the tagged commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
+        with:
+          # The SDK comes from global.json, so CI and a local rebuild produce the same
+          # bytes for a release.
+          global-json-file: global.json
+
       - name: Build the plugin package
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.verify.outputs.version }}
         run: scripts/package.sh "$VERSION"
 
       - name: Attest what was built
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: dist/${{ steps.version.outputs.zip }}
+          subject-path: dist/${{ needs.verify.outputs.zip }}
 
       - name: Publish the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version }}
-          ZIP: ${{ steps.version.outputs.zip }}
+          VERSION: ${{ needs.verify.outputs.version }}
+          ZIP: ${{ needs.verify.outputs.zip }}
         run: |
           zip="dist/$ZIP"
           # Idempotent: a rerun after a later step failed must not stop here.
@@ -135,8 +171,8 @@ jobs:
       - name: Add the version to manifest.json
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version }}
-          ZIP: ${{ steps.version.outputs.zip }}
+          VERSION: ${{ needs.verify.outputs.version }}
+          ZIP: ${{ needs.verify.outputs.zip }}
           SERVER_URL: ${{ github.server_url }}
           REPOSITORY: ${{ github.repository }}
         run: |
@@ -162,7 +198,7 @@ jobs:
       - name: Open a pull request with the manifest
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.verify.outputs.version }}
         run: |
           version="$VERSION"
           branch="manifest/$GITHUB_REF_NAME"
@@ -178,7 +214,9 @@ jobs:
 
           git add manifest.json m.json README.md
           git commit -m "Publish $version in the plugin manifest"
-          git push --force origin "$branch"
+          # The checkout keeps no credential (#344), so the one push names its token.
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)" \
+            push --force origin "$branch"
 
           if ! gh pr view "$branch" >/dev/null 2>&1; then
             gh pr create --base main --head "$branch" \

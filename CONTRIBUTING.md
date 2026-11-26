@@ -20,6 +20,11 @@ problems go through a [private advisory](SECURITY.md) instead.
 make test        # dotnet test tests/Jellyfin.Plugin.Sso.Tests -c Release --logger trx
 ```
 
+Every project restores from a committed `packages.lock.json`, and CI restores in locked
+mode, so a package version or content hash that differs from the reviewed one fails the
+build instead of slipping in. Changing a package reference locally updates the lock file;
+commit it with the change.
+
 Tests live under `tests/`; everything a run produces (binaries, obj, TRX results) goes to
 `tests/runs/`, which is gitignored. They cover the security-relevant paths: ID token
 validation (signature, issuer, audience, lifetime, nonce, `alg=none`), the ephemeral
@@ -217,6 +222,11 @@ again. And `scripts/check-manifest.sh` compares the two character for character,
 the manifest is generated and a generated file somebody has edited by hand is no longer a
 record of anything.
 
+The `Release` workflow runs in two jobs. The first runs both test suites with a token that
+can only read; the second runs no test code, and builds, attests and publishes. Test
+dependencies are code nobody here wrote, and they used to run next to the write token
+and the attestation.
+
 The `Release` workflow builds the ZIP, attaches it to a GitHub release and appends the
 version to `manifest.json` on `main`, which is what servers poll. The `targetAbi` written
 into the manifest is derived from the `Jellyfin.Controller` reference in the csproj, so a
@@ -381,6 +391,15 @@ set of tested servers — in two places, the workflow and the ruleset. Moving th
 to 12.3 and 12.4 under that arrangement would have left `main` waiting for a check that no
 longer runs, and the repair is a repository setting, which is precisely what a
 `GITHUB_TOKEN` pull request may not touch.
+
+`main` also requires `audit`, because that job holds `scripts/check-manifest.sh`: the only
+check that every manifest entry points at a real release asset with the right checksum.
+The manifest is the file servers install from, and before it was required a pull request
+that broke it could still merge (#345). Three settings outside the workflows complete
+the picture: the default `GITHUB_TOKEN` can only read, so a workflow that forgets its
+`permissions:` block gets nothing; workflows cannot approve pull requests; and a ruleset
+keeps `v*` tags from being moved or deleted once a release points at them, with only a
+repository administrator able to bypass it.
 
 The project is open to co-maintainers, and the rule above is the part of it that does not
 wait for one: no change to the authentication path goes in on the strength of a green test
