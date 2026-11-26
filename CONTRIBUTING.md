@@ -171,6 +171,15 @@ file that is never committed; [tests/google/README.md](tests/google/README.md) h
 
 ### Cutting a release
 
+**Not every merge is a release.** Every version shows up in the catalog as an update
+somebody has to read and install, and eight of them in November — two on one day — asked
+that of every operator more often than the changes were worth. Fixes collect on `main` and
+go out together, about every two weeks. A release sooner is for something an operator
+should not wait for: a security fix that holds without any change to the setup, a login
+that no longer works, or settings that are lost. A finding that needs a hostile provider
+the operator configured, or a mapping set up in a particular way, can wait for the next
+regular one.
+
 ```bash
 git tag v1.12.1 && git push origin v1.12.1
 ```
