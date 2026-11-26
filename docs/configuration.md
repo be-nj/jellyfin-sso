@@ -213,9 +213,32 @@ prevent it, because Jellyfin reads that copy before taking the lock.
 
 ## Group Mappings
 
-One card per group: *Group name*, *Libraries*, **Admin (all libraries)**, *Live TV
-access*, *Live TV management*, *Downloads*, *Delete media*, *Manage collections*,
+One card per group: *Group name*, **Admin (all libraries)**, *Providers*, *Libraries*,
+*Live TV access*, *Live TV management*, *Downloads*, *Delete media*, *Manage collections*,
 *Manage subtitles*, *Manage lyrics*, *Max parental rating* (empty = no limit).
+
+*Providers* says whose logins the mapping applies to. *All providers* is the default, and
+it is what every mapping saved before the choice existed has. Untick it and tick the
+providers the group belongs to, and a login through any other provider does not match the
+mapping, even when it carries a group of exactly that name: no administrator flag, no
+libraries, no permissions from it, and it does not count for *Refuse logins that match no
+mapping*. In the configuration JSON this is `ProviderIds`, a list of provider ids, where
+an empty list means every provider. A save that names an id no provider has is refused
+rather than quietly dropped, because a list emptied that way would mean every provider. A
+removed provider therefore stays on the card, ticked and marked *no longer configured*,
+until you choose again.
+
+> **An administrator mapping left on *All providers* trusts every provider that sets
+> permissions.** A group name means whatever the provider that sends it says. With two
+> providers whose *Set permissions from this provider's groups* is on, a mapping of
+> `jf-admins` to administrator makes administrator anybody either of them puts in a group
+> called `jf-admins`. If one of them is a provider where somebody else decides the group
+> names — a friend's identity provider, a GitLab where users create their own groups, a
+> Keycloak realm where users can edit an attribute that is mapped into `groups` — limit
+> the administrator mapping to the provider you run. The same reasoning holds, with less
+> at stake, for every other mapping. With a single provider the choice changes nothing
+> today, and limiting the administrator mapping anyway keeps it right when a second
+> provider is added later.
 
 *All libraries, including ones added later* grants every library without making the group
 administrators, and without naming the libraries: a library created afterwards is included
@@ -256,6 +279,11 @@ SSO sync for user …: admin=False, libraries=1, groups=media
 A user in several groups gets the union: every library of every matched group, each
 permission any group grants, and the most permissive parental rating — a group without a
 limit lifts the limit.
+
+A login that carries the group of a mapping limited to other providers leaves a warning in
+the log, which names the mapping and says it applies only to logins through other
+providers. That is the line to look for when somebody signs in through one provider and
+gets nothing, and it is also what an attempt to claim another provider's group looks like.
 
 ## Published server address
 

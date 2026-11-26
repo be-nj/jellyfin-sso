@@ -101,6 +101,9 @@ function setupTabs(view) {
             panels.forEach(function (p) { p.hidden = (p.dataset.panel !== name); });
             // Save applies to Provider + Group Mappings only.
             saveBar.hidden = (name === 'links');
+            // The provider choice on each mapping follows the cards on the Provider tab,
+            // which may have gained, lost or renamed a provider since it was drawn.
+            if (name === 'mappings') { refreshProviderScopes(view); }
         });
     });
 }
@@ -193,6 +196,18 @@ function save(view) {
     if (blank >= 0) {
         Dashboard.alert('Group mapping ' + (blank + 1) + ' has no group name. Enter the group '
             + 'it applies to, or remove the mapping. Nothing was saved.');
+        return Promise.resolve();
+    }
+
+    // Saved as it stands, a mapping limited to no provider would be an empty list, and an
+    // empty list means every provider: the opposite of what the unticked box said (#340).
+    var unscoped = Array.from(view.querySelectorAll('.sso-mapping')).findIndex(function (card) {
+        return !card.querySelector('.sso-all-providers-check').checked
+            && !card.querySelector('.sso-provider-scope-cb:checked');
+    });
+    if (unscoped >= 0) {
+        Dashboard.alert('Group mapping ' + (unscoped + 1) + ' is limited to some providers, but '
+            + 'none is ticked. Tick the providers it applies to, or All providers. Nothing was saved.');
         return Promise.resolve();
     }
 
@@ -514,6 +529,7 @@ function buildRow(view, m, i) {
 
     var adminChecked = m.IsAdministrator ? ' checked' : '';
     var allChecked = m.AllLibraries ? ' checked' : '';
+    var allProvidersChecked = (m.ProviderIds || []).length === 0 ? ' checked' : '';
     var rating = (m.MaxParentalRating === null || m.MaxParentalRating === undefined) ? '' : m.MaxParentalRating;
 
     function permission(cls, labelText, on) {
@@ -541,6 +557,15 @@ function buildRow(view, m, i) {
             '<div class="checkboxContainer sso-admin-toggle"><label><input type="checkbox" is="emby-checkbox" class="sso-admin-check"' +
                 adminChecked + ' /><span>Admin (all libraries)</span></label></div>' +
             '<button type="button" is="emby-button" class="raised sso-remove-btn"><span>Remove</span></button>' +
+        '</div>' +
+        '<div class="sso-providers-section">' +
+            '<h3 class="checkboxListLabel">Providers</h3>' +
+            '<div class="checkboxContainer"><label><input type="checkbox" is="emby-checkbox" class="sso-all-providers-check"' +
+                allProvidersChecked + ' /><span>All providers</span></label>' +
+                '<div class="fieldDescription">Each provider decides its own group names. Limit the ' +
+                'mapping when another provider could send this name, above all for an administrator ' +
+                'group.</div></div>' +
+            '<div class="checkboxList sso-libs-grid sso-provider-scope-list"></div>' +
         '</div>' +
         '<div class="folderAccess sso-libs-section">' +
             '<h3 class="checkboxListLabel">Libraries</h3>' +
@@ -578,6 +603,18 @@ function buildRow(view, m, i) {
     ac.addEventListener('change', syncAdmin);
     syncAdmin();
 
+    // Drawn from the provider cards, and drawn again whenever the tab is opened.
+    card.dataset.providerIds = JSON.stringify(m.ProviderIds || []);
+    renderProviderScope(view, card);
+    var scopeList = card.querySelector('.sso-provider-scope-list');
+    scopeList.addEventListener('change', function () {
+        card.dataset.providerIds = JSON.stringify(checkedProviderIds(card));
+    });
+    var allProviders = card.querySelector('.sso-all-providers-check');
+    function syncAllProviders() { scopeList.style.display = allProviders.checked ? 'none' : ''; }
+    allProviders.addEventListener('change', syncAllProviders);
+    syncAllProviders();
+
     var all = card.querySelector('.sso-all-libs-check');
     var libList = card.querySelector('.sso-lib-list');
     function syncAll() { libList.style.display = all.checked ? 'none' : ''; }
@@ -596,6 +633,45 @@ function buildRow(view, m, i) {
     });
 
     return card;
+}
+
+// The providers a mapping can be limited to: the cards on the Provider tab as they stand,
+// so a provider added or renamed there is offered before it is saved.
+function currentProviders(view) {
+    return Array.from(view.querySelectorAll('.sso-provider')).map(function (card, idx) {
+        var name = card.querySelector('.sso-provider-name');
+        return { Id: card.dataset.providerId, Name: (name && name.value.trim()) || ('Provider ' + (idx + 1)) };
+    });
+}
+
+function checkedProviderIds(card) {
+    return Array.from(card.querySelectorAll('.sso-provider-scope-cb'))
+        .filter(function (cb) { return cb.checked; })
+        .map(function (cb) { return cb.value; });
+}
+
+function renderProviderScope(view, card) {
+    var chosen = JSON.parse(card.dataset.providerIds || '[]');
+    var providers = currentProviders(view);
+    // A provider that has no card any more stays on the list, ticked, so that the save
+    // names it. Dropping it here would leave the mapping limited to nothing, and saved
+    // that way an empty list means every provider.
+    chosen.forEach(function (id) {
+        if (!providers.some(function (p) { return p.Id === id; })) {
+            providers.push({ Id: id, Name: id + ' (no longer configured)' });
+        }
+    });
+    card.querySelector('.sso-provider-scope-list').innerHTML = providers.map(function (p) {
+        var checked = chosen.indexOf(p.Id) !== -1 ? ' checked' : '';
+        return '<div class="sectioncheckbox"><label><input type="checkbox" is="emby-checkbox" class="sso-provider-scope-cb" value="'
+            + escAttr(p.Id) + '"' + checked + ' /><span>' + escHtml(p.Name) + '</span></label></div>';
+    }).join('');
+}
+
+function refreshProviderScopes(view) {
+    Array.from(view.querySelectorAll('.sso-mapping')).forEach(function (card) {
+        renderProviderScope(view, card);
+    });
 }
 
 function renumber(view) {
@@ -622,6 +698,9 @@ function collectMappings(view) {
 
         return {
             Group: g,
+            // Empty is every provider, which is also what a mapping saved before the
+            // choice existed has.
+            ProviderIds: checked('.sso-all-providers-check') ? [] : checkedProviderIds(card),
             LibraryIds: libIds,
             AllLibraries: checked('.sso-all-libs-check'),
             IsAdministrator: ac ? ac.checked : false,

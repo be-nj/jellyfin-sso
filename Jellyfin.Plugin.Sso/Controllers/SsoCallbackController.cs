@@ -551,7 +551,7 @@ public sealed class SsoCallbackController : SsoFlowController
         {
             _logger.LogWarning(
                 "SSO group mapping '{Mapping}' does not match the group '{Arrived}' the "
-                + "provider sent: {Reason}, and matching is exact.",
+                + "provider sent: {Reason}.",
                 mapping,
                 Loggable.OneLine(arrived),
                 reason);

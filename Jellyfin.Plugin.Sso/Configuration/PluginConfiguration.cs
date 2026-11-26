@@ -310,6 +310,22 @@ public class GroupMappingConfig
     public string Group { get; set; } = string.Empty;
 
     /// <summary>
+    /// The ids of the providers whose logins this mapping applies to. Empty — the default,
+    /// and what every mapping saved before this existed has — means every provider.
+    ///
+    /// A group name means something only at the provider that issued it. With two
+    /// providers that set permissions, an unscoped mapping of "jf-admins" to administrator
+    /// makes administrator anybody either provider calls "jf-admins", and the second
+    /// provider may be one where somebody else decides the group names — a friend's
+    /// identity provider, a GitLab where users create groups (#340). Naming the provider
+    /// here keeps the grant with the provider that was meant.
+    ///
+    /// Starts empty, as the lists of a provider do, because XmlSerializer appends saved
+    /// entries to a pre-filled list instead of replacing it.
+    /// </summary>
+    public List<string> ProviderIds { get; set; } = [];
+
+    /// <summary>
     /// Library GUIDs (stable ItemId values from ILibraryManager.GetVirtualFolders()).
     /// Stored as strings to survive XML serialization round-trips cleanly.
     /// </summary>
