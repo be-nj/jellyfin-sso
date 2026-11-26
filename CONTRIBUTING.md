@@ -20,6 +20,11 @@ problems go through a [private advisory](SECURITY.md) instead.
 make test        # dotnet test tests/Jellyfin.Plugin.Sso.Tests -c Release --logger trx
 ```
 
+Every project restores from a committed `packages.lock.json`, and CI restores in locked
+mode, so a package version or content hash that differs from the reviewed one fails the
+build instead of slipping in. Changing a package reference locally updates the lock file;
+commit it with the change.
+
 Tests live under `tests/`; everything a run produces (binaries, obj, TRX results) goes to
 `tests/runs/`, which is gitignored. They cover the security-relevant paths: ID token
 validation (signature, issuer, audience, lifetime, nonce, `alg=none`), the ephemeral
@@ -216,6 +221,11 @@ release already exist. `scripts/manifest-changelogs.sh` copies the sections into
 again. And `scripts/check-manifest.sh` compares the two character for character, because
 the manifest is generated and a generated file somebody has edited by hand is no longer a
 record of anything.
+
+The `Release` workflow runs in two jobs. The first runs both test suites with a token that
+can only read; the second runs no test code, and builds, attests and publishes. Test
+dependencies are code nobody here wrote, and they used to run next to the write token
+and the attestation.
 
 The `Release` workflow builds the ZIP, attaches it to a GitHub release and appends the
 version to `manifest.json` on `main`, which is what servers poll. The `targetAbi` written

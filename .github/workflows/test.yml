@@ -34,6 +34,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       # The filter decides whether the four required checks run anything at all, so it
       # must not come from the branch being checked: a pull request that rewrote this
@@ -62,6 +63,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         if: needs.changes.outputs.code != 'false'
+        with:
+          persist-credentials: false
 
       - name: Set up .NET
         if: needs.changes.outputs.code != 'false'
@@ -99,6 +102,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Check the review's references
         env:
@@ -126,6 +130,8 @@ jobs:
       list: ${{ steps.read.outputs.list }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       # Not gated on `changes`: the file is not Markdown, so editing it is a code change
       # either way, and two seconds here beats three containers spending twenty minutes
@@ -154,6 +160,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         if: needs.changes.outputs.code != 'false'
+        with:
+          persist-credentials: false
 
       - name: Set up .NET
         if: needs.changes.outputs.code != 'false'
@@ -223,6 +231,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         if: needs.changes.outputs.code != 'false'
+        with:
+          persist-credentials: false
 
       - name: Set up .NET
         if: needs.changes.outputs.code != 'false'

@@ -10,14 +10,19 @@ on:
   push:
     branches: [main]
 
-permissions: read-all
+# Nothing by default; the one job names what it needs (#344).
+permissions: {}
 
 jobs:
   analysis:
     name: Scorecard analysis
     runs-on: ubuntu-latest
     permissions:
+      contents: read
+      actions: read
+      # Uploads the results to the security tab.
       security-events: write
+      # Publishes the results to the OpenSSF API, which proves the run by this token.
       id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

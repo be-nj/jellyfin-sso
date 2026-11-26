@@ -1,5 +1,8 @@
 <Project>
 
+  <!-- The repository's own settings first: this file would otherwise hide them. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
   <!-- Everything a test run produces stays under tests/runs/, which is gitignored. -->
   <PropertyGroup>
     <BaseOutputPath>$(MSBuildThisFileDirectory)runs/dotnet/bin/$(MSBuildProjectName)/</BaseOutputPath>

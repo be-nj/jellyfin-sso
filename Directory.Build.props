@@ -1,0 +1,16 @@
+<Project>
+
+  <!--
+    Every restore is pinned to the exact packages, and their content hashes, that were
+    reviewed when the lock file was committed. Without it a restore takes whatever the
+    feed answers at that moment, and the release job restored the test projects' packages
+    (Playwright, Testcontainers and their dependencies) in the same job that holds a write
+    token and signs the attestation (#343). In CI a restore that would change a lock file
+    fails instead of changing it; locally it updates the file, which then shows in review.
+  -->
+  <PropertyGroup>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
+  </PropertyGroup>
+
+</Project>

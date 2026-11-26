@@ -34,6 +34,8 @@ jobs:
       list: ${{ steps.minors.outputs.list }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - id: minors
         env:
@@ -56,14 +58,20 @@ jobs:
         jellyfin: ${{ fromJSON(needs.servers.outputs.list) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up .NET
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
         with:
           global-json-file: global.json
 
+      # Through the environment: the matrix is Jellyfin's tag list on Docker Hub, which is
+      # text from outside this repository, and a template expands before the shell parses.
       - name: Check the image exists before testing against it
-        run: scripts/upstream-check-images.sh "jellyfin/jellyfin:${{ matrix.jellyfin }}"
+        env:
+          JELLYFIN_TAG: ${{ matrix.jellyfin }}
+        run: scripts/upstream-check-images.sh "jellyfin/jellyfin:$JELLYFIN_TAG"
 
       - name: Run the e2e suite against Jellyfin ${{ matrix.jellyfin }}
         env:
@@ -104,6 +112,8 @@ jobs:
       actions: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - id: bump
         env:
@@ -125,7 +135,9 @@ jobs:
           git checkout -b "$branch"
           git add jellyfin-versions.json
           git commit -m "Test the pull requests against $AFTER"
-          git push --force origin "$branch"
+          # The checkout keeps no credential (#344), so the one push names its token.
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)" \
+            push --force origin "$branch"
 
           # printf rather than a heredoc: every line of a run: block has to stay
           # indented for the YAML, and a heredoc would carry that indentation into the
@@ -159,6 +171,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up .NET
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
@@ -225,6 +239,8 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Open or update the upstream issue
         env:
