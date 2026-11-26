@@ -245,7 +245,7 @@ internal static class BrowserSupport
             await CaptureAsync(page, name);
 
             var refused = PageConsole.RefusalsOf(page);
-            Assert.Fail(
+            Assert.Fail(WithoutApiKeys(
                 $"The web client never adopted the SSO session within "
                 + $"{timeoutMs / 1000} s.\n"
                 + $"url:         {page.Url}\n"
@@ -256,9 +256,19 @@ internal static class BrowserSupport
                 + $"network:     {HostNetwork.State}\n"
                 // Errors only, unless a caller chose what to pass: jellyfin-web logs the
                 // stored credentials, access token included, at debug level.
-                + $"console:     {string.Join(" | ", consoleMessages ?? PageConsole.ErrorsOf(page))}");
+                + $"console:     {string.Join(" | ", consoleMessages ?? PageConsole.ErrorsOf(page))}"));
         }
     }
+
+    /// <summary>
+    /// The message without the value of any <c>ApiKey</c> or <c>api_key</c> query
+    /// parameter. jellyfin-web opens its websocket with the access token in the address,
+    /// and on a slow start that address arrives in the refused list and the console, so a
+    /// failure message printed the very token it promises to keep out (#351).
+    /// </summary>
+    internal static string WithoutApiKeys(string message)
+        => System.Text.RegularExpressions.Regex.Replace(
+            message, @"(?i)\b(api_?key=)[^&\s""'|]+", "$1***");
 
     // Whether a token is stored is said; the token itself never is.
     private const string CredentialsProbe =

@@ -42,6 +42,15 @@ public sealed class LogoutTokenValidationTests : IDisposable
     }
 
     [Fact]
+    public void An_expiry_that_is_there_is_honoured()
+    {
+        // exp is optional, but one that is present and past ends the token even while its
+        // iat is still fresh. The mutation run showed nothing tested this.
+        Assert.ThrowsAny<SecurityTokenException>(
+            () => Validate(_provider.MintLogoutToken(lifetime: TimeSpan.FromMinutes(-10))));
+    }
+
+    [Fact]
     public void A_token_signed_by_somebody_else_is_rejected()
     {
         using var stranger = new IdTokenFactory("stranger-key");
