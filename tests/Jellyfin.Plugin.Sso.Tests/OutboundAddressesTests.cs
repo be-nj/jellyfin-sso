@@ -108,6 +108,14 @@ public sealed class OutboundAddressesTests
     [InlineData("2a00:1450:4001::200e")]
     [InlineData("64:ff9b::0808:0808")]   // NAT64 carrying 8.8.8.8
     [InlineData("2002:0808:0808::1")]    // 6to4 tunnelling to 8.8.8.8
+    // Each special range is matched on its whole prefix, not on part of it. These share
+    // all but one byte of a refused prefix with a private IPv4 address behind them, and a
+    // check that matched on fewer bytes would refuse them (found by the mutation run).
+    [InlineData("2064:ff9b::a00:1")]     // NAT64's bytes, but not at the start
+    [InlineData("2a00:db8::1")]          // documentation range's second half
+    [InlineData("2a00::a00:1")]          // Teredo's second half
+    [InlineData("2a00:2::a00:1")]        // benchmarking's second half
+    [InlineData("2001:2:1::1")]          // next to the benchmarking /48
     public void An_ordinary_global_IPv6_address_is_public(string ip)
         => Assert.True(OutboundAddresses.IsPublic(IPAddress.Parse(ip)));
 

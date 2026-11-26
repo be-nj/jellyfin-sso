@@ -332,6 +332,22 @@ public sealed class PermissionSyncTests : IDisposable
     }
 
     [Fact]
+    public async Task Deletion_is_granted_when_one_of_several_matched_groups_grants_it()
+    {
+        Map("media", admin: false, MoviesId);
+        _harness.Configuration.GroupMappings.Add(new GroupMappingConfig
+        {
+            Group = "curators",
+            LibraryIds = [MoviesId.ToString("N")],
+            EnableContentDeletion = true,
+        });
+
+        await _sync.SyncAsync(_userId, Identity("media", "curators"));
+
+        Assert.True(CapturedPolicy().EnableContentDeletion);
+    }
+
+    [Fact]
     public async Task A_group_that_no_longer_grants_deletion_takes_it_away_again()
     {
         var user = ExistingUser(admin: false);
