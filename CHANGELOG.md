@@ -12,6 +12,22 @@ in the few lines somebody reads before clicking.
 Issue and pull request numbers are given bare rather than as links: the catalog renders
 Markdown, so a link per finding would cost more characters than the lines themselves.
 
+## 1.12.26
+
+- **New: a group mapping can be limited to providers.** With more than one provider, a
+  mapping applied to every one of them, so a provider where others can create groups could
+  grant administrator rights meant for another. Unticked, a mapping still applies to all
+  (#340).
+- **Security: a provider cannot send the browser to a script address.** An authorization
+  endpoint that is not an http or https address is refused (#339).
+- **Security: a disabled administrator no longer counts as the one that remains** when the
+  last enabled administrator would lose the role (#341).
+- **Hardening.** Plugin pages refuse to be framed and send `nosniff` (#346); a cancelled
+  page load no longer hides a provider's logo for twelve hours (#342).
+
+On upgrade: nothing changes until a mapping is limited. Where several providers set
+permissions from groups, limit the administrator mapping to the provider it belongs to.
+
 ## 1.12.25
 
 - **Security: a code is only redeemed at the provider that issued it.** The callback now
