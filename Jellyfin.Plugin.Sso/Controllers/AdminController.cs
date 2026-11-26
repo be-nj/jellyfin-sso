@@ -16,6 +16,7 @@ namespace Jellyfin.Plugin.Sso.Controllers;
 /// </summary>
 [ApiController]
 [Route("sso/admin")]
+[ResponseHardening]
 public sealed class AdminController : ControllerBase
 {
     private readonly ILibraryManager _libraryManager;

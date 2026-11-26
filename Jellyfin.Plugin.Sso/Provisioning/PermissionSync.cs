@@ -274,9 +274,15 @@ public sealed class PermissionSync
         return null;
     }
 
+    /// <summary>
+    /// Another administrator who can still sign in. A disabled one does not count: the
+    /// wizard's local account is often kept as a disabled administrator once SSO works, and
+    /// counting it let a mistyped admin mapping demote the only administrator anybody could
+    /// sign in as (#341).
+    /// </summary>
     private bool OtherAdministratorsExist(Guid userId)
         => (_userManager.GetUsers() ?? [])
-            .Any(u => u.Id != userId && IsAdministrator(u));
+            .Any(u => u.Id != userId && IsAdministrator(u) && !u.HasPermission(PermissionKind.IsDisabled));
 
     private static bool IsAdministrator(User? user)
         => user is not null && user.HasPermission(PermissionKind.IsAdministrator);

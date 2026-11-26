@@ -327,6 +327,9 @@ internal static class SsoPages
                   });
                   if (!res.ok) throw new Error(await res.text() || ('HTTP ' + res.status));
                   const data = await res.json();
+                  // The server already refuses anything else (#339); this page does not
+                  // rely on it, since it runs where the user's access token is.
+                  if (!/^https?:\/\//i.test(data.AuthorizeUrl || '')) throw new Error('the provider address is not a web address');
                   window.location.href = data.AuthorizeUrl;
                 } catch (e) {
                   msg.textContent = 'Could not start linking: ' + e.message;

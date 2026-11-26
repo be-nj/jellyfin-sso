@@ -14,6 +14,7 @@ namespace Jellyfin.Plugin.Sso.Controllers;
 /// What they share is this: where the server is as the browser sees it, the two cookies
 /// the flow sets, and which providers an operator has enabled.
 /// </summary>
+[ResponseHardening]
 public abstract class SsoControllerBase : ControllerBase
 {
     private SsoAddress? _at;

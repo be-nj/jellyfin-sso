@@ -201,6 +201,11 @@ public sealed class OidcClientFactory : IDisposable
             // can serve a form on the authority's own host just as easily.
             ("end_session_endpoint", published("end_session_endpoint")));
 
+        // Its host is the provider's business, but what kind of address it is is not: the
+        // browser is sent there, and the link page sends it there from script (#339).
+        if (published("authorization_endpoint") is { } authorize)
+            NavigableAuthorizeEndpoint(authorize);
+
         if (doc.IsError)
             throw new InvalidOperationException(
                 $"OIDC discovery failed for {provider.Authority}: {ProviderSaid(doc.Error)}");
@@ -225,6 +230,29 @@ public sealed class OidcClientFactory : IDisposable
         "backchannel_authentication_endpoint",
         "check_session_iframe",
     ];
+
+    /// <summary>
+    /// The authorization endpoint, if it is an address a browser can be sent to as a page:
+    /// absolute, http or https, with no user name or password in it and no fragment (RFC
+    /// 6749 §3.1 forbids one). The host is not checked, for the reason given at the host
+    /// check; the kind of address is, because the self-service link page navigates to it
+    /// from script, and a <c>javascript:</c> address there runs on Jellyfin's own origin,
+    /// where the signed-in user's access token is (#339).
+    /// </summary>
+    internal static Uri NavigableAuthorizeEndpoint(string? endpoint)
+    {
+        if (Uri.TryCreate(endpoint, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp)
+            && uri.UserInfo.Length == 0
+            && uri.Fragment.Length == 0)
+        {
+            return uri;
+        }
+
+        throw new InvalidOperationException(
+            "The provider's discovery document names an authorization endpoint that is not "
+            + "an http or https address: " + Logging.Loggable.OneLine(endpoint ?? "(none)"));
+    }
 
     /// <summary>
     /// Reads endpoint addresses out of a discovery document as it was sent, whether or
