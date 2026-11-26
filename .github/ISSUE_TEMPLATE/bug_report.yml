@@ -1,0 +1,106 @@
+name: Bug report
+description: Something in the plugin does not work the way the documentation says it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Two things first:
+
+        - **Anything that lets a person reach an account, a library or an administrator flag that is not theirs is a security report.** Please send it through a [private advisory](https://github.com/be-nj/jellyfin-sso/security/advisories/new), not here.
+        - [Troubleshooting](https://github.com/be-nj/jellyfin-sso/blob/main/docs/troubleshooting.md) covers the most common surprises, such as no libraries after login or a refused existing username.
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      description: Dashboard → Plugins → SSO Authentication.
+      placeholder: 1.12.25.0
+    validations:
+      required: true
+
+  - type: input
+    id: jellyfin-version
+    attributes:
+      label: Jellyfin version
+      description: Dashboard → General, or the image tag you run.
+      placeholder: 12.4.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Identity provider
+      options:
+        - Authentik
+        - Keycloak
+        - Authelia
+        - Tinyauth
+        - Google
+        - Other (name it below)
+    validations:
+      required: true
+
+  - type: input
+    id: provider-version
+    attributes:
+      label: Provider version
+      placeholder: e.g. Authentik 2025.10.1
+
+  - type: dropdown
+    id: client
+    attributes:
+      label: Where does it happen?
+      multiple: true
+      options:
+        - Jellyfin web in a browser
+        - Jellyfin Media Player / desktop app
+        - Android or Android TV app
+        - iOS / Swiftfin
+        - Quick Connect on a TV or other device
+        - The plugin's configuration page
+        - Other
+
+  - type: textarea
+    id: setup
+    attributes:
+      label: Setup
+      description: How Jellyfin is reached (reverse proxy, sub-path / Base URL, plain HTTP or HTTPS) and anything unusual about the provider's configuration.
+      placeholder: |
+        Jellyfin in Docker behind Caddy at https://media.example.org, no Base URL.
+        Authentik application with the default scopes and a "groups" claim.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: The steps you took and what you saw, including the exact message if there was one.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Log excerpt
+      description: |
+        Jellyfin's log around the attempt (Dashboard → Logs, or `docker logs jellyfin`). Every rejection the plugin makes is logged with the provider and the reason.
+        **Remove client secrets, tokens, codes and anything else you would not post publicly before pasting.** The plugin does not log them itself, but a reverse proxy or the provider might.
+      render: text
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you send it
+      options:
+        - label: I am on the newest plugin version, or I have said above why I cannot update.
+          required: true
+        - label: The log excerpt contains no secrets, tokens or codes.
+          required: true
