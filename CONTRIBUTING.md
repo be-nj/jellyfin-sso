@@ -392,6 +392,15 @@ to 12.3 and 12.4 under that arrangement would have left `main` waiting for a che
 longer runs, and the repair is a repository setting, which is precisely what a
 `GITHUB_TOKEN` pull request may not touch.
 
+`main` also requires `audit`, because that job holds `scripts/check-manifest.sh`: the only
+check that every manifest entry points at a real release asset with the right checksum.
+The manifest is the file servers install from, and before it was required a pull request
+that broke it could still merge (#345). Three settings outside the workflows complete
+the picture: the default `GITHUB_TOKEN` can only read, so a workflow that forgets its
+`permissions:` block gets nothing; workflows cannot approve pull requests; and a ruleset
+keeps `v*` tags from being moved or deleted once a release points at them, with only a
+repository administrator able to bypass it.
+
 The project is open to co-maintainers, and the rule above is the part of it that does not
 wait for one: no change to the authentication path goes in on the strength of a green test
 run alone.
