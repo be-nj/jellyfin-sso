@@ -64,3 +64,22 @@ public class PageConsoleTests
         Assert.False(PageConsole.ClientCrashedWhileRendering([]));
     }
 }
+
+/// <summary>
+/// A failure message the harness raises is printed in CI logs anybody can read, so the
+/// access token jellyfin-web puts into its websocket address must not reach it (#351).
+/// </summary>
+public class FailureMessageTests
+{
+    [Fact]
+    public void An_api_key_in_an_address_is_not_printed()
+    {
+        var message = BrowserSupport.WithoutApiKeys(
+            "refused: GET http://localhost:32769/socket?ApiKey=43899bdcc1454d9c84787002cacf1ceb&deviceId=x -> 401"
+            + " | console: ws://h/socket?api_key=0123abcd failed");
+
+        Assert.DoesNotContain("43899bdcc1454d9c84787002cacf1ceb", message);
+        Assert.DoesNotContain("0123abcd", message);
+        Assert.Contains("ApiKey=***&deviceId=x", message);
+    }
+}
