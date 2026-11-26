@@ -117,6 +117,36 @@ public sealed class ConfigPageTests : IAsyncLifetime
         await Assertions.Expect(saved.Locator(".sso-card-sub")).ToHaveTextAsync("all libraries");
     }
 
+    /// <summary>
+    /// A mapping limited to one provider (#340) is saved with that provider's id, and the
+    /// page shows the choice again rather than falling back to every provider.
+    /// </summary>
+    [Fact]
+    public async Task The_admin_page_saves_a_mapping_limited_to_one_provider_and_shows_it_again()
+    {
+        var page = await OpenConfigPageAsync();
+
+        await page.ClickAsync("#AddMapping");
+        var card = page.Locator(".sso-mapping").Last;
+        await card.Locator(".sso-group-input").FillAsync("one-provider-only");
+        await Assertions.Expect(card.Locator(".sso-all-providers-check")).ToBeCheckedAsync();
+        await card.Locator(".sso-all-providers-check").UncheckAsync(new LocatorUncheckOptions { Force = true });
+        await card.Locator($".sso-provider-scope-cb[value=\"{JellyfinEnvironment.ProviderId}\"]")
+            .CheckAsync(new LocatorCheckOptions { Force = true });
+
+        await page.ClickAsync("#Save");
+
+        var mapping = await WaitForMappingAsync("one-provider-only");
+        var scope = Assert.Single(mapping["ProviderIds"]!.AsArray());
+        Assert.Equal(JellyfinEnvironment.ProviderId, scope!.GetValue<string>());
+
+        var again = await OpenConfigPageAsync();
+        var saved = again.Locator(".sso-mapping").Filter(new LocatorFilterOptions { HasText = "one-provider-only" });
+        await Assertions.Expect(saved.Locator(".sso-all-providers-check")).Not.ToBeCheckedAsync();
+        await Assertions.Expect(saved.Locator($".sso-provider-scope-cb[value=\"{JellyfinEnvironment.ProviderId}\"]"))
+            .ToBeCheckedAsync();
+    }
+
     [Fact]
     public async Task The_admin_page_saves_that_the_quick_connect_code_is_typed_in()
     {

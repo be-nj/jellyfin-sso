@@ -124,6 +124,9 @@ public sealed class ConfigurationRoundTripPropertyTests
             // A mapping has a group: the rules refuse one without (#330).
             mapping.Group = "g" + mapping.Group;
             mapping.LibraryIds = Enumerable.Range(0, random.Next(0, 3)).Select(_ => Guid.NewGuid().ToString()).ToList();
+
+            // A mapping names only providers that exist (#340).
+            mapping.ProviderIds = config.Providers.Select(p => p.Id).Where(_ => random.Next(2) == 0).ToList();
         }
 
         return config;

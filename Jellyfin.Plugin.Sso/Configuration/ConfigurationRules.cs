@@ -115,6 +115,8 @@ public static partial class ConfigurationRules
             }
         }
 
+        var known = config.Providers.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
+
         // A library is named by its Jellyfin id, and the sync parses those ids on every
         // login. An id that is not a GUID therefore turned every SSO login on the server
         // into a 500 — from a value that only this endpoint can introduce, and only by
@@ -137,6 +139,21 @@ public static partial class ConfigurationRules
             {
                 var bad = mapping.LibraryIds.First(id => !Guid.TryParse(id, out _));
                 return $"Group mapping '{mapping.Group}': '{bad}' is not a library id.";
+            }
+
+            // A mapping limited to a provider that does not exist matches no login, which
+            // is safe, but it is not what anybody meant: a typo in a hand-written id, or a
+            // provider removed while a mapping still named it. Saving it would look like a
+            // working mapping. Dropping the id instead would be worse — a list emptied that
+            // way means every provider, so a mapping meant for one would quietly apply to
+            // all of them (#340). A null entry is not a provider either.
+            var scope = mapping.ProviderIds ?? [];
+            if (scope.Any(id => id is null || !known.Contains(id)))
+            {
+                var unknown = scope.First(id => id is null || !known.Contains(id));
+                return $"Group mapping '{mapping.Group}' is limited to the provider '{unknown}', "
+                    + "and there is no provider with that id. Choose the providers it applies "
+                    + "to again, or let it apply to all of them.";
             }
         }
 

@@ -8,11 +8,18 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Jellyfin.Plugin.Sso.Oidc;
 
+/// <summary>
+/// Who signed in, as one provider says. <see cref="ProviderId"/> is the provider that said
+/// it: a group name is only meaningful at the provider that issued it, and a group mapping
+/// limited to some providers is matched against this (#340). Null means the provider is
+/// not known, which matches only the mappings that apply to every provider.
+/// </summary>
 public sealed record OidcIdentity(
     string Sub,
     string PreferredUsername,
     IReadOnlyList<string> Groups,
-    string? PictureUrl = null);
+    string? PictureUrl = null,
+    string? ProviderId = null);
 
 public sealed class ClaimsExtractor
 {
@@ -68,7 +75,7 @@ public sealed class ClaimsExtractor
             }
             catch (Exception) when (!required)
             {
-                return new OidcIdentity(sub, preferredUsername, groups, picture);
+                return new OidcIdentity(sub, preferredUsername, groups, picture, provider.Id);
             }
 
             // OIDC Core §5.3.2: the sub in a userinfo response must be verified against
@@ -83,7 +90,7 @@ public sealed class ClaimsExtractor
             {
                 if (!required)
                 {
-                    return new OidcIdentity(sub, preferredUsername, groups, picture);
+                    return new OidcIdentity(sub, preferredUsername, groups, picture, provider.Id);
                 }
 
                 // Says what happened, which is not what this message used to say. "Its
@@ -119,7 +126,7 @@ public sealed class ClaimsExtractor
             }
         }
 
-        return new OidcIdentity(sub, preferredUsername, groups, picture);
+        return new OidcIdentity(sub, preferredUsername, groups, picture, provider.Id);
     }
 
     /// <summary>
