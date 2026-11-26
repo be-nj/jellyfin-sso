@@ -9,6 +9,14 @@
     "imageUrl": "https://jf.be-nj.net/docs/img/icon.png",
     "versions": [
       {
+        "version": "1.12.26.0",
+        "changelog": "- **New: a group mapping can be limited to providers.** With more than one provider, a\n  mapping applied to every one of them, so a provider where others can create groups could\n  grant administrator rights meant for another. Unticked, a mapping still applies to all\n  (#340).\n- **Security: a provider cannot send the browser to a script address.** An authorization\n  endpoint that is not an http or https address is refused (#339).\n- **Security: a disabled administrator no longer counts as the one that remains** when the\n  last enabled administrator would lose the role (#341).\n- **Hardening.** Plugin pages refuse to be framed and send `nosniff` (#346); a cancelled\n  page load no longer hides a provider's logo for twelve hours (#342).\n\nOn upgrade: nothing changes until a mapping is limited. Where several providers set\npermissions from groups, limit the administrator mapping to the provider it belongs to.",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/be-nj/jellyfin-sso/releases/download/v1.12.26/jellyfin-sso_1.12.26.0.zip",
+        "checksum": "5df16d87c59f0fe2fd0375469342e688",
+        "timestamp": "2026-11-26T10:32:56Z"
+      },
+      {
         "version": "1.12.25.0",
         "changelog": "- **Security: a code is only redeemed at the provider that issued it.** The callback now\n  checks RFC 9207's `iss`; a second, hostile provider on the same server could otherwise\n  receive another provider's code where that provider accepts callbacks by pattern (#325).\n- **Security: a group mapping without a group no longer matches.** ID-token groups that\n  were not strings became an empty group, which matched a half-filled mapping row (#330).\n- **Security: a provider is held to a deadline and a size.** A slow provider no longer\n  turns a login into a 500, answers over 1 MiB are refused, and over-long group names are\n  not stored (#321, #322, #323).\n- **Security: names that only look like another account's are caught.** Invisible\n  characters are removed before the existing-account check, also where the name falls back\n  to the subject (#324, #331).\n- **Fixes.** Host values are checked to be host names (#327), three IPv6 ranges are added\n  to the outbound address check (#328), and a carriage return is no longer stored (#329).\n\nOn upgrade: a group mapping without a group must be filled in or removed before the\nsettings can be saved again; the page says which one.",
         "targetAbi": "12.0.0.0",
@@ -39,14 +47,6 @@
         "sourceUrl": "https://github.com/be-nj/jellyfin-sso/releases/download/v1.12.22/jellyfin-sso_1.12.22.0.zip",
         "checksum": "bafcfe9820a4666a23134032c42ac383",
         "timestamp": "2026-11-16T00:23:03Z"
-      },
-      {
-        "version": "1.12.21.0",
-        "changelog": "- **Security.** Unlinking an account or a back-channel logout now also ends what a login\n  in progress had already handed out: the one-time sign-in secret, a Quick Connect approval\n  not yet clicked, and a token Jellyfin mints at that moment, through its own password\n  login and Quick Connect page as well (#243, #250, #251). A profile-picture download no\n  longer undoes an administrator disabling the account meanwhile (#244), a new account is\n  disabled and SSO-only from the moment it is first saved (#245), and a disabled account\n  can no longer let a Quick Connect device in (#253).\n- **Google works again.** New: _Further endpoint hosts_ on the provider card names the\n  hosts a provider serves its keys and tokens from besides its issuer's. For Google:\n  `www.googleapis.com oauth2.googleapis.com openidconnect.googleapis.com` (#260).\n- **New: _Create an account at first login_**, per provider. Off, only accounts linked\n  beforehand sign in, which is what a provider that admits everyone it knows needs.\n  Existing providers keep it on; **a provider you add starts with it off** (#262).\n- **Fixes.** A first login and a self-service link racing for one identity can no longer\n  both win; switching off _Allow self-service linking_ also stops a link already started;\n  Jellyfin's own plugin-configuration endpoint can no longer drop a link without ending its\n  sessions; the `jwks_uri` host is checked before the keys are fetched (#246, #247, #249,\n  #252, #254).\n- **Also.** A login that collides with another change to the account gets \"Please sign in\n  again\" (409) instead of a configuration error, and the server log says at startup\n  whether every Jellyfin login action the revocation guard watches is present (#255, #256).\n\nNothing to do on upgrade, unless you sign in through Google: name its three hosts as above.",
-        "targetAbi": "12.0.0.0",
-        "sourceUrl": "https://github.com/be-nj/jellyfin-sso/releases/download/v1.12.21/jellyfin-sso_1.12.21.0.zip",
-        "checksum": "ad775abacfe77e7f73e07e2da696d3fd",
-        "timestamp": "2026-11-15T16:10:30Z"
       }
     ]
   }
