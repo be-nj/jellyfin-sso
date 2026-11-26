@@ -50,8 +50,8 @@ public abstract class SsoFlowController : SsoControllerBase
 
         var disco = await Oidc.GetDiscoveryDocumentAsync(provider, ct).ConfigureAwait(false);
 
-        return new RequestUrl(disco.AuthorizeEndpoint
-            ?? throw new InvalidOperationException("Discovery document has no authorize endpoint."))
+        return new RequestUrl(OidcClientFactory.NavigableAuthorizeEndpoint(disco.AuthorizeEndpoint
+            ?? throw new InvalidOperationException("Discovery document has no authorize endpoint.")).AbsoluteUri)
             .CreateAuthorizeUrl(
                 clientId: provider.ClientId,
                 responseType: "code",

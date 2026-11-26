@@ -33,6 +33,7 @@ public sealed partial class ProviderLogos : IDisposable
     private static partial Regex LinkHref { get; }
 
     private readonly ConcurrentDictionary<string, Entry> _cache = new();
+    private readonly ConcurrentDictionary<string, Lazy<Task<RemoteImage?>>> _fetches = new();
     private readonly HttpClient _http;
     private readonly RemoteImages _images;
     private readonly ILogger<ProviderLogos> _logger;
@@ -64,10 +65,36 @@ public sealed partial class ProviderLogos : IDisposable
             return cached.Logo;
         }
 
+        // One fetch per provider, and not the caller's: the route is anonymous, and a
+        // visitor who dropped the connection used to cancel the fetch, which was caught as
+        // a failure and remembered as "no logo" for twelve hours (#342). The fetch runs on
+        // its own, bounded by the fetcher's own deadlines; a caller who gives up only stops
+        // waiting for it.
+        var entry = _fetches.GetOrAdd(
+            key, _ => new Lazy<Task<RemoteImage?>>(() => FetchAndRememberAsync(key, authority)));
+        var fetch = entry.Value;
+        _ = fetch.ContinueWith(
+            _ => _fetches.TryRemove(new KeyValuePair<string, Lazy<Task<RemoteImage?>>>(key, entry)),
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
+        try
+        {
+            return await fetch.WaitAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return null;
+        }
+    }
+
+    private async Task<RemoteImage?> FetchAndRememberAsync(string key, Uri authority)
+    {
         RemoteImage? logo = null;
         try
         {
-            logo = await FindAsync(authority, ct).ConfigureAwait(false);
+            logo = await FindAsync(authority, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException
             or JsonException or InvalidOperationException or UriFormatException)
