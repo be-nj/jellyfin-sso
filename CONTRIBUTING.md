@@ -406,7 +406,10 @@ check that every manifest entry points at a real release asset with the right ch
 The manifest is the file servers install from, and before it was required a pull request
 that broke it could still merge (#345). Three settings outside the workflows complete
 the picture: the default `GITHUB_TOKEN` can only read, so a workflow that forgets its
-`permissions:` block gets nothing; workflows cannot approve pull requests; and a ruleset
+`permissions:` block gets nothing; *Allow GitHub Actions to create and approve pull
+requests* stays on, because the release job opens the manifest pull request and its own
+`pull-requests: write` is worth nothing while that switch is off (turning it off with the
+read-only default stopped the 1.12.26 release at that step, #355); and a ruleset
 keeps `v*` tags from being moved or deleted once a release points at them, with only a
 repository administrator able to bypass it.
 
